@@ -24,21 +24,21 @@ pip install -r requirements.txt
 
 cp .env.example .env
 cp config.example.yaml config.yaml
-# 编辑 .env 填 API_ID/API_HASH/ADMIN_IDS
-# 编辑 config.yaml 填 source_chats/target_channel/relay_chat 的 chat_id
+# 编辑 .env 填 API_ID/API_HASH
+# 编辑 config.yaml 填 source_chats/target_channel 的 chat_id 与 admins
 
 python -m app.auth   # 交互式首次登录：手机号 → 验证码 → 2FA，生成 session
 python -m app        # 启动
 ```
 
-> 拿到 chat_id：在中转群 / 分类群里给管理员自己发 `/id`，程序会输出当前 chat 与 sender id。
+> 拿到 chat_id：在任一源群/目标频道给管理员自己发 `/id`，程序会输出当前 chat 与 sender id。
 
 ## 配置项
 
 | 文件 | 内容 |
 |---|---|
-| `.env` | API 凭据、管理员 ID（不进 Git） |
-| `config.yaml` | 分类群、总频道、中转群、限速、Tag/Rating 开关、搜索链接模板 |
+| `.env` | API 凭据（不进 Git） |
+| `config.yaml` | 源群（含默认 Tag、可选独立目标频道）、总频道、限速、Tag/Rating 开关、搜索链接模板、admins |
 
 完整字段见 [config.example.yaml](config.example.yaml)。
 
@@ -47,7 +47,7 @@ python -m app        # 启动
 一条归档消息由 Renderer 统一渲染，顺序固定：
 
 ```
-⭐⭐⭐⭐⭐
+推荐指数：⭐⭐⭐⭐⭐
 #游戏 #GTA5 #MOD
 
 GTA5 NVE 教程
@@ -61,7 +61,7 @@ Tag 用空格分隔（不换行、不连写），数据库中存结构化列表�
 
 ## 管理命令
 
-管理员（`ADMIN_IDS`）在关联讨论组中回复频道消息使用：
+管理员（config.yaml `admins`）在源群或讨论组中回复归档消息使用：
 
 | 命令 | 作用 |
 |---|---|
