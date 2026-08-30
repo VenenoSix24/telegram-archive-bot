@@ -39,6 +39,7 @@ class Config:
     rating_enabled: bool
     admins: frozenset[int]
     url_template: str | None
+    database_path: str
 
 
 def _env_names(names: list[str]) -> dict[str, str]:
@@ -106,4 +107,5 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         rating_enabled=bool(rating.get("enabled", True)),
         admins=admins,
         url_template=search.get("url_template"),
+        database_path=raw.get("database", {}).get("path", "archive.sqlite"),
     )

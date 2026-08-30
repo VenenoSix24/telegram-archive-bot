@@ -44,3 +44,7 @@ search:
 # 管理员 User ID，验证 event.sender_id 是否在列表中
 admins:
   - 123456789
+
+# 数据库文件路径（部署时挂 volume）
+database:
+  path: archive.sqlite
