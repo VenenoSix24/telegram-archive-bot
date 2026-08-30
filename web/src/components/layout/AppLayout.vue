@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { LayoutDashboard, Images, Tags, Settings, LogOut } from 'lucide-vue-next'
+import { computed, onMounted } from 'vue'
+import { LayoutDashboard, Images, Tags, Settings, LogOut, Sun, Moon } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { applyTheme, currentMode, toggleMode } from '@/composables/useTheme'
 
 const route = useRoute()
 const router = useRouter()
+
+onMounted(applyTheme)
 
 const nav = [
   { name: 'dashboard', label: '概览', icon: LayoutDashboard },
@@ -13,6 +17,8 @@ const nav = [
   { name: 'tags', label: '标签', icon: Tags },
   { name: 'settings', label: '设置', icon: Settings },
 ]
+
+const isActive = (name: string) => route.name === name
 
 async function onLogout() {
   try {
@@ -22,24 +28,29 @@ async function onLogout() {
     router.push('/login')
   }
 }
+
+const shouldShowNav = computed(() => !!route.name)
 </script>
 
 <template>
-  <div class="flex min-h-screen">
-    <aside class="sticky top-0 flex h-screen w-40 shrink-0 flex-col border-r border-ink-line bg-ink-bg">
-      <div class="px-4 pb-6 pt-5">
+  <div class="min-h-screen">
+    <!-- 桌面端侧边栏 -->
+    <aside
+      class="fixed inset-y-0 left-0 z-30 hidden w-44 shrink-0 flex-col border-r border-ink-line bg-ink-bg px-3 py-6 md:flex"
+    >
+      <div class="px-2 pb-6">
         <p class="font-display text-sm font-semibold tracking-tight text-gold">ARCHIVE</p>
         <p class="text-xs text-steam-dim">Telegram 归档库</p>
       </div>
-      <nav class="flex flex-col gap-1 px-2" aria-label="主导航">
+      <nav class="flex flex-col gap-1" aria-label="主导航">
         <RouterLink
           v-for="item in nav"
           :key="item.name"
           :to="{ name: item.name }"
-          :aria-current="route.name === item.name ? 'page' : undefined"
+          :aria-current="isActive(item.name) ? 'page' : undefined"
           :class="cn(
             'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-            route.name === item.name
+            isActive(item.name)
               ? 'bg-gold/15 text-gold'
               : 'text-steam-dim hover:bg-ink-raised hover:text-steam',
           )"
@@ -48,7 +59,7 @@ async function onLogout() {
           {{ item.label }}
         </RouterLink>
       </nav>
-      <div class="mt-auto mb-4 px-2">
+      <div class="mt-auto">
         <button
           type="button"
           class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam cursor-pointer"
@@ -57,10 +68,52 @@ async function onLogout() {
           <LogOut class="h-4 w-4" />
           退出
         </button>
+        <button
+          type="button"
+          class="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam cursor-pointer"
+          :aria-label="currentMode === 'dark' ? '切换浅色' : '切换深色'"
+          @click="toggleMode"
+        >
+          <Sun v-if="currentMode === 'dark'" class="h-4 w-4" />
+          <Moon v-else class="h-4 w-4" />
+          {{ currentMode === 'dark' ? '浅色' : '深色' }}
+        </button>
       </div>
     </aside>
-    <main class="min-w-0 flex-1">
+
+    <!-- 主内容 -->
+    <main class="min-w-0 pb-24 md:pl-44 md:pb-0">
       <RouterView />
     </main>
+
+    <!-- 移动端底部 tab 栏（iOS 26 悬浮胶囊风格） -->
+    <nav
+      v-if="shouldShowNav"
+      aria-label="移动端导航"
+      class="fixed inset-x-0 bottom-4 z-40 mx-auto flex max-w-[22rem] items-center justify-around gap-1 rounded-full border border-ink-line/70 bg-ink-surface/85 px-2 py-1.5 shadow-lg backdrop-blur-md md:hidden"
+    >
+      <RouterLink
+        v-for="item in nav"
+        :key="item.name"
+        :to="{ name: item.name }"
+        :aria-current="isActive(item.name) ? 'page' : undefined"
+        :class="cn(
+          'flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-[10px] transition-colors',
+          isActive(item.name) ? 'bg-gold/15 text-gold' : 'text-steam-dim hover:text-steam',
+        )"
+      >
+        <component :is="item.icon" class="h-5 w-5" />
+        {{ item.label }}
+      </RouterLink>
+      <button
+        type="button"
+        class="flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-[10px] text-steam-dim transition-colors hover:text-steam cursor-pointer"
+        :aria-label="currentMode === 'dark' ? '切换浅色' : '切换深色'"
+        @click="toggleMode"
+      >
+        <Sun v-if="currentMode === 'dark'" class="h-5 w-5" />
+        <Moon v-else class="h-5 w-5" />
+      </button>
+    </nav>
   </div>
 </template>

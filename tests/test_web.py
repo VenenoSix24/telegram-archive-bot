@@ -26,6 +26,7 @@ def _config(**overrides) -> Config:
         admins=frozenset({1}),
         url_template=None,
         database_path=":memory:",
+        config_path=None,
         web_enabled=True,
         web_host="127.0.0.1",
         web_port=8000,
@@ -47,7 +48,8 @@ def seeded_db(tmp_path):
             source_chat_id INTEGER NOT NULL,
             source_message_id INTEGER NOT NULL,
             media_type TEXT NOT NULL DEFAULT 'text',
-            status TEXT NOT NULL DEFAULT 'processed'
+            status TEXT NOT NULL DEFAULT 'processed',
+            target_chat_id INTEGER
         );
         CREATE TABLE tags (
             id INTEGER PRIMARY KEY,
@@ -61,11 +63,12 @@ def seeded_db(tmp_path):
             id INTEGER PRIMARY KEY,
             status TEXT NOT NULL DEFAULT 'pending'
         );
-        INSERT INTO messages (id, source_chat_id, source_message_id, media_type, status)
-        VALUES (1, -1001, 1, 'photo', 'archived'),
-               (2, -1001, 2, 'video', 'archived'),
-               (3, -1002, 1, 'text', 'archived'),
-               (4, -1002, 2, 'text', 'processed');
+        INSERT INTO messages (id, source_chat_id, source_message_id, media_type,
+            status, target_chat_id)
+        VALUES (1, -1001, 1, 'photo', 'archived', -1005),
+               (2, -1001, 2, 'video', 'archived', -1005),
+               (3, -1002, 1, 'text', 'archived', -1006),
+               (4, -1002, 2, 'text', 'processed', NULL);
         INSERT INTO tags (id, name) VALUES (1, '游戏'), (2, '软件');
         INSERT INTO message_tags (message_id, tag_id) VALUES (1, 1), (2, 1), (3, 2);
         INSERT INTO queue (id, status) VALUES (1, 'success'), (2, 'pending'), (3, 'failed');
@@ -111,6 +114,7 @@ def test_login_ok_and_stats(tmp_path, seeded_db):
         assert body["messages"]["by_type"] == {"photo": 1, "video": 1, "text": 2}
         assert body["tags"] == {"total": 2, "with_messages": 2}
         assert body["queue"] == {"pending": 1, "processing": 0, "success": 1, "failed": 1}
+        assert body["targets"] == [{"chat_id": -1005, "count": 2}, {"chat_id": -1006, "count": 1}]
 
 
 def test_logout_invalidates_session(tmp_path):

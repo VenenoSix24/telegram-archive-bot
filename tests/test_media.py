@@ -19,7 +19,7 @@ from telethon.tl.types import (
 
 from app.database.migrate import apply_migrations, open_db
 from app.media.backfill import backfill_thumbs
-from app.media.thumbnails import ThumbnailCache
+from app.media.thumbnails import ThumbnailCache, _pick_photo_thumb
 from app.processor.adapter import build_incoming, media_file_meta
 
 
@@ -124,6 +124,27 @@ def test_thumb_cache_fetch_ignores_text(tmp_path):
     cache = ThumbnailCache(Path(tmp_path))
     msg = _message(None)
     assert asyncio.run(cache.fetch(_FakeClient(), msg, 7)) is None
+
+
+def test_pick_photo_thumb_prefers_medium_width():
+    from telethon.tl.types import PhotoSize as RealPhotoSize
+
+    sizes = [
+        RealPhotoSize(type="s", w=100, h=100, size=100),
+        RealPhotoSize(type="m", w=640, h=640, size=1000),
+        RealPhotoSize(type="x", w=1280, h=1280, size=5000),
+        RealPhotoSize(type="y", w=2560, h=2560, size=9000),
+    ]
+    picked = _pick_photo_thumb(SimpleNamespace(sizes=sizes))
+    assert picked is sizes[1]  # 640 是最小且落在 [480,1280]，不用 2560 全图
+
+
+def test_pick_photo_thumb_no_mid_falls_back_smallest():
+    from telethon.tl.types import PhotoSize as RealPhotoSize
+
+    sizes = [RealPhotoSize(type="s", w=100, h=100, size=100)]
+    picked = _pick_photo_thumb(SimpleNamespace(sizes=sizes))
+    assert picked is sizes[0]
 
 
 def test_backfill_updates_thumb_path_only_media(conn, tmp_path):

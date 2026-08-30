@@ -43,6 +43,28 @@ export interface MessagesResponse {
   offset: number
 }
 
+export interface Target {
+  chat_id: number
+  count: number
+}
+
+export interface EditableConfig {
+  source_chats: {
+    chat_id: number | null
+    name: string
+    default_tags: string[]
+    target_channel_id: number | null
+  }[]
+  target_channel_id: number | null
+  forward_interval: number
+  retry_count: number
+  show_link: boolean
+  preserve_original: boolean
+  rating_enabled: boolean
+  url_template: string | null
+  admins: number[]
+}
+
 export interface Stats {
   messages: {
     total: number
@@ -52,6 +74,7 @@ export interface Stats {
   }
   tags: { total: number; with_messages: number }
   queue: Record<string, number>
+  targets: Target[]
 }
 
 export interface TagCount {
