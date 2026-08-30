@@ -4,15 +4,22 @@ import { Film, Image as ImageIcon, FileText, Loader2 } from 'lucide-vue-next'
 import { getStats, listMessages } from '@/lib/api'
 import type { Message, Stats } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
+import MessageDrawer from '@/components/MessageDrawer.vue'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<Message[]>([])
 const loading = ref(true)
+const selected = ref<Message | null>(null)
 
 const typeOrder = ['video', 'photo', 'text']
 
 function statsOf(type: string) {
   return stats.value?.messages.by_type[type] ?? 0
+}
+
+function onDrawerUpdate(updated: Message) {
+  recent.value = recent.value.map((m) => (m.id === updated.id ? updated : m))
+  if (selected.value?.id === updated.id) selected.value = updated
 }
 
 onMounted(async () => {
@@ -82,8 +89,14 @@ onMounted(async () => {
           <RouterLink :to="{ name: 'messages' }" class="text-xs text-gold hover:underline">全部素材 →</RouterLink>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MessageCard v-for="m in recent" :key="m.id" :message="m" />
+          <MessageCard
+            v-for="m in recent"
+            :key="m.id"
+            :message="m"
+            @open="selected = m"
+          />
         </div>
+        <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
       </section>
     </template>
   </div>
