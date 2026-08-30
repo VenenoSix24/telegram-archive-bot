@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Loader2, SearchX } from 'lucide-vue-next'
 import { listMessages, patchMessage } from '@/lib/api'
 import type { Message, MessagesResponse } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
+import MessageDrawer from '@/components/MessageDrawer.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
 
@@ -13,6 +14,7 @@ const error = ref('')
 const q = ref('')
 const mediaType = ref('')
 const rating = ref<number | ''>('')
+const selected = ref<Message | null>(null)
 
 const PAGE = 30
 const mediaOptions = [
@@ -32,10 +34,13 @@ const ratingOptions = [
   { value: '0', label: '未评级' },
 ]
 
+const shown = computed(() => data.value?.items.length ?? 0)
+const hasMore = computed(() => data.value ? shown.value < data.value.total : false)
+
 let timer: ReturnType<typeof setTimeout> | undefined
 watch([q, mediaType, rating], () => {
   clearTimeout(timer)
-  timer = setTimeout(load, 300) // 防抖：输入即搜，避免每键一次请求
+  timer = setTimeout(load, 300)
 })
 
 async function load() {
@@ -55,14 +60,39 @@ async function load() {
   }
 }
 
+async function loadMore() {
+  if (!data.value || loading.value) return
+  loading.value = true
+  try {
+    const next = await listMessages({
+      q: q.value || undefined,
+      media_type: mediaType.value || undefined,
+      rating: rating.value === '' ? undefined : Number(rating.value),
+      limit: PAGE,
+      offset: shown.value,
+    })
+    data.value = { ...next, items: [...data.value.items, ...next.items] }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 async function rate(msg: Message, value: number) {
   try {
     const updated = await patchMessage(msg.id, { rating: value })
     const item = data.value?.items.find((m) => m.id === msg.id)
-    if (item) item.rating = updated.rating
+    if (item) Object.assign(item, updated)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
   }
+}
+
+function onDrawerUpdate(updated: Message) {
+  const idx = data.value?.items.findIndex((m) => m.id === updated.id)
+  if (data.value && idx != null && idx >= 0) data.value.items[idx] = updated
+  if (selected.value?.id === updated.id) selected.value = updated
 }
 
 onMounted(load)
@@ -100,7 +130,7 @@ onMounted(load)
       <span v-if="error" class="text-xs text-destructive">{{ error }}</span>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-steam-dim">
+    <div v-if="loading && !shown" class="flex items-center gap-2 text-steam-dim">
       <Loader2 class="h-4 w-4 animate-spin" /> 载入中…
     </div>
 
@@ -113,12 +143,26 @@ onMounted(load)
         :key="m.id"
         :message="m"
         @rate="(n) => rate(m, n)"
+        @open="selected = m"
       />
     </div>
 
-    <div v-else class="flex flex-col items-center gap-2 py-16 text-steam-dim">
+    <div v-else-if="data" class="flex flex-col items-center gap-2 py-16 text-steam-dim">
       <SearchX class="h-8 w-8" />
       <p class="text-sm">没有匹配的素材</p>
     </div>
+
+    <div v-if="hasMore" class="mt-6 flex justify-center">
+      <Button
+        variant="secondary"
+        :disabled="loading"
+        @click="loadMore"
+      >
+        <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
+        {{ loading ? '载入中…' : `加载更多（${shown} / ${data?.total}）` }}
+      </Button>
+    </div>
+
+    <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
   </div>
 </template>

@@ -7,7 +7,7 @@ import StarRating from '@/components/ui/StarRating.vue'
 import { durationLabel } from '@/lib/format'
 
 const props = defineProps<{ message: Message }>()
-const emit = defineEmits<{ rate: [number]; 'open-source': [] }>()
+const emit = defineEmits<{ rate: [number]; open: []; 'open-source': [] }>()
 
 const mediaIcon = computed(() => {
   switch (props.message.media_type) {
@@ -43,7 +43,8 @@ const fileInfo = computed(() => {
 
 <template>
   <article
-    class="group flex flex-col overflow-hidden rounded-card border border-ink-line bg-ink-surface transition-shadow duration-200 hover:shadow-glow focus-within:shadow-glow"
+    class="group cursor-pointer flex flex-col overflow-hidden rounded-card border border-ink-line bg-ink-surface transition-shadow duration-200 hover:shadow-glow focus-within:shadow-glow"
+    @click="emit('open')"
   >
     <!-- 媒体区：photo/video 渲染缩略图；其余渲染类型图标占位 -->
     <div
@@ -72,13 +73,13 @@ const fileInfo = computed(() => {
     </div>
 
     <!-- 评分区：星级即控件，浏览时直接改 -->
-    <div class="flex items-center justify-between px-3 pt-2">
+    <div class="flex items-center justify-between px-3 pt-2" @click.stop>
       <StarRating :value="message.rating" size="lg" interactive @change="(n) => emit('rate', n)" />
       <span class="font-mono text-[11px] text-steam-dim">#{{ message.id }}</span>
     </div>
 
     <!-- tags -->
-    <div v-if="message.tags.length" class="flex flex-wrap gap-1 px-3 pt-1.5">
+    <div v-if="message.tags.length" class="flex flex-wrap gap-1 px-3 pt-1.5" @click.stop>
       <Badge v-for="tag in message.tags" :key="tag.name + tag.type" :tone="tag.type">
         {{ tag.name }}
       </Badge>
@@ -91,7 +92,7 @@ const fileInfo = computed(() => {
     </p>
 
     <!-- 底部：来源 + 打开 Telegram -->
-    <div class="mt-auto flex items-center gap-2 border-t border-ink-line px-3 py-2">
+    <div class="mt-auto flex items-center gap-2 border-t border-ink-line px-3 py-2" @click.stop>
       <a
         v-if="message.target_url || message.source_url"
         :href="message.target_url || message.source_url!"
