@@ -37,6 +37,14 @@ def record_message(
     ).fetchone()
     if row is not None:
         return None
+    # 相册组级去重：同组已有记录则跳过，避免整组媒体重复归档（ADR 0002）。
+    if incoming.media_group_id:
+        group_row = conn.execute(
+            "SELECT id FROM messages WHERE source_chat_id=? AND media_group_id=?",
+            (incoming.source_chat_id, incoming.media_group_id),
+        ).fetchone()
+        if group_row is not None:
+            return None
 
     manual = manual_tags or []
     original = extract_hashtags(incoming.text) if preserve_original else []
