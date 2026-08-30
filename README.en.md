@@ -24,21 +24,21 @@ pip install -r requirements.txt
 
 cp .env.example .env
 cp config.example.yaml config.yaml
-# fill .env with API_ID/API_HASH/ADMIN_IDS
-# fill config.yaml with source_chats/target_channel/relay_chat chat_ids
+# fill .env with API_ID/API_HASH
+# fill config.yaml with source_chats/target_channel chat_ids and admins
 
 python -m app.auth   # interactive first login: phone → code → 2FA, creates session
 python -m app        # run
 ```
 
-> Get chat ids: reply `/id` in the relay chat and the bot echoes current chat/sender id.
+> Get chat ids: reply `/id` in any source chat or the target channel and the bot echoes current chat/sender id.
 
 ## Configuration
 
 | File | Content |
 |---|---|
-| `.env` | API credentials, admin ids (not committed) |
-| `config.yaml` | source chats, target channel, relay chat, rate limit, tag/rating toggles, search template |
+| `.env` | API credentials (not committed) |
+| `config.yaml` | source chats (default tags, optional per-source target), target channel, rate limit, tag/rating toggles, search template, admins |
 
 See [config.example.yaml](config.example.yaml) for all fields.
 
@@ -47,7 +47,7 @@ See [config.example.yaml](config.example.yaml) for all fields.
 Rendered by the Renderer with fixed order:
 
 ```
-⭐⭐⭐⭐⭐
+推荐指数：⭐⭐⭐⭐⭐
 #游戏 #GTA5 #MOD
 
 GTA5 NVE 教程
@@ -61,7 +61,7 @@ Tags are space-separated (never newline, never concatenated); the database store
 
 ## Admin commands
 
-Admins (`ADMIN_IDS`) reply to an archived message in the linked discussion group:
+Admins (`config.yaml` `admins`) reply to an archived message in a source chat or the target channel:
 
 | Command | Effect |
 |---|---|
@@ -74,11 +74,16 @@ Admins (`ADMIN_IDS`) reply to an archived message in the linked discussion group
 
 ## Deploy
 
-Docker (to be verified in Phase 12):
+Docker (requires Docker Desktop installed locally):
 
 ```bash
+# 1. First login: interactive phone → code → 2FA, creates session
+docker compose run --rm app python -m app.auth
+# 2. Start
 docker compose up -d
 ```
+
+Session, database and logs persist via compose volumes (`telegram_archive.session` / `archive.sqlite` / `logs/`); the queue recovers on restart.
 
 ## Backup
 
