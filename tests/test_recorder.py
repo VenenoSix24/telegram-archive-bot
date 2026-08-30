@@ -8,7 +8,7 @@ import pytest
 
 from app.database.migrate import apply_migrations, open_db
 from app.processor.adapter import build_incoming
-from app.processor.recorder import record_message
+from app.processor.recorder import add_manual_tags, record_message
 
 
 @pytest.fixture
@@ -97,3 +97,20 @@ def test_record_album_group_dedupes(conn):
     second = _record(conn, _msg(text="同组其他", grouped_id="grp1", mid=8))
     assert first == 1
     assert second is None
+
+
+def test_add_manual_tags_merges_and_keeps_types(conn):
+    mid = _record(conn, _msg(text="#GTA5 教程"))
+    rendered = add_manual_tags(conn, mid, ["MOD", "游戏"])
+    assert [(t["name"], t["type"]) for t in _tags(conn, mid)] == [
+        ("游戏", "source"),
+        ("GTA5", "original"),
+        ("MOD", "manual"),
+    ]
+    assert "MOD" in rendered
+    saved = conn.execute("SELECT rendered_text FROM messages WHERE id=1").fetchone()
+    assert saved["rendered_text"] == rendered
+
+
+def test_add_manual_tags_missing_message(conn):
+    assert add_manual_tags(conn, 999, ["MOD"]) is None

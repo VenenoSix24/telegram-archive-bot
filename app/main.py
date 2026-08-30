@@ -9,7 +9,10 @@ from contextlib import suppress
 from app.config import ConfigError, load_config
 from app.database.migrate import apply_migrations, open_db
 from app.logging_setup import setup_logging
-from app.processor.handlers import attach_new_message_handler
+from app.processor.handlers import (
+    attach_new_message_handler,
+    attach_reply_command_handler,
+)
 from app.queue.manager import QueueManager
 from app.telegram.client import build_client, validate_config_chats
 from app.telegram.copier import archive_message_by_db_id
@@ -70,6 +73,7 @@ async def _run() -> int:
         logger.info("重启恢复 %s 条 processing 任务为 pending", recovered)
     worker = asyncio.create_task(queue.run())
     attach_new_message_handler(client, config, conn, queue)
+    attach_reply_command_handler(client, config, conn)
 
     logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:
