@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from telethon.tl.types import (
     DocumentAttributeAudio,
+    DocumentAttributeFilename,
     DocumentAttributeSticker,
     DocumentAttributeVideo,
     MessageMediaDocument,
@@ -25,6 +26,27 @@ class IncomingMessage:
     media_type: str | None
     media_group_id: str | None
     source_url: str | None
+    file_name: str | None = None
+    file_size: int | None = None
+    duration: int | None = None
+
+
+def media_file_meta(media) -> tuple[str | None, int | None, int | None]:
+    """从媒体提取 (file_name, file_size, duration)；无文件类媒体返回 (None, None, None)。
+
+    时长对视频/音频/语音都有效，Web 卡片直接展示，不做媒体子类型剔除。
+    """
+    if not isinstance(media, MessageMediaDocument):
+        return None, None, None
+    doc = media.document
+    file_name = None
+    duration = None
+    for attr in doc.attributes:
+        if isinstance(attr, DocumentAttributeFilename):
+            file_name = attr.file_name
+        elif isinstance(attr, (DocumentAttributeVideo, DocumentAttributeAudio)):
+            duration = attr.duration
+    return file_name, doc.size, duration
 
 
 def classify_media(media) -> str | None:
@@ -86,6 +108,7 @@ async def resolve_source_url(client, message, chat_entity, *, show_link: bool = 
 
 
 def build_incoming(message, chat_id: int, source_url: str | None) -> IncomingMessage:
+    file_name, file_size, duration = media_file_meta(message.media)
     return IncomingMessage(
         source_chat_id=chat_id,
         source_message_id=message.id,
@@ -93,4 +116,7 @@ def build_incoming(message, chat_id: int, source_url: str | None) -> IncomingMes
         media_type=classify_media(message.media),
         media_group_id=message.grouped_id,
         source_url=source_url,
+        file_name=file_name,
+        file_size=file_size,
+        duration=duration,
     )

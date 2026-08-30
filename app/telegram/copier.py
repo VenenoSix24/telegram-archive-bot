@@ -16,11 +16,13 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from app.media.thumbnails import ThumbnailCache
 from app.renderer.db import render_from_db
 
 logger = logging.getLogger(__name__)
 
 _ALBUM_SCAN_LIMIT = 200
+_THUMB_CACHE = ThumbnailCache()
 
 
 async def collect_album(client, chat, first_message) -> list:
@@ -51,11 +53,12 @@ def _save_target(
     target_chat_id: int,
     target_message_id: int,
     target_url: str | None,
+    thumb_path: str | None,
 ) -> None:
     conn.execute(
         "UPDATE messages SET target_chat_id=?, target_message_id=?, target_url=?, "
-        "status='archived' WHERE id=?",
-        (target_chat_id, target_message_id, target_url, message_id),
+        "status='archived', thumb_path=? WHERE id=?",
+        (target_chat_id, target_message_id, target_url, thumb_path, message_id),
     )
     conn.commit()
 
@@ -97,12 +100,19 @@ async def archive_message_by_db_id(
     first = sent_list[0]
     username = getattr(target, "username", None)
     target_url = f"https://t.me/{username}/{first.id}" if username else None
+    # 归档成功后再抓缩略图（引用复制拿到的是原始 media，可正常下载小图）。
+    thumb_path = None
+    if msgs:
+        thumb = await _THUMB_CACHE.fetch(client, msgs[0], message_id)
+        if thumb is not None:
+            thumb_path = str(thumb)
     _save_target(
         conn,
         message_id,
         target_chat_id=target_id,
         target_message_id=first.id,
         target_url=target_url,
+        thumb_path=thumb_path,
     )
     logger.info(
         "archived messages#%s -> target msg %s (media=%s)",

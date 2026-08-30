@@ -11,3 +11,4 @@ services:
       - ./telegram_archive.session:/app/telegram_archive.session
       - ./archive.sqlite:/app/archive.sqlite
       - ./logs:/app/logs
+      - ./thumbs:/app/thumbs

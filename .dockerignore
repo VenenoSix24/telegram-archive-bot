@@ -9,6 +9,7 @@ logs
 *.sqlite3
 .env
 config.yaml
+thumbs
 docs
 tests
 开发文档*.md

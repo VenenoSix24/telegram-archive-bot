@@ -53,8 +53,8 @@ def record_message(
 
     conn.execute(
         "INSERT INTO messages (source_chat_id, source_message_id, media_type, "
-        "media_group_id, original_text, source_url, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "media_group_id, original_text, source_url, status, file_name, file_size, duration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             incoming.source_chat_id,
             incoming.source_message_id,
@@ -63,6 +63,9 @@ def record_message(
             incoming.text,
             incoming.source_url,
             status,
+            incoming.file_name or "",
+            incoming.file_size,
+            incoming.duration,
         ),
     )
     message_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]

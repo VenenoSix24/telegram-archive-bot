@@ -12,6 +12,8 @@ import sqlite3
 from telethon import events
 
 from app.config import Config
+from app.media.backfill import backfill_thumbs
+from app.media.thumbnails import ThumbnailCache
 from app.processor.adapter import (
     IncomingMessage,
     build_incoming,
@@ -30,6 +32,16 @@ from app.tags.engine import normalize_tags
 from app.tags.index import compute_tag_counts
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_rethumb_limit(args: list[str]) -> int:
+    """`/rethumb [N]`：可选条数上限，缺省 100；非法值回退默认。"""
+    if args:
+        try:
+            return max(1, int(args[0]))
+        except ValueError:
+            pass
+    return 100
 
 
 def process_incoming(
@@ -172,7 +184,7 @@ def attach_management_command_handler(
         parsed = parse_command(msg.text)
         if parsed is None:
             return
-        cmd, _args = parsed
+        cmd, args = parsed
         if event.sender_id not in config.admins:
             return
         if cmd == "status":
@@ -189,6 +201,12 @@ def attach_management_command_handler(
         elif cmd == "resume":
             queue.resume()
             text = "队列已恢复"
+        elif cmd == "rethumb":
+            limit = _parse_rethumb_limit(args)
+            count = await backfill_thumbs(
+                client, config, conn, ThumbnailCache(), limit=limit
+            )
+            text = f"已补抓 {count} 条缩略图"
         else:
             return
         await client.send_message(event.chat_id, text)
