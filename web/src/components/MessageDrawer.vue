@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Calendar, Link2, Plus, Send, Tag as TagIcon, X } from 'lucide-vue-next'
+import { Calendar, Film, Link2, Plus, Send, Tag as TagIcon, X } from 'lucide-vue-next'
 import type { Message } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
 import Button from '@/components/ui/Button.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import { durationLabel, formatTime, sizeLabel } from '@/lib/format'
 import { toastError, toastSuccess } from '@/composables/useToast'
+import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
 
 const props = defineProps<{ message: Message | null }>()
 const emit = defineEmits<{ close: []; update: [Message] }>()
@@ -14,10 +15,12 @@ const emit = defineEmits<{ close: []; update: [Message] }>()
 const newTag = ref('')
 const busy = ref(false)
 const error = ref('')
+const drawerThumbFailed = ref(false)
 
 watch(() => props.message, () => {
   newTag.value = ''
   error.value = ''
+  drawerThumbFailed.value = false
 })
 
 const metaLine = computed(() => {
@@ -29,7 +32,12 @@ const metaLine = computed(() => {
   return parts.join(' · ')
 })
 
-const openUrl = computed(() => props.message?.target_url || props.message?.source_url || null)
+const openUrl = computed(() => {
+  if (!props.message) return null
+  return archiveLinkOf(props.message) || sourceLinkOf(props.message)
+})
+
+const srcUrl = computed(() => (props.message ? sourceLinkOf(props.message) : null))
 
 async function setRating(n: number) {
   if (!props.message) return
@@ -110,16 +118,23 @@ async function mutate(
             </header>
 
             <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <!-- 媒体 -->
+              <!-- 媒体：失败显示占位图标 -->
               <div
-                v-if="message.media_type === 'photo' || message.media_type === 'video'"
+                v-if="((message.media_type === 'photo' || message.media_type === 'video') && !drawerThumbFailed)"
                 class="mb-4 overflow-hidden rounded-card bg-ink-raised"
               >
                 <img
                   :src="`/api/v1/messages/${message.id}/thumb`"
                   :alt="'消息 #' + message.id"
                   class="max-h-96 w-full object-contain"
+                  @error="drawerThumbFailed = true"
                 />
+              </div>
+              <div
+                v-else-if="message.media_type === 'photo' || message.media_type === 'video'"
+                class="mb-4 flex h-48 items-center justify-center rounded-card bg-ink-raised text-steam-dim/45"
+              >
+                <Film class="h-12 w-12" />
               </div>
 
               <!-- 评级 -->
@@ -151,15 +166,15 @@ async function mutate(
                   <Calendar class="h-3.5 w-3.5" />
                   {{ formatTime(message.created_at) }}
                 </div>
-                <div v-if="message.source_url" class="flex items-center gap-2">
+                <div v-if="srcUrl" class="flex items-center gap-2">
                   <Link2 class="h-3.5 w-3.5" />
                   <a
-                    :href="message.source_url"
+                    :href="srcUrl"
                     target="_blank"
                     rel="noopener"
                     class="truncate text-steam hover:text-gold"
                   >
-                    {{ message.source_url }}
+                    {{ srcUrl }}
                   </a>
                 </div>
               </dl>

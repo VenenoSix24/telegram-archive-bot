@@ -88,7 +88,7 @@ onMounted(async () => {
           <h2 class="text-sm font-medium text-steam">最近归档</h2>
           <RouterLink :to="{ name: 'messages' }" class="text-xs text-gold hover:underline">全部素材 →</RouterLink>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <MessageCard
             v-for="m in recent"
             :key="m.id"
