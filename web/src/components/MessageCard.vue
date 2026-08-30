@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { FileText, Film, Headphones, Link2, Music, Send, Sticker, File as FileIcon } from 'lucide-vue-next'
 import type { Message } from '@/lib/types'
 import Badge from '@/components/ui/Badge.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import { durationLabel } from '@/lib/format'
 import { useAspectRatio } from '@/composables/useAspectRatio'
+import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
 
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ rate: [number]; open: [] }>()
 
 const { ratio, onLoad } = useAspectRatio()
+const thumbFailed = ref(false)
+
+const archiveUrl = computed(() => archiveLinkOf(props.message))
+const sourceUrl = computed(() => sourceLinkOf(props.message))
 
 const mediaIcon = computed(() => {
   switch (props.message.media_type) {
@@ -49,9 +54,9 @@ const fileInfo = computed(() => {
     class="group cursor-pointer flex flex-col overflow-hidden rounded-card border border-ink-line bg-ink-surface transition-shadow duration-200 hover:shadow-glow focus-within:shadow-glow"
     @click="emit('open')"
   >
-    <!-- 媒体区：photo/video 渲染缩略图；其余渲染类型图标占位 -->
+    <!-- 媒体区：photo/video 渲染缩略图；失败显示占位图标 -->
     <div
-      v-if="showThumb"
+      v-if="showThumb && !thumbFailed"
       class="relative w-full overflow-hidden bg-ink-raised"
       :style="{ aspectRatio: ratio }"
     >
@@ -61,7 +66,7 @@ const fileInfo = computed(() => {
         loading="lazy"
         class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
         @load="onLoad"
-        @error="($event.target as HTMLImageElement).style.display = 'none'"
+        @error="thumbFailed = true"
       />
       <span
         v-if="durationLabelText"
@@ -72,9 +77,9 @@ const fileInfo = computed(() => {
     </div>
     <div
       v-else
-      class="flex aspect-video w-full items-center justify-center bg-ink-raised text-steam-dim/50"
+      class="flex aspect-video w-full items-center justify-center bg-ink-raised text-steam-dim/45"
     >
-      <component :is="mediaIcon" class="h-10 w-10" />
+      <component :is="mediaIcon ?? Film" class="h-10 w-10" />
     </div>
 
     <!-- 评分区：星级即控件，浏览时直接改 -->
@@ -99,8 +104,8 @@ const fileInfo = computed(() => {
     <!-- 底部：归档频道 + 源链接（双按钮） -->
     <div class="mt-auto flex items-center gap-2 border-t border-ink-line px-3 py-2" @click.stop>
       <a
-        v-if="message.target_url"
-        :href="message.target_url"
+        v-if="archiveUrl"
+        :href="archiveUrl"
         target="_blank"
         rel="noopener"
         class="inline-flex items-center gap-1 text-xs text-steam-dim transition-colors hover:text-gold"
@@ -109,8 +114,8 @@ const fileInfo = computed(() => {
         归档
       </a>
       <a
-        v-if="message.source_url"
-        :href="message.source_url"
+        v-if="sourceUrl"
+        :href="sourceUrl"
         target="_blank"
         rel="noopener"
         class="inline-flex items-center gap-1 text-xs text-steam-dim transition-colors hover:text-gold"
@@ -119,7 +124,7 @@ const fileInfo = computed(() => {
         来源
       </a>
       <span
-        v-if="!message.target_url && !message.source_url"
+        v-if="!archiveUrl && !sourceUrl"
         class="inline-flex items-center gap-1 text-xs text-steam-dim/60"
       >
         无链接
