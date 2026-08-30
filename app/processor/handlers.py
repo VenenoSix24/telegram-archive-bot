@@ -20,8 +20,8 @@ from app.processor.adapter import (
     resolve_source_url,
 )
 from app.processor.commands import parse_command
-from app.processor.ratings import update_rating
-from app.processor.recorder import add_manual_tags, record_message
+from app.processor.edit import apply_message_edit
+from app.processor.recorder import record_message
 from app.processor.reports import (
     format_queue_report,
     format_status_report,
@@ -134,7 +134,9 @@ def attach_reply_command_handler(
             manual = normalize_tags(" ".join(args))
             if not manual:
                 return
-            rendered = add_manual_tags(conn, row["id"], manual)
+            ok = await apply_message_edit(
+                client, conn, row["id"], add_tags=manual, indexer=indexer
+            )
         else:
             if len(args) != 1:
                 return
@@ -144,15 +146,10 @@ def attach_reply_command_handler(
                 return
             if not 0 <= value <= 5:
                 return
-            rendered = update_rating(conn, row["id"], value)
-        if rendered is None:
+            ok = await apply_message_edit(client, conn, row["id"], rating=value)
+        if not ok:
             return
-        await client.edit_message(
-            row["target_chat_id"], row["target_message_id"], rendered
-        )
         await client.delete_messages(event.chat_id, [msg.id])
-        if cmd == "tag" and indexer is not None:
-            indexer.schedule()
         logger.info(
             "reply %s on %s/%s applied to messages#%s",
             cmd,
