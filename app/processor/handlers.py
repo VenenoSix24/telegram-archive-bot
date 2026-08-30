@@ -20,8 +20,14 @@ from app.processor.adapter import (
 from app.processor.commands import parse_command
 from app.processor.ratings import update_rating
 from app.processor.recorder import add_manual_tags, record_message
+from app.processor.reports import (
+    format_queue_report,
+    format_status_report,
+    format_tag_report,
+)
 from app.queue.manager import QueueManager
 from app.tags.engine import normalize_tags
+from app.tags.index import compute_tag_counts
 
 logger = logging.getLogger(__name__)
 
@@ -144,3 +150,48 @@ def attach_reply_command_handler(
         )
 
     return on_reply_command
+
+
+def attach_management_command_handler(
+    client, config: Config, conn: sqlite3.Connection, queue: QueueManager
+):
+    """源群里管理员的管理命令：/status /queue /pause /resume /tags /id。
+
+    回复类命令（/tag /rating）交给 attach_reply_command_handler；这里只处理
+    非回复指令，且仅管理员（event.sender_id ∈ admins）。
+    """
+    ids = [c.chat_id for c in config.source_chats]
+    if not ids:
+        return None
+
+    @client.on(events.NewMessage(chats=ids))
+    async def on_management_command(event):
+        msg = event.message
+        if msg.reply_to_msg_id:
+            return
+        parsed = parse_command(msg.text)
+        if parsed is None:
+            return
+        cmd, _args = parsed
+        if event.sender_id not in config.admins:
+            return
+        if cmd == "status":
+            text = format_status_report(config, queue)
+        elif cmd == "queue":
+            text = format_queue_report(queue.stats())
+        elif cmd == "tags":
+            text = format_tag_report(compute_tag_counts(conn))
+        elif cmd == "id":
+            text = f"chat_id: {event.chat_id}\nsender_id: {event.sender_id}"
+        elif cmd == "pause":
+            queue.pause()
+            text = "队列已暂停"
+        elif cmd == "resume":
+            queue.resume()
+            text = "队列已恢复"
+        else:
+            return
+        await client.send_message(event.chat_id, text)
+        logger.info("admin %s ran /%s", event.sender_id, cmd)
+
+    return on_management_command

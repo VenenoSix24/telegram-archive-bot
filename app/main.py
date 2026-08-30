@@ -10,6 +10,7 @@ from app.config import ConfigError, load_config
 from app.database.migrate import apply_migrations, open_db
 from app.logging_setup import setup_logging
 from app.processor.handlers import (
+    attach_management_command_handler,
     attach_new_message_handler,
     attach_reply_command_handler,
 )
@@ -85,6 +86,7 @@ async def _run() -> int:
     indexer.start()
     attach_new_message_handler(client, config, conn, queue, indexer)
     attach_reply_command_handler(client, config, conn, indexer)
+    attach_management_command_handler(client, config, conn, queue)
 
     logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:
