@@ -42,6 +42,10 @@ class Config:
     admins: frozenset[int]
     url_template: str | None
     database_path: str
+    web_enabled: bool
+    web_host: str
+    web_port: int
+    web_token: str
 
     def target_for(self, source_chat_id: int) -> int:
         """该源群的目标频道：源群指定优先，否则用全局 target_channel。"""
@@ -63,6 +67,13 @@ def _env_names(names: list[str]) -> dict[str, str]:
             "Copy .env.example to .env and fill in the values."
         )
     return {n: os.getenv(n) for n in names}
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
 def load_config(config_path: str | Path = "config.yaml") -> Config:
@@ -119,6 +130,14 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
             "admins is empty: configure at least one admin user id in config.yaml."
         )
 
+    web_enabled = _env_bool("WEB_ENABLED", default=True)
+    web_token = os.getenv("WEB_TOKEN") or ""
+    if web_enabled and not web_token:
+        raise ConfigError(
+            "WEB_TOKEN is required when WEB_ENABLED is true. "
+            "Copy .env.example to .env and fill in a token (e.g. `openssl rand -hex 32`)."
+        )
+
     return Config(
         api_id=api_id,
         api_hash=env["TELEGRAM_API_HASH"],
@@ -133,4 +152,8 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         admins=admins,
         url_template=search.get("url_template"),
         database_path=raw.get("database", {}).get("path", "archive.sqlite"),
+        web_enabled=web_enabled,
+        web_host=os.getenv("WEB_HOST", "127.0.0.1"),
+        web_port=int(os.getenv("WEB_PORT", "8000")),
+        web_token=web_token,
     )

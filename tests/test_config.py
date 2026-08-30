@@ -11,6 +11,7 @@ from app.config import ConfigError, load_config
 def env(monkeypatch):
     monkeypatch.setenv("TELEGRAM_API_ID", "123456")
     monkeypatch.setenv("TELEGRAM_API_HASH", "testhash")
+    monkeypatch.setenv("WEB_TOKEN", "test-web-token")
     return monkeypatch
 
 
@@ -116,3 +117,25 @@ def test_empty_source_chats_raises(env, tmp_path):
 def test_missing_admins_raises(env, tmp_path):
     with pytest.raises(ConfigError, match="admins"):
         load_config(_write_config(tmp_path, MINIMAL.replace("admins:\n  - 111\n  - 222\n", "")))
+
+
+def test_web_token_required_when_enabled(env, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEB_ENABLED", "true")
+    monkeypatch.delenv("WEB_TOKEN", raising=False)
+    with pytest.raises(ConfigError, match="WEB_TOKEN"):
+        load_config(_write_config(tmp_path, MINIMAL))
+
+
+def test_web_disabled_skips_token(env, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEB_ENABLED", "false")
+    monkeypatch.delenv("WEB_TOKEN", raising=False)
+    cfg = load_config(_write_config(tmp_path, MINIMAL))
+    assert cfg.web_enabled is False
+
+
+def test_web_parses_env(env, tmp_path):
+    cfg = load_config(_write_config(tmp_path, MINIMAL))
+    assert cfg.web_enabled is True
+    assert cfg.web_token == "test-web-token"
+    assert cfg.web_host == "127.0.0.1"
+    assert cfg.web_port == 8000
