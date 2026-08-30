@@ -1,0 +1,40 @@
+# secrets & credentials
+.env
+.env.*
+!.env.example
+
+# real config (only config.example.yaml is committed)
+config.yaml
+
+# telethon session (禁止提交 GitHub)
+*.session
+*.session-journal
+
+# database
+*.db
+*.sqlite
+*.sqlite3
+
+# logs
+logs/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
+
+# 本地设计文档与决策记录（开发规范 3.4：不进公开仓库）
+开发文档*.md
+开发规范*.md
+docs/decisions/
