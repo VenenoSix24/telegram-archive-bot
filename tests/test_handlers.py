@@ -9,7 +9,7 @@ import pytest
 from app.config import Config, SourceChat
 from app.database.migrate import apply_migrations, open_db
 from app.processor.adapter import IncomingMessage
-from app.processor.handlers import process_incoming
+from app.processor.handlers import _parse_rethumb_limit, process_incoming
 from app.queue.manager import QueueManager
 
 
@@ -112,3 +112,10 @@ def test_relay_message_uses_relay_default_tags(ctx):
         )
     ]
     assert tags == [("历史", "source")]
+
+
+def test_rethumb_limit_default_and_valid():
+    assert _parse_rethumb_limit([]) == 100
+    assert _parse_rethumb_limit(["50"]) == 50
+    assert _parse_rethumb_limit(["0"]) == 1  # 兜底下限
+    assert _parse_rethumb_limit(["abc"]) == 100  # 非法值回退默认
