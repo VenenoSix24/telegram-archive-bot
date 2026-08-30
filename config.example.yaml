@@ -1,0 +1,46 @@
+telegram:
+  # 分类群：新消息模式监听这些群，全部新消息归档
+  source_chats:
+    - chat_id: -100123456789
+      name: 游戏
+      default_tags:
+        - 游戏
+
+    - chat_id: -100987654321
+      name: 软件
+      default_tags:
+        - 软件
+
+  # 总频道：归档消息的目的地（broadcast channel + 关联讨论组）
+  target_channel:
+    chat_id: -100111222333
+
+  # 中转群：历史消息模式，手动转发历史消息到这里 + /tag 评论
+  relay_chat:
+    chat_id: -100444555666
+
+forward:
+  # 默认每隔 N 秒发送一条
+  interval: 3
+  # 失败最大重试次数，超限标记 failed
+  retry_count: 3
+
+source:
+  # 归档消息是否显示「来自：」来源链接
+  show_link: true
+
+tags:
+  # 是否保留原消息中的 hashtag
+  preserve_original: true
+
+rating:
+  enabled: true
+
+search:
+  # 私有频道时使用 url_template，{tag} 会被替换成对应 Tag；
+  # 公开频道自动生成 https://t.me/channel_name/123
+  url_template: "https://t.me/c/123456789?q={tag}"
+
+# 管理员 User ID，验证 event.sender_id 是否在列表中
+admins:
+  - 123456789
