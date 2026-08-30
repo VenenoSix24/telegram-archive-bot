@@ -16,8 +16,13 @@ def test_build_source_url_with_username():
     assert build_source_url(chat, 12) == "https://t.me/my_channel/12"
 
 
-def test_build_source_url_private_no_username():
-    assert build_source_url(SimpleNamespace(username=None), 12) is None
+def test_build_source_url_private_channel_deeplink():
+    chat = SimpleNamespace(username=None, id=-1003942965645)
+    assert build_source_url(chat, 12) == "https://t.me/c/3942965645/12"
+
+
+def test_build_source_url_plain_group_none():
+    assert build_source_url(SimpleNamespace(username=None, id=123456), 12) is None
 
 
 def test_classify_media_none():

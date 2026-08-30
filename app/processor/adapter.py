@@ -47,9 +47,19 @@ def classify_media(media) -> str | None:
 
 
 def build_source_url(chat_entity, message_id: int) -> str | None:
-    """公开频道生成 t.me/<username>/<id>；无 username（私有/群）返回 None。"""
+    """生成消息来源链接。
+
+    公开实体用 t.me/<username>/<id>；私有频道/超级群（-100 前缀）用
+    t.me/c/<内部id>/<id> 深链；普通群无 username 无法生成，返回 None。
+    """
     username = getattr(chat_entity, "username", None)
-    return f"https://t.me/{username}/{message_id}" if username else None
+    if username:
+        return f"https://t.me/{username}/{message_id}"
+    chat_id = getattr(chat_entity, "id", None)
+    if isinstance(chat_id, int) and chat_id < 0:
+        internal = str(chat_id).removeprefix("-100")
+        return f"https://t.me/c/{internal}/{message_id}"
+    return None
 
 
 def build_incoming(message, chat_id: int, source_url: str | None) -> IncomingMessage:
