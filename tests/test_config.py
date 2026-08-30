@@ -56,11 +56,10 @@ def test_load_minimal_config(env, tmp_path):
     assert cfg.source_chats[0].default_tags == ["游戏"]
     assert cfg.target_channel_id == -1002
     assert cfg.forward_interval == 3
-    assert cfg.relay_chat_id is None
     assert cfg.admins == frozenset({111, 222})
 
 
-def test_load_relay_chat(env, tmp_path):
+def test_legacy_relay_chat_merged_as_source(env, tmp_path):
     yaml_text = """
 telegram:
   source_chats:
@@ -75,8 +74,30 @@ admins:
   - 111
 """
     cfg = load_config(_write_config(tmp_path, yaml_text))
-    assert cfg.relay_chat_id == -1003
-    assert cfg.relay_default_tags == ("历史",)
+    ids = {c.chat_id for c in cfg.source_chats}
+    assert ids == {-1001, -1003}
+    relay = next(c for c in cfg.source_chats if c.chat_id == -1003)
+    assert relay.default_tags == ["历史"]
+
+
+def test_target_for_override_and_default(env, tmp_path):
+    yaml_text = """
+telegram:
+  source_chats:
+    - chat_id: -1001
+      name: 游戏
+      target_channel_id: -1008
+    - chat_id: -1002
+      name: 软件
+  target_channel:
+    chat_id: -1009
+admins:
+  - 1
+"""
+    cfg = load_config(_write_config(tmp_path, yaml_text))
+    assert cfg.target_for(-1001) == -1008
+    assert cfg.target_for(-1002) == -1009
+    assert cfg.all_target_channel_ids() == {-1008, -1009}
 
 
 def test_missing_env_raises(monkeypatch, tmp_path):

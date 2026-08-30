@@ -100,7 +100,8 @@ async def archive_message_by_db_id(
         if not row["original_text"] and anchor_text:
             body_override = anchor_text
     rendered = render_from_db(conn, row, body_override=body_override)
-    target = await client.get_entity(config.target_channel_id)
+    target_id = config.target_for(row["source_chat_id"])
+    target = await client.get_entity(target_id)
 
     medias = [m.media for m in msgs if m.media]
     if medias:
@@ -123,7 +124,7 @@ async def archive_message_by_db_id(
     _save_target(
         conn,
         message_id,
-        target_chat_id=config.target_channel_id,
+        target_chat_id=target_id,
         target_message_id=first.id,
         target_url=target_url,
     )

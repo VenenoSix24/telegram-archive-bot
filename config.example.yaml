@@ -1,24 +1,27 @@
 telegram:
-  # 分类群：新消息模式监听这些群，全部新消息归档
+  # 源群统一模型：监听这些群，全部新消息自动归档。
+  # 每个源群可带 default_tags；可选 target_channel_id 指定归档频道（缺省走全局）。
   source_chats:
     - chat_id: -100123456789
       name: 游戏
       default_tags:
         - 游戏
+      # target_channel_id: -100111222333  # 可选，缺省归档到全局 target_channel
 
     - chat_id: -100987654321
       name: 软件
       default_tags:
         - 软件
 
-  # 总频道：归档消息的目的地（broadcast channel + 关联讨论组）
+    # 中转群作为普通源群之一：历史消息手动转发到这里归档，回复 /tag 可补 tag
+    - chat_id: -100444555666
+      name: 中转群
+      default_tags: []
+
+  # 全局目标频道：未单独指定 target_channel_id 的源群归档到这里
+  #（broadcast channel + 关联讨论组）
   target_channel:
     chat_id: -100111222333
-
-  # 中转群：历史消息模式，手动转发历史消息到这里 + 回复补 /tag
-  relay_chat:
-    chat_id: -100444555666
-    default_tags: []   # 兜底：转发消息无任何 tag 时的默认分类
 
 forward:
   # 默认每隔 N 秒发送一条
