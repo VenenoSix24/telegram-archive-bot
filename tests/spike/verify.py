@@ -95,8 +95,6 @@ async def _run() -> int:
 
     if cmd == "listen":
         ids = {c.chat_id for c in config.source_chats}
-        if config.relay_chat_id:
-            ids.add(config.relay_chat_id)
         print("正在监听 " + ", ".join(str(i) for i in sorted(ids)))
         print("请在 Telegram 客户端依次做三件事：")
         print("  1. 往来源群发一条带媒体的消息（图/视频/文件 + 文字）")

@@ -48,19 +48,27 @@ async def _run() -> int:
         return 4
 
     for src in config.source_chats:
-        logger.info("source: %s (%s)", chats[src.chat_id], src.chat_id)
-    logger.info("target: %s (%s)", chats[config.target_channel_id], config.target_channel_id)
-    if config.relay_chat_id:
-        logger.info("relay: %s (%s)", chats[config.relay_chat_id], config.relay_chat_id)
-
-    target = await client.get_entity(config.target_channel_id)
-    is_admin = bool(
-        getattr(target, "creator", False) or getattr(target, "admin_rights", None)
-    )
-    if not is_admin:
-        logger.warning(
-            "目标频道：当前账号不是管理员，将无法发消息/编辑。请把专用小号设为频道管理员。"
+        target_id = config.target_for(src.chat_id)
+        logger.info(
+            "source: %s (%s) -> target %s (%s)",
+            chats[src.chat_id],
+            src.chat_id,
+            chats[target_id],
+            target_id,
         )
+
+    for target_id in sorted(config.all_target_channel_ids()):
+        target = await client.get_entity(target_id)
+        is_admin = bool(
+            getattr(target, "creator", False) or getattr(target, "admin_rights", None)
+        )
+        if not is_admin:
+            logger.warning(
+                "目标频道 %s (%s)：当前账号不是管理员，将无法发消息/编辑。"
+                "请把小号设为该频道管理员。",
+                chats[target_id],
+                target_id,
+            )
 
     queue = QueueManager(
         conn,

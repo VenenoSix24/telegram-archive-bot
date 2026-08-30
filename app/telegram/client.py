@@ -52,9 +52,7 @@ async def validate_config_chats(client: TelegramClient, config: Config) -> dict:
     """
     resolved: dict[int, str] = {}
     ids = {c.chat_id for c in config.source_chats}
-    ids.add(config.target_channel_id)
-    if config.relay_chat_id:
-        ids.add(config.relay_chat_id)
+    ids.update(config.all_target_channel_ids())
 
     for chat_id in sorted(ids):
         try:

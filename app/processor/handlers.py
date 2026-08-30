@@ -34,13 +34,10 @@ def process_incoming(
     """落库并入队的决策：指令/已存在跳过，返回是否入队。"""
     if parse_command(incoming.text) is not None:
         return False
-    if incoming.source_chat_id == config.relay_chat_id:
-        source_tags = list(config.relay_default_tags)
-    else:
-        chat_cfg = next(
-            (c for c in config.source_chats if c.chat_id == incoming.source_chat_id), None
-        )
-        source_tags = chat_cfg.default_tags if chat_cfg else []
+    chat_cfg = next(
+        (c for c in config.source_chats if c.chat_id == incoming.source_chat_id), None
+    )
+    source_tags = chat_cfg.default_tags if chat_cfg else []
     message_id = record_message(
         conn,
         incoming,
@@ -57,10 +54,8 @@ def process_incoming(
 def attach_new_message_handler(
     client, config: Config, conn: sqlite3.Connection, queue: QueueManager
 ):
-    """注册 source_chats 与中转群的新消息监听。"""
+    """注册所有源群的新消息监听。"""
     ids = [c.chat_id for c in config.source_chats]
-    if config.relay_chat_id:
-        ids.append(config.relay_chat_id)
 
     @client.on(events.NewMessage(chats=ids))
     async def on_new_message(event):
@@ -79,14 +74,15 @@ def attach_new_message_handler(
 
 
 def attach_reply_command_handler(client, config: Config, conn: sqlite3.Connection):
-    """中转群里对已归档消息回复 /tag 的补充处理：追加 tag→重渲染→编辑→删指令。
+    """源群里对已归档消息回复 /tag 的补充处理：追加 tag→重渲染→编辑→删指令。
 
     仅管理员（event.sender_id ∈ admins）生效；非指令回复忽略。
     """
-    if not config.relay_chat_id:
+    ids = [c.chat_id for c in config.source_chats]
+    if not ids:
         return None
 
-    @client.on(events.NewMessage(chats=[config.relay_chat_id]))
+    @client.on(events.NewMessage(chats=ids))
     async def on_reply_command(event):
         msg = event.message
         if not msg.reply_to_msg_id:
