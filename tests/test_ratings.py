@@ -68,3 +68,10 @@ def test_render_from_db_omits_empty_sections(conn):
     conn.commit()
     row = conn.execute("SELECT * FROM messages WHERE id=2").fetchone()
     assert render_from_db(conn, row) == "纯文本"
+
+
+def test_render_from_db_body_override(conn):
+    _seed(conn)
+    row = conn.execute("SELECT * FROM messages WHERE id=1").fetchone()
+    rendered = render_from_db(conn, row, body_override="相册锚文字")
+    assert rendered == "#游戏\n\n相册锚文字\n\n来自：\nhttps://t.me/x/1"

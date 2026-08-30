@@ -65,7 +65,13 @@ async def archive_message_by_db_id(
 
     chat = await client.get_entity(row["source_chat_id"])
     msgs = await _fetch_source_messages(client, chat, row)
-    rendered = render_from_db(conn, row)
+    # 相册组文字挂在组内最早消息上：本条正文为空时用锚消息文字渲染（避免缺 caption）。
+    body_override = None
+    if row["media_group_id"] and msgs:
+        anchor_text = msgs[0].message or ""
+        if not row["original_text"] and anchor_text:
+            body_override = anchor_text
+    rendered = render_from_db(conn, row, body_override=body_override)
     target = await client.get_entity(config.target_channel_id)
 
     medias = [m.media for m in msgs if m.media]
