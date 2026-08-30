@@ -24,7 +24,8 @@ def _config(chat_id: int = -1001) -> Config:
         bot_token=None,
         source_chats=[SourceChat(chat_id=chat_id, name="源", default_tags=["游戏"])],
         target_channel_id=-1002,
-        relay_chat_id=None,
+        relay_chat_id=-1003,
+        relay_default_tags=("历史",),
         forward_interval=3,
         retry_count=3,
         show_link=True,
@@ -89,3 +90,20 @@ def test_album_later_item_skipped(ctx):
     assert process_incoming(config, conn, queue, inc1)
     assert not process_incoming(config, conn, queue, inc2)
     assert _pending(conn) == 1
+
+
+def test_relay_message_uses_relay_default_tags(ctx):
+    conn, queue, config = ctx
+    assert process_incoming(config, conn, queue, _incoming(text="转发历史", chat_id=-1003, mid=9))
+    mid = conn.execute(
+        "SELECT id FROM messages WHERE source_message_id=9"
+    ).fetchone()["id"]
+    tags = [
+        (r["name"], r["type"])
+        for r in conn.execute(
+            "SELECT t.name, mt.type FROM message_tags mt "
+            "JOIN tags t ON t.id = mt.tag_id WHERE mt.message_id=?",
+            (mid,),
+        )
+    ]
+    assert tags == [("历史", "source")]

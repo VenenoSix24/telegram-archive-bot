@@ -32,6 +32,7 @@ class Config:
     source_chats: list[SourceChat]
     target_channel_id: int
     relay_chat_id: int | None
+    relay_default_tags: tuple[str, ...]
     forward_interval: float
     retry_count: int
     show_link: bool
@@ -87,6 +88,8 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         raise ConfigError("telegram.target_channel.chat_id is required.")
 
     relay_chat = tg.get("relay_chat") or {}
+    relay_chat_id = int(relay_chat["chat_id"]) if relay_chat.get("chat_id") is not None else None
+    relay_default_tags = tuple(relay_chat.get("default_tags", []))
     admins = frozenset(int(x) for x in raw.get("admins", []))
     if not admins:
         raise ConfigError(
@@ -99,7 +102,8 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         bot_token=os.getenv("TELEGRAM_BOT_TOKEN") or None,
         source_chats=source_chats,
         target_channel_id=int(target_channel_id),
-        relay_chat_id=int(relay_chat["chat_id"]) if relay_chat.get("chat_id") is not None else None,
+        relay_chat_id=relay_chat_id,
+        relay_default_tags=relay_default_tags,
         forward_interval=float(fw.get("interval", 3)),
         retry_count=int(fw.get("retry_count", 3)),
         show_link=bool(src.get("show_link", True)),

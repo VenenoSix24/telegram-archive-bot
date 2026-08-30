@@ -15,9 +15,10 @@ telegram:
   target_channel:
     chat_id: -100111222333
 
-  # 中转群：历史消息模式，手动转发历史消息到这里 + /tag 评论
+  # 中转群：历史消息模式，手动转发历史消息到这里 + 回复补 /tag
   relay_chat:
     chat_id: -100444555666
+    default_tags: []   # 兜底：转发消息无任何 tag 时的默认分类
 
 forward:
   # 默认每隔 N 秒发送一条

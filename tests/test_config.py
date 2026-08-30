@@ -70,11 +70,13 @@ telegram:
     chat_id: -1002
   relay_chat:
     chat_id: -1003
+    default_tags: [历史]
 admins:
   - 111
 """
     cfg = load_config(_write_config(tmp_path, yaml_text))
     assert cfg.relay_chat_id == -1003
+    assert cfg.relay_default_tags == ("历史",)
 
 
 def test_missing_env_raises(monkeypatch, tmp_path):

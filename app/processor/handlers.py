@@ -18,8 +18,9 @@ from app.processor.adapter import (
     resolve_source_url,
 )
 from app.processor.commands import parse_command
-from app.processor.recorder import record_message
+from app.processor.recorder import add_manual_tags, record_message
 from app.queue.manager import QueueManager
+from app.tags.engine import normalize_tags
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,13 @@ def process_incoming(
     """落库并入队的决策：指令/已存在跳过，返回是否入队。"""
     if parse_command(incoming.text) is not None:
         return False
-    chat_cfg = next(
-        (c for c in config.source_chats if c.chat_id == incoming.source_chat_id), None
-    )
-    source_tags = chat_cfg.default_tags if chat_cfg else []
+    if incoming.source_chat_id == config.relay_chat_id:
+        source_tags = list(config.relay_default_tags)
+    else:
+        chat_cfg = next(
+            (c for c in config.source_chats if c.chat_id == incoming.source_chat_id), None
+        )
+        source_tags = chat_cfg.default_tags if chat_cfg else []
     message_id = record_message(
         conn,
         incoming,
@@ -53,8 +57,10 @@ def process_incoming(
 def attach_new_message_handler(
     client, config: Config, conn: sqlite3.Connection, queue: QueueManager
 ):
-    """注册 source_chats 的新消息监听。"""
+    """注册 source_chats 与中转群的新消息监听。"""
     ids = [c.chat_id for c in config.source_chats]
+    if config.relay_chat_id:
+        ids.append(config.relay_chat_id)
 
     @client.on(events.NewMessage(chats=ids))
     async def on_new_message(event):
@@ -70,3 +76,50 @@ def attach_new_message_handler(
             )
 
     return on_new_message
+
+
+def attach_reply_command_handler(client, config: Config, conn: sqlite3.Connection):
+    """中转群里对已归档消息回复 /tag 的补充处理：追加 tag→重渲染→编辑→删指令。
+
+    仅管理员（event.sender_id ∈ admins）生效；非指令回复忽略。
+    """
+    if not config.relay_chat_id:
+        return None
+
+    @client.on(events.NewMessage(chats=[config.relay_chat_id]))
+    async def on_reply_command(event):
+        msg = event.message
+        if not msg.reply_to_msg_id:
+            return
+        parsed = parse_command(msg.text)
+        if parsed is None:
+            return
+        cmd, args = parsed
+        if event.sender_id not in config.admins:
+            return
+        if cmd != "tag":
+            return
+        manual = normalize_tags(" ".join(args))
+        if not manual:
+            return
+        row = conn.execute(
+            "SELECT * FROM messages WHERE source_chat_id=? AND source_message_id=?",
+            (event.chat_id, msg.reply_to_msg_id),
+        ).fetchone()
+        if row is None or not row["target_chat_id"]:
+            return
+        rendered = add_manual_tags(conn, row["id"], manual)
+        if rendered is None:
+            return
+        await client.edit_message(
+            row["target_chat_id"], row["target_message_id"], rendered
+        )
+        await client.delete_messages(event.chat_id, [msg.id])
+        logger.info(
+            "reply /tag on %s/%s applied to messages#%s",
+            event.chat_id,
+            msg.reply_to_msg_id,
+            row["id"],
+        )
+
+    return on_reply_command
