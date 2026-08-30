@@ -43,7 +43,11 @@ async def _run() -> int:
     if config.relay_chat_id:
         logger.info("relay: %s (%s)", chats[config.relay_chat_id], config.relay_chat_id)
 
-    if not await client.is_admin(config.target_channel_id):
+    target = await client.get_entity(config.target_channel_id)
+    is_admin = bool(
+        getattr(target, "creator", False) or getattr(target, "admin_rights", None)
+    )
+    if not is_admin:
         logger.warning(
             "目标频道：当前账号不是管理员，将无法发消息/编辑。请把专用小号设为频道管理员。"
         )
