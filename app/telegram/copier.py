@@ -3,15 +3,18 @@
 媒体以引用复用（send_file file=media），不下载到服务器再上传（ADR 0001/d、
 spike 0002 验证）；Album 一次传 media list 保持分组与顺序。本函数即
 Queue 的 sender 接口，收到 message_id 后从 DB 读记录执行复制并回填 target。
+
+注意（平台硬限制）：引用复制视频时 Telegram 不会为新消息生成封面，而
+Telethon 的 thumb 参数只在「上传新文件」路径生效、mtproto 的
+InputMediaDocument 也没有 thumb 字段——因此引用复制的视频无法附加封面，
+部分无封面视频在客户端显示为黑色缩略图。要带封面只能重新上传视频本体，
+违背「不下载重传」原则，故不采纳。
 """
 
 from __future__ import annotations
 
 import logging
 import sqlite3
-from io import BytesIO
-
-from telethon.tl.types import MessageMediaDocument
 
 from app.renderer.db import render_from_db
 
@@ -57,34 +60,6 @@ def _save_target(
     conn.commit()
 
 
-async def _source_thumb(client, first_message) -> tuple[str, bytes] | None:
-    """视频/文档缩略图随附，避免目标频道黑图。
-
-    引用复制媒体时服务端不会为复制出的消息生成缩略图；源缩略图可能藏在
-    media.video_cover（封面 photo，很多视频主 document 无 thumbs）或
-    document.thumbs，按此顺序取。仅单条文档生效；相册多图不受影响。
-    """
-    media = first_message.media
-    if not isinstance(media, MessageMediaDocument):
-        return None
-    cover = getattr(media, "video_cover", None)
-    if cover is not None:
-        try:
-            data = await client.download_file(cover)
-            return ("thumb.jpg", data)
-        except Exception:
-            logger.debug("video_cover download failed for msg %s", first_message.id)
-    if not getattr(media.document, "thumbs", None):
-        return None
-    try:
-        buf = BytesIO()
-        await client.download_media(first_message, file=buf, thumb=-1)
-        return ("thumb.jpg", buf.getvalue())
-    except Exception:
-        logger.debug("thumb download failed for msg %s", first_message.id)
-        return None
-
-
 async def archive_message_by_db_id(
     client,
     config,
@@ -113,14 +88,7 @@ async def archive_message_by_db_id(
 
     medias = [m.media for m in msgs if m.media]
     if medias:
-        send_kwargs: dict = {}
-        if len(medias) == 1:
-            thumb = await _source_thumb(client, msgs[0])
-            if thumb:
-                send_kwargs["thumb"] = thumb
-        sent = await client.send_file(
-            target, file=medias, caption=rendered, **send_kwargs
-        )
+        sent = await client.send_file(target, file=medias, caption=rendered)
         sent_list = sent if isinstance(sent, list) else [sent]
     else:
         sent_msg = await client.send_message(target, rendered)
