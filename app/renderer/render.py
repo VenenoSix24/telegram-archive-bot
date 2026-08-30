@@ -1,12 +1,17 @@
 """最终消息渲染：评级 → Tag → 正文 → 来源。
 
-格式顺序固定（文档第 10 节）。Render 只在数据库记录 original_text，
-改模板可重新生成 rendered_text（文档第 35 节）。
+格式顺序固定（文档第 10 节）。original_text 存原文，渲染时正文剔除已并入
+tag 区的 hashtag（避免与上方 tag 行重复），改模板可重新生成 rendered_text
+（文档第 35 节）。
 """
 
 from __future__ import annotations
 
+import re
+
 from app.tags.engine import render_tags
+
+_HASHTAG = re.compile(r"#[^\s#]+")
 
 
 def format_rating(rating: int) -> str:
@@ -14,6 +19,12 @@ def format_rating(rating: int) -> str:
     if 1 <= rating <= 5:
         return "⭐" * rating
     return ""
+
+
+def _strip_echoed_tags(text: str) -> str:
+    """去掉正文中已并入 tag 区的 hashtag，折叠连续空格，保留换行。"""
+    text = _HASHTAG.sub("", text)
+    return re.sub(r"[ \t]+", " ", text).strip()
 
 
 def render_message(
@@ -31,10 +42,13 @@ def render_message(
         lines.append(stars)
     if tag_line:
         lines.append(tag_line)
-    if body:
+
+    cleaned = _strip_echoed_tags(body) if body else ""
+    if cleaned:
         if lines:
             lines.append("")
-        lines.append(body)
+        lines.append(cleaned)
+
     if source_url:
         if lines:
             lines.append("")

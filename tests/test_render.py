@@ -45,3 +45,20 @@ def test_render_no_rating_no_tags():
 def test_render_no_source_link():
     text = render_message(rating=4, tags=["游戏"], body="正文", source_url=None)
     assert text == "⭐⭐⭐⭐\n#游戏\n\n正文"
+
+
+def test_render_strips_hashtags_from_body():
+    text = render_message(
+        rating=0, tags=["游戏", "GTA5"], body="#GTA5 教程", source_url=None
+    )
+    assert text == "#游戏 #GTA5\n\n教程"
+
+
+def test_render_body_folds_extra_spaces():
+    text = render_message(rating=0, tags=["GTA5"], body="这是 #GTA5 教程", source_url=None)
+    assert text == "#GTA5\n\n这是 教程"
+
+
+def test_render_all_hashtags_body_omitted():
+    text = render_message(rating=0, tags=["游戏"], body="#游戏", source_url=None)
+    assert text == "#游戏"
