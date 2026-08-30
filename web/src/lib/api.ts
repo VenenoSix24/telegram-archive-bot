@@ -9,6 +9,15 @@ import type {
 /** 未登录（cookie 失效）时的统一跳转。 */
 export class AuthError extends Error {}
 
+/** 401 全局处理：清本地会话标记，统一跳登录页（避免空壳白屏）。 */
+function onUnauthorized() {
+  sessionStorage.removeItem('archive_authed')
+  const path = window.location.hash.replace(/^#/, '/') || '/'
+  if (path !== '/login') {
+    window.location.hash = '/login'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`/api/v1${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -16,6 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   })
   if (resp.status === 401) {
+    onUnauthorized()
     throw new AuthError('session expired')
   }
   if (!resp.ok) {
