@@ -14,6 +14,12 @@ def env(monkeypatch):
     return monkeypatch
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cwd(tmp_path, monkeypatch):
+    """load_dotenv 按 cwd 找 .env，切走以免读到项目根的真实 .env。"""
+    monkeypatch.chdir(tmp_path)
+
+
 def _write_config(tmp_path, text: str) -> str:
     path = tmp_path / "config.yaml"
     path.write_text(text, encoding="utf-8")
