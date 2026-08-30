@@ -11,6 +11,8 @@ import asyncio
 import logging
 import sqlite3
 
+from telethon.errors import MessageNotModifiedError
+
 from app.tags.index import compute_tag_counts, format_tag_index
 
 logger = logging.getLogger(__name__)
@@ -64,7 +66,11 @@ class IndexUpdater:
             return
         counts = compute_tag_counts(self._conn, target_chat_id=target_chat_id)
         target = await self._client.get_entity(target_chat_id)
-        await self._client.edit_message(target, index_id, format_tag_index(counts))
+        try:
+            await self._client.edit_message(target, index_id, format_tag_index(counts))
+        except MessageNotModifiedError:
+            # 内容与目标一致时 Telegram 报 not modified，属正常空转，无需重试
+            logger.debug("tag index unchanged in %s, skip edit", target_chat_id)
 
     async def _refresh_all(self) -> None:
         for target_id in sorted(self._config.all_target_channel_ids()):
