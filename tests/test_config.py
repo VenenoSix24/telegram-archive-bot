@@ -15,9 +15,9 @@ def env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_cwd(tmp_path, monkeypatch):
-    """load_dotenv 按 cwd 找 .env，切走以免读到项目根的真实 .env。"""
-    monkeypatch.chdir(tmp_path)
+def _block_dotenv(monkeypatch):
+    """阻止 load_config 读到真实 .env（find_dotenv 会向上找父目录）。"""
+    monkeypatch.setattr("app.config.load_dotenv", lambda: None)
 
 
 def _write_config(tmp_path, text: str) -> str:
