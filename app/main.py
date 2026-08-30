@@ -1,16 +1,18 @@
-"""V1 entry point：连接 Telegram、校验配置的 chat 可访问性、保持运行。
-
-Phase 2 起在此注册事件处理器；队列 worker 也在进程内协程运行。
-"""
+"""V1 entry point：连接、校验 chat、启动归档管道（监听 → 队列 → 复制）。"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from app.config import ConfigError, load_config
+from app.database.migrate import apply_migrations, open_db
 from app.logging_setup import setup_logging
+from app.processor.handlers import attach_new_message_handler
+from app.queue.manager import QueueManager
 from app.telegram.client import build_client, validate_config_chats
+from app.telegram.copier import archive_message_by_db_id
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +25,15 @@ async def _run() -> int:
         logger.error("%s", exc)
         return 2
 
+    conn = open_db(config.database_path)
+    apply_migrations(conn)
+
     client = build_client(config)
     await client.connect()
     if not await client.is_user_authorized():
         logger.warning("尚未登录：请先运行 python -m app.auth")
         await client.disconnect()
+        conn.close()
         return 3
 
     try:
@@ -35,6 +41,7 @@ async def _run() -> int:
     except RuntimeError as exc:
         logger.error("%s", exc)
         await client.disconnect()
+        conn.close()
         return 4
 
     for src in config.source_chats:
@@ -52,11 +59,27 @@ async def _run() -> int:
             "目标频道：当前账号不是管理员，将无法发消息/编辑。请把专用小号设为频道管理员。"
         )
 
-    logger.info("connected，监听与归档功能在后续 Phase 接入——Ctrl+C 停止")
+    queue = QueueManager(
+        conn,
+        sender=lambda mid: archive_message_by_db_id(client, config, conn, mid),
+        interval=config.forward_interval,
+        max_retries=config.retry_count,
+    )
+    recovered = queue.recover_incomplete()
+    if recovered:
+        logger.info("重启恢复 %s 条 processing 任务为 pending", recovered)
+    worker = asyncio.create_task(queue.run())
+    attach_new_message_handler(client, config, conn, queue)
+
+    logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:
         await client.run_until_disconnected()
     finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
         await client.disconnect()
+        conn.close()
     return 0
 
 
