@@ -18,6 +18,7 @@ from app.processor.adapter import (
     resolve_source_url,
 )
 from app.processor.commands import parse_command
+from app.processor.ratings import update_rating
 from app.processor.recorder import add_manual_tags, record_message
 from app.queue.manager import QueueManager
 from app.tags.engine import normalize_tags
@@ -93,10 +94,9 @@ def attach_reply_command_handler(client, config: Config, conn: sqlite3.Connectio
         cmd, args = parsed
         if event.sender_id not in config.admins:
             return
-        if cmd != "tag":
+        if cmd not in ("tag", "rating"):
             return
-        manual = normalize_tags(" ".join(args))
-        if not manual:
+        if cmd == "rating" and not config.rating_enabled:
             return
         row = conn.execute(
             "SELECT * FROM messages WHERE source_chat_id=? AND source_message_id=?",
@@ -104,7 +104,21 @@ def attach_reply_command_handler(client, config: Config, conn: sqlite3.Connectio
         ).fetchone()
         if row is None or not row["target_chat_id"]:
             return
-        rendered = add_manual_tags(conn, row["id"], manual)
+        if cmd == "tag":
+            manual = normalize_tags(" ".join(args))
+            if not manual:
+                return
+            rendered = add_manual_tags(conn, row["id"], manual)
+        else:
+            if len(args) != 1:
+                return
+            try:
+                value = int(args[0])
+            except ValueError:
+                return
+            if not 0 <= value <= 5:
+                return
+            rendered = update_rating(conn, row["id"], value)
         if rendered is None:
             return
         await client.edit_message(
@@ -112,7 +126,8 @@ def attach_reply_command_handler(client, config: Config, conn: sqlite3.Connectio
         )
         await client.delete_messages(event.chat_id, [msg.id])
         logger.info(
-            "reply /tag on %s/%s applied to messages#%s",
+            "reply %s on %s/%s applied to messages#%s",
+            cmd,
             event.chat_id,
             msg.reply_to_msg_id,
             row["id"],
