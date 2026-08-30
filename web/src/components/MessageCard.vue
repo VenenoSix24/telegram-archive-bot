@@ -5,9 +5,12 @@ import type { Message } from '@/lib/types'
 import Badge from '@/components/ui/Badge.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import { durationLabel } from '@/lib/format'
+import { useAspectRatio } from '@/composables/useAspectRatio'
 
 const props = defineProps<{ message: Message }>()
-const emit = defineEmits<{ rate: [number]; open: []; 'open-source': [] }>()
+const emit = defineEmits<{ rate: [number]; open: [] }>()
+
+const { ratio, onLoad } = useAspectRatio()
 
 const mediaIcon = computed(() => {
   switch (props.message.media_type) {
@@ -49,13 +52,15 @@ const fileInfo = computed(() => {
     <!-- 媒体区：photo/video 渲染缩略图；其余渲染类型图标占位 -->
     <div
       v-if="showThumb"
-      class="relative aspect-video w-full overflow-hidden bg-ink-raised"
+      class="relative w-full overflow-hidden bg-ink-raised"
+      :style="{ aspectRatio: ratio }"
     >
       <img
         :src="thumbSrc"
         :alt="'消息 #' + message.id"
         loading="lazy"
         class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+        @load="onLoad"
         @error="($event.target as HTMLImageElement).style.display = 'none'"
       />
       <span
@@ -91,27 +96,34 @@ const fileInfo = computed(() => {
       {{ fileInfo }}
     </p>
 
-    <!-- 底部：来源 + 打开 Telegram -->
+    <!-- 底部：归档频道 + 源链接（双按钮） -->
     <div class="mt-auto flex items-center gap-2 border-t border-ink-line px-3 py-2" @click.stop>
       <a
-        v-if="message.target_url || message.source_url"
-        :href="message.target_url || message.source_url!"
+        v-if="message.target_url"
+        :href="message.target_url"
         target="_blank"
         rel="noopener"
         class="inline-flex items-center gap-1 text-xs text-steam-dim transition-colors hover:text-gold"
       >
         <Send class="h-3.5 w-3.5" />
-        打开 Telegram
+        归档
       </a>
-      <button
-        v-else
-        type="button"
-        class="inline-flex items-center gap-1 text-xs text-steam-dim/70"
-        @click="emit('open-source')"
+      <a
+        v-if="message.source_url"
+        :href="message.source_url"
+        target="_blank"
+        rel="noopener"
+        class="inline-flex items-center gap-1 text-xs text-steam-dim transition-colors hover:text-gold"
       >
         <Link2 class="h-3.5 w-3.5" />
+        来源
+      </a>
+      <span
+        v-if="!message.target_url && !message.source_url"
+        class="inline-flex items-center gap-1 text-xs text-steam-dim/60"
+      >
         无链接
-      </button>
+      </span>
       <span v-if="message.source_url" class="ml-auto truncate font-mono text-[10px] text-steam-dim/50">
         {{ message.source_chat_id }}
       </span>

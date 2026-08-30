@@ -5,7 +5,8 @@ import type { Message } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
 import Button from '@/components/ui/Button.vue'
 import StarRating from '@/components/ui/StarRating.vue'
-import { durationLabel, sizeLabel } from '@/lib/format'
+import { durationLabel, formatTime, sizeLabel } from '@/lib/format'
+import { toastError, toastSuccess } from '@/composables/useToast'
 
 const props = defineProps<{ message: Message | null }>()
 const emit = defineEmits<{ close: []; update: [Message] }>()
@@ -32,30 +33,35 @@ const openUrl = computed(() => props.message?.target_url || props.message?.sourc
 
 async function setRating(n: number) {
   if (!props.message) return
-  await mutate({ rating: n })
+  await mutate({ rating: n }, n === 0 ? '已清除评级' : `评级设为 ${n} 星`)
 }
 
 async function addTag() {
   const name = newTag.value.trim()
   if (!name || !props.message || props.message.tags.some((t) => t.name === name)) return
-  await mutate({ add_tags: [name] })
+  await mutate({ add_tags: [name] }, `已添加标签「${name}」`)
   newTag.value = ''
 }
 
 async function removeTag(tagName: string) {
   if (!props.message) return
-  await mutate({ remove_tag_names: [tagName] })
+  await mutate({ remove_tag_names: [tagName] }, `已移除标签「${tagName}」`)
 }
 
-async function mutate(change: { rating?: number; add_tags?: string[]; remove_tag_names?: string[] }) {
+async function mutate(
+  change: { rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
+  doneText: string,
+) {
   if (!props.message) return
   busy.value = true
   error.value = ''
   try {
     const updated = await patchMessage(props.message.id, change)
     emit('update', updated)
+    toastSuccess(doneText)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
+    toastError(e instanceof Error ? e.message : '保存失败')
   } finally {
     busy.value = false
   }
@@ -112,7 +118,7 @@ async function mutate(change: { rating?: number; add_tags?: string[]; remove_tag
                 <img
                   :src="`/api/v1/messages/${message.id}/thumb`"
                   :alt="'消息 #' + message.id"
-                  class="max-h-80 w-full object-cover"
+                  class="max-h-96 w-full object-contain"
                 />
               </div>
 
@@ -143,7 +149,7 @@ async function mutate(change: { rating?: number; add_tags?: string[]; remove_tag
               <dl class="mt-4 space-y-1.5 border-t border-ink-line pt-3 text-xs text-steam-dim">
                 <div class="flex items-center gap-2">
                   <Calendar class="h-3.5 w-3.5" />
-                  {{ message.created_at }}
+                  {{ formatTime(message.created_at) }}
                 </div>
                 <div v-if="message.source_url" class="flex items-center gap-2">
                   <Link2 class="h-3.5 w-3.5" />

@@ -17,6 +17,7 @@ import logging
 import sqlite3
 
 from app.media.thumbnails import ThumbnailCache
+from app.processor.adapter import build_source_url
 from app.renderer.db import render_from_db
 
 logger = logging.getLogger(__name__)
@@ -98,8 +99,9 @@ async def archive_message_by_db_id(
         sent_list = [sent_msg]
 
     first = sent_list[0]
-    username = getattr(target, "username", None)
-    target_url = f"https://t.me/{username}/{first.id}" if username else None
+    # 归档消息链接：公开频道 t.me/<名称>/<id>，私密频道 t.me/c/<内部id>/<id>
+    #（与源链接同套逻辑，见 build_source_url）。
+    target_url = build_source_url(target, first.id)
     # 归档成功后再抓缩略图（引用复制拿到的是原始 media，可正常下载小图）。
     thumb_path = None
     if msgs:
