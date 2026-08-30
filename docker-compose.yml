@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    image: telegram-archive-bot:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # 业务配置只读挂载；数据/凭据不烧进镜像
+      - ./config.yaml:/app/config.yaml:ro
+      - ./telegram_archive.session:/app/telegram_archive.session
+      - ./archive.sqlite:/app/archive.sqlite
+      - ./logs:/app/logs

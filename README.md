@@ -74,11 +74,16 @@ Tag 用空格分隔（不换行、不连写），数据库中存结构化列表�
 
 ## 部署
 
-Docker（Phase 12 完成后验证）：
+Docker（需本机安装 Docker Desktop）：
 
 ```bash
+# 1. 首次登录：交互式手机号→验证码→2FA，生成 session
+docker compose run --rm app python -m app.auth
+# 2. 正式启动
 docker compose up -d
 ```
+
+会话、数据库、日志经 compose 卷持久化（`telegram_archive.session` / `archive.sqlite` / `logs/`），重启自动恢复。
 
 ## 备份
 
