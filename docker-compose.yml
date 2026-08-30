@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    ports:
+      # Web 后台（WEB_HOST 绑 0.0.0.0 时对外可用；本机保持 127.0.0.1 由 Linux 桥接限制访问）
+      - "${WEB_PORT:-8000}:${WEB_PORT:-8000}"
     volumes:
       # 业务配置只读挂载；数据/凭据不烧进镜像
       - ./config.yaml:/app/config.yaml:ro

@@ -37,7 +37,7 @@ python -m app        # run
 
 | File | Content |
 |---|---|
-| `.env` | API credentials (not committed) |
+| `.env` | API credentials, Web settings (`WEB_ENABLED` / `WEB_HOST` / `WEB_PORT` / `WEB_TOKEN`, not committed) |
 | `config.yaml` | source chats (default tags, optional per-source target), target channel, rate limit, tag/rating toggles, search template, admins |
 
 See [config.example.yaml](config.example.yaml) for all fields.
@@ -85,10 +85,47 @@ docker compose up -d
 
 Session, database and logs persist via compose volumes (`telegram_archive.session` / `archive.sqlite` / `logs/`); the queue recovers on restart.
 
+## Web UI (V2)
+
+One process runs both the Telegram archiving pipeline and a FastAPI Web UI (Vue 3 SPA).
+
+```text
+127.0.0.1:8000  →  Web UI (localhost by default)
+```
+
+- Login with `WEB_TOKEN` (a strong random string in `.env`); the browser keeps the session, re-login after restart
+- Browse archived messages, thumbnails, search, filter by Tag / rating / media type
+- Open a message to **edit rating and add / remove Tags** — writes DB → re-renders → updates the message
+  and pinned Tag index in the target channel. Telegram and Web stay in sync (DB is the single source of truth)
+- Thumbnails are small local files for browsing only; full media always opens back in Telegram (no media vault)
+
+### Local run
+
+`.env` already has `WEB_ENABLED=true` / `WEB_HOST=127.0.0.1` / `WEB_PORT=8000` / `WEB_TOKEN`. Just run:
+
+```bash
+python -m app        # then open http://127.0.0.1:8000
+```
+
+### Docker deploy
+
+Compose maps `WEB_PORT`; inside the container set `WEB_HOST=0.0.0.0` to expose it:
+
+```bash
+# .env
+WEB_HOST=0.0.0.0
+```
+
+```bash
+docker compose up -d   # frontend is built into the image (multi-stage); no Node needed locally
+```
+
+> On a server, put Caddy / Nginx in front with HTTPS.
+
 ## Backup
 
 - `telegram_archive.session`: Telegram login state; back it up manually for server migration (not committed).
-- Database file and `logs/` are persisted via volumes.
+- Database file, `logs/` and `thumbs/` (thumbnail cache) are persisted via volumes.
 
 ## Development
 

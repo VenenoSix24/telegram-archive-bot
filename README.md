@@ -37,7 +37,7 @@ python -m app        # 启动
 
 | 文件 | 内容 |
 |---|---|
-| `.env` | API 凭据（不进 Git） |
+| `.env` | API 凭据、Web 后台相关（`WEB_ENABLED` / `WEB_HOST` / `WEB_PORT` / `WEB_TOKEN`，不进 Git） |
 | `config.yaml` | 源群（含默认 Tag、可选独立目标频道）、总频道、限速、Tag/Rating 开关、搜索链接模板、admins |
 
 完整字段见 [config.example.yaml](config.example.yaml)。
@@ -85,10 +85,47 @@ docker compose up -d
 
 会话、数据库、日志经 compose 卷持久化（`telegram_archive.session` / `archive.sqlite` / `logs/`），重启自动恢复。
 
+## Web 后台（V2）
+
+同一个进程里跑着两个入口：Telegram 归档管道 + FastAPI Web（Vue 3 SPA）。
+
+```text
+127.0.0.1:8000  →  Web 后台（默认本机）
+```
+
+- 登录用 `WEB_TOKEN`（.env 里一个强随机串），浏览器保持会话，重启需重登
+- 浏览归档消息、看缩略图、搜索、按 Tag / 评级 / 媒体类型筛选
+- 点开消息可**直接改评级、加 / 删 Tag**——写 DB → 重渲染 → 更新总频道里的消息与
+  置顶索引，Telegram 与 Web 双向同步（DB 是唯一数据中心）
+- 缩略图只存本地小图用于浏览，完整媒体始终回 Telegram 打开（不建媒体仓库）
+
+### 本机运行
+
+`.env` 已含 `WEB_ENABLED=true` / `WEB_HOST=127.0.0.1` / `WEB_PORT=8000` / `WEB_TOKEN`，直接：
+
+```bash
+python -m app        # 启动后访问 http://127.0.0.1:8000
+```
+
+### Docker 部署
+
+compose 已映射 `WEB_PORT`；容器内需把 `WEB_HOST` 设为 `0.0.0.0` 才能对外：
+
+```bash
+# .env
+WEB_HOST=0.0.0.0
+```
+
+```bash
+docker compose up -d   # 前端已打进镜像（multi-stage），构建无需本机 Node
+```
+
+> 部署到服务器时，建议用 Caddy / Nginx 反代 + HTTPS（session cookie 走 TLS 更安全）。
+
 ## 备份
 
 - `telegram_archive.session`：Telegram 登录态，服务器迁移时手动备份还原（不进 Git）。
-- 数据库文件与 `logs/` 随 volume 持久化。
+- 数据库文件、`logs/`、`thumbs/`（缩略图缓存）随 volume 持久化。
 
 ## 开发
 
