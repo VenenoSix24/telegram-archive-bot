@@ -43,7 +43,9 @@ def test_find_message_by_target_miss(conn):
 def test_update_rating_rerenders(conn):
     _seed(conn)
     rendered = update_rating(conn, 1, 5)
-    assert rendered == "⭐⭐⭐⭐⭐\n#游戏\n\n正文\n\n来自：\nhttps://t.me/x/1"
+    assert rendered == (
+        "推荐指数：⭐⭐⭐⭐⭐\n#游戏\n\n正文\n\n来自：\nhttps://t.me/x/1"
+    )
     row = conn.execute("SELECT * FROM messages WHERE id=1").fetchone()
     assert row["rating"] == 5
     assert row["rendered_text"] == rendered

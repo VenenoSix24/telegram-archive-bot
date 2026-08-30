@@ -39,7 +39,7 @@ def render_message(
     stars = format_rating(rating)
     tag_line = render_tags(tags)
     if stars:
-        lines.append(stars)
+        lines.append(f"推荐指数：{stars}")
     if tag_line:
         lines.append(tag_line)
 
