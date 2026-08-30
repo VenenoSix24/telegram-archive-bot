@@ -20,7 +20,7 @@ def test_render_full_message():
         source_url="https://t.me/xxx/123",
     )
     assert text == (
-        "⭐⭐⭐⭐⭐\n"
+        "推荐指数：⭐⭐⭐⭐⭐\n"
         "#游戏 #GTA5 #MOD\n"
         "\n"
         "GTA5 NVE 教程\n"
@@ -44,7 +44,7 @@ def test_render_no_rating_no_tags():
 
 def test_render_no_source_link():
     text = render_message(rating=4, tags=["游戏"], body="正文", source_url=None)
-    assert text == "⭐⭐⭐⭐\n#游戏\n\n正文"
+    assert text == "推荐指数：⭐⭐⭐⭐\n#游戏\n\n正文"
 
 
 def test_render_strips_hashtags_from_body():
