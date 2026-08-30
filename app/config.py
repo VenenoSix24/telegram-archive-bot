@@ -42,6 +42,7 @@ class Config:
     admins: frozenset[int]
     url_template: str | None
     database_path: str
+    config_path: str
     web_enabled: bool
     web_host: str
     web_port: int
@@ -152,6 +153,7 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         admins=admins,
         url_template=search.get("url_template"),
         database_path=raw.get("database", {}).get("path", "archive.sqlite"),
+        config_path=str(config_path),
         web_enabled=web_enabled,
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=int(os.getenv("WEB_PORT", "8000")),
