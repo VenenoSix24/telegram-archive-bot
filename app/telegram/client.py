@@ -19,9 +19,28 @@ def build_client(config: Config) -> TelegramClient:
     return TelegramClient(Path(SESSION_FILE), config.api_id, config.api_hash)
 
 
+async def _resolve_entity(client: TelegramClient, chat_id: int):
+    """按配置 id 解析实体；正整数失败时按频道内部 id 的 -100 前缀再试。
+
+    Telethon 把正整数默认当作 user id，而用户可能直接填了私密频道的内部 id
+    （正确编码为 -100<内部id>），因此需要兜底重试。
+    """
+    try:
+        return await client.get_entity(chat_id)
+    except ValueError:
+        if 0 < chat_id < 10**12:
+            try:
+                candidate = int(f"-100{chat_id}")
+            except ValueError:
+                pass
+            else:
+                return await client.get_entity(candidate)
+        raise
+
+
 async def resolve_chat_name(client: TelegramClient, chat_id: int) -> str:
     """返回 chat_id 对应的实体标题；无法访问时抛出带修复提示的异常。"""
-    entity = await client.get_entity(chat_id)
+    entity = await _resolve_entity(client, chat_id)
     name = getattr(entity, "title", None) or getattr(entity, "username", None) or str(chat_id)
     return name
 
