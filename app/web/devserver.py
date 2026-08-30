@@ -15,8 +15,9 @@ from app.web.app import create_app
 async def main() -> None:
     config = load_config()
     app = create_app(config, client=None, conn=None, indexer=None)
+    port = int(os.environ.get("PORT", config.web_port))
     server = uvicorn.Server(
-        uvicorn.Config(app, host=config.web_host, port=config.web_port, log_level="warning")
+        uvicorn.Config(app, host=config.web_host, port=port, log_level="warning")
     )
     await server.serve()
 

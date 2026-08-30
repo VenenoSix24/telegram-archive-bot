@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.media.thumbnails import ThumbnailCache
 from app.processor.edit import apply_message_edit
+from app.web.config_editor import apply_editable_config, read_editable_config
 
 COOKIE_NAME = "archive_session"
 
@@ -95,6 +96,10 @@ def _sql_filters(query) -> tuple[str, list]:
     if source:
         conds.append("source_chat_id = ?")
         params.append(int(source))
+    target = query.get("target_chat_id")
+    if target:
+        conds.append("target_chat_id = ?")
+        params.append(int(target))
     q = query.get("q")
     if q:
         conds.append("(original_text LIKE ? OR rendered_text LIKE ?)")
@@ -108,7 +113,7 @@ def _sql_filters(query) -> tuple[str, list]:
     return where, params
 
 
-def build_api_router(database_path: str) -> APIRouter:
+def build_api_router(database_path: str, config_path: str | None = None) -> APIRouter:
     router = APIRouter(dependencies=[Depends(_require_auth)])
 
     @router.get("/health")
@@ -135,6 +140,13 @@ def build_api_router(database_path: str) -> APIRouter:
                 "SELECT COUNT(DISTINCT tag_id) AS n FROM message_tags"
             ).fetchone()["n"]
             tags = conn.execute("SELECT COUNT(*) AS n FROM tags").fetchone()["n"]
+            target_rows = conn.execute(
+                "SELECT target_chat_id, COUNT(*) AS n FROM messages "
+                "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
+            ).fetchall()
+            targets = [
+                {"chat_id": r["target_chat_id"], "count": r["n"]} for r in target_rows
+            ]
         queue = {"pending": 0, "processing": 0, "success": 0, "failed": 0}
         with _connect(database_path) as conn:
             for row in conn.execute(_QUEUE_COUNTS):
@@ -148,6 +160,7 @@ def build_api_router(database_path: str) -> APIRouter:
             },
             "tags": {"total": tags, "with_messages": tag_rows},
             "queue": queue,
+            "targets": targets,
         }
 
     @router.get("/tags")
@@ -205,7 +218,7 @@ def build_api_router(database_path: str) -> APIRouter:
 
         path = Path(existing) if existing else None
         if path is not None and path.exists():
-            return FileResponse(str(path))
+            return FileResponse(str(path), headers={"Cache-Control": "public, max-age=86400"})
 
         client = request.app.state.client
         if client is None:
@@ -232,7 +245,7 @@ def build_api_router(database_path: str) -> APIRouter:
                 "UPDATE messages SET thumb_path=? WHERE id=?", (str(fetched), message_id)
             )
             conn.commit()
-        return FileResponse(str(fetched))
+        return FileResponse(str(fetched), headers={"Cache-Control": "public, max-age=86400"})
 
     @router.patch("/messages/{message_id}")
     async def patch_message(
@@ -263,5 +276,20 @@ def build_api_router(database_path: str) -> APIRouter:
                 "SELECT * FROM messages WHERE id=?", (message_id,)
             ).fetchone()
             return _message_dict(db, row)
+
+    if config_path is not None:
+        @router.get("/config")
+        def get_config() -> dict:
+            try:
+                return read_editable_config(Path(config_path))
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail="config.yaml unreadable") from exc
+
+        @router.put("/config")
+        def put_config(body: dict) -> dict:
+            try:
+                return apply_editable_config(Path(config_path), dict(body))
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"config invalid: {exc}") from exc
 
     return router

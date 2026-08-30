@@ -35,6 +35,7 @@ def _config(chat_id: int = -1001) -> Config:
         admins=frozenset({1}),
         url_template=None,
         database_path="x.sqlite",
+        config_path="config.yaml",
         web_enabled=False,
         web_host="127.0.0.1",
         web_port=8000,
