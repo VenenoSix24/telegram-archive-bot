@@ -18,6 +18,7 @@ from app.queue.manager import QueueManager
 from app.tags.indexer import IndexUpdater
 from app.telegram.client import build_client, validate_config_chats
 from app.telegram.copier import archive_message_by_db_id
+from app.web.server import start_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +89,19 @@ async def _run() -> int:
     attach_reply_command_handler(client, config, conn, indexer)
     attach_management_command_handler(client, config, conn, queue)
 
+    web_server = None
+    if config.web_enabled:
+        web_server = start_server_task(config)
+        web_task = asyncio.create_task(web_server.serve())
+
     logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:
         await client.run_until_disconnected()
     finally:
+        if web_server is not None:
+            web_server.should_exit = True
+            with suppress(asyncio.CancelledError):
+                await web_task
         worker.cancel()
         with suppress(asyncio.CancelledError):
             await worker
