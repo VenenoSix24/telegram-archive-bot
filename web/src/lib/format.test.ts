@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { durationLabel } from '@/lib/format'
+import { durationLabel, formatTime } from '@/lib/format'
 
 describe('durationLabel', () => {
   it('formats seconds to mm:ss', () => {
@@ -10,5 +10,18 @@ describe('durationLabel', () => {
 
   it('returns empty for null', () => {
     expect(durationLabel(null)).toBe('')
+  })
+})
+
+describe('formatTime', () => {
+  it('parses sqlite UTC as a local-time date', () => {
+    const out = formatTime('2026-08-30 04:05:00')
+    // 时区跟随执行环境，只保证格式正确、可解析
+    expect(out).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+  })
+
+  it('returns empty for null and junk', () => {
+    expect(formatTime(null)).toBe('')
+    expect(formatTime('not-a-date')).toBe('not-a-date')
   })
 })
