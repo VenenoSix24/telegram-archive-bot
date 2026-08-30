@@ -14,6 +14,8 @@ config.yaml
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 
 # logs
 logs/
@@ -38,3 +40,4 @@ venv/
 开发文档*.md
 开发规范*.md
 docs/decisions/
+.history/
