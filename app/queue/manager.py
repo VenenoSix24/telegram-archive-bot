@@ -77,6 +77,9 @@ class QueueManager:
     def resume(self) -> None:
         self._paused.set()
 
+    def is_paused(self) -> bool:
+        return not self._paused.is_set()
+
     def stats(self) -> QueueStats:
         row = self._conn.execute(
             "SELECT "
