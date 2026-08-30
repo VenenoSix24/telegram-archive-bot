@@ -1,0 +1,15 @@
+.venv
+.git
+__pycache__
+*.pyc
+logs
+*.session
+*.session-journal
+*.sqlite
+*.sqlite3
+.env
+config.yaml
+docs
+tests
+开发文档*.md
+开发规范*.md
