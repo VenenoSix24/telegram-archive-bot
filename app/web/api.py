@@ -9,10 +9,13 @@ Telethon client 与共享 conn，完成「写 DB → 重渲染 → edit 目标�
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app.media.thumbnails import ThumbnailCache
 from app.processor.edit import apply_message_edit
 
 COOKIE_NAME = "archive_session"
@@ -68,6 +71,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         "status": row["status"],
         "created_at": row["created_at"],
         "tags": tags,
+        "thumb": {"available": bool(row["thumb_path"]), "path": row["thumb_path"]},
     }
 
 
@@ -146,6 +150,21 @@ def build_api_router(database_path: str) -> APIRouter:
             "queue": queue,
         }
 
+    @router.get("/tags")
+    def list_tags() -> dict:
+        with _connect(database_path) as conn:
+            rows = conn.execute(
+                "SELECT t.name, t.normalized_name, COUNT(mt.message_id) AS count "
+                "FROM tags t LEFT JOIN message_tags mt ON mt.tag_id = t.id "
+                "GROUP BY t.id ORDER BY count DESC, t.name"
+            ).fetchall()
+        return {
+            "items": [
+                {"name": r["name"], "count": r["count"]} for r in rows
+            ],
+            "total": len(rows),
+        }
+
     @router.get("/messages")
     def list_messages(
         request: Request, limit: int = 30, offset: int = 0
@@ -172,6 +191,48 @@ def build_api_router(database_path: str) -> APIRouter:
             if row is None:
                 raise HTTPException(status_code=404, detail="message not found")
             return _message_dict(conn, row)
+
+    @router.get("/messages/{message_id}/thumb")
+    async def message_thumb(message_id: int, request: Request):
+        """返回消息缩略图；本地缺失且有 client 时懒抓并落库（计划书 D5 懒补）。"""
+        with _connect(database_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM messages WHERE id=?", (message_id,)
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="message not found")
+            existing = row["thumb_path"]
+
+        path = Path(existing) if existing else None
+        if path is not None and path.exists():
+            return FileResponse(str(path))
+
+        client = request.app.state.client
+        if client is None:
+            raise HTTPException(status_code=404, detail="thumbnail unavailable")
+        # 当前 Web 只有 read 端点不碰 conn；懒抓用独立短连接补写 thumb_path。
+        with _connect(database_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM messages WHERE id=?", (message_id,)
+            ).fetchone()
+        try:
+            chat = await client.get_entity(row["source_chat_id"])
+            source = await client.get_messages(chat, ids=row["source_message_id"])
+            fetched = (
+                await ThumbnailCache().fetch(client, source, message_id)
+                if source is not None
+                else None
+            )
+        except Exception:
+            fetched = None
+        if fetched is None or not fetched.exists():
+            raise HTTPException(status_code=404, detail="thumbnail unavailable")
+        with _connect(database_path) as conn:
+            conn.execute(
+                "UPDATE messages SET thumb_path=? WHERE id=?", (str(fetched), message_id)
+            )
+            conn.commit()
+        return FileResponse(str(fetched))
 
     @router.patch("/messages/{message_id}")
     async def patch_message(
