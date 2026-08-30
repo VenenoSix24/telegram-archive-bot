@@ -240,3 +240,57 @@ def test_messages_patch_requires_action(patch_client):
 def test_messages_patch_not_found(patch_client):
     resp = patch_client.patch("/api/v1/messages/999", json={"rating": 3})
     assert resp.status_code == 404
+
+
+def _seeded_messages_db(tmp_path):
+    """建一张带 2 条消息(含 tag/target)的真实 schema 库。"""
+    import sqlite3
+
+    db = _make_schema_db(tmp_path, name="seeded.sqlite")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "INSERT INTO tags (name, normalized_name) VALUES ('游戏', '游戏'), ('MOD', 'mod')"
+    )
+    conn.execute(
+        "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, "
+        "original_text, rating, status, target_chat_id, target_message_id) "
+        "VALUES (1, -1001, 1, 'photo', '截图', 4, 'archived', -1005, 11),"
+        "      (2, -1002, 2, 'text', 'MOD 说明', 0, 'archived', -1005, 12)"
+    )
+    conn.execute("INSERT INTO message_tags (message_id, tag_id, type) VALUES (1, 1, 'source')")
+    conn.commit()
+    conn.close()
+    return db
+
+
+def test_tags_endpoint(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    with _logged_client(db) as client:
+        resp = client.get("/api/v1/tags")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+        assert {"游戏", "MOD"} == {t["name"] for t in body["items"]}
+        games = next(t for t in body["items"] if t["name"] == "游戏")
+        assert games["count"] == 1
+
+
+def test_messages_list_filter_and_tags(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    with _logged_client(db) as client:
+        resp = client.get("/api/v1/messages?tag=游戏")
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == 1
+        assert body["items"][0]["tags"] == [{"name": "游戏", "type": "source"}]
+        assert body["items"][0]["thumb"]["available"] is False
+
+
+def test_messages_thumb_without_client_404(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    cfg = _config(database_path=db, web_token="secret-token")
+    from app.web.app import create_app as _create
+
+    with TestClient(_create(cfg, client=None, conn=None)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        assert client.get("/api/v1/messages/1/thumb").status_code == 404
