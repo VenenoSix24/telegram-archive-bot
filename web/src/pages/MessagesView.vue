@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Loader2, SearchX } from 'lucide-vue-next'
-import { listMessages, patchMessage } from '@/lib/api'
-import type { Message, MessagesResponse } from '@/lib/types'
+import { useRoute, useRouter } from 'vue-router'
+import { Loader2, SearchX, X } from 'lucide-vue-next'
+import { getStats, listMessages, patchMessage } from '@/lib/api'
+import type { Message, MessagesResponse, Target } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
 import MessageDrawer from '@/components/MessageDrawer.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
+import { toastError, toastSuccess } from '@/composables/useToast'
+
+const route = useRoute()
+const router = useRouter()
 
 const data = ref<MessagesResponse | null>(null)
 const loading = ref(true)
@@ -14,6 +19,9 @@ const error = ref('')
 const q = ref('')
 const mediaType = ref('')
 const rating = ref<number | ''>('')
+const tagFilter = ref('')
+const targetFilter = ref<number | ''>('')
+const targets = ref<Target[]>([])
 const selected = ref<Message | null>(null)
 
 const PAGE = 30
@@ -37,8 +45,34 @@ const ratingOptions = [
 const shown = computed(() => data.value?.items.length ?? 0)
 const hasMore = computed(() => data.value ? shown.value < data.value.total : false)
 
+// URL ?tag=（从标签页点来）作为标签筛选的初始值
+function syncFromQuery() {
+  const t = route.query.tag
+  if (typeof t === 'string' && t) tagFilter.value = t
+}
+
+// 标签筛选变更时同步回 URL，可分享/前进后退
+function syncToQuery() {
+  router.replace({
+    query: tagFilter.value ? { tag: tagFilter.value } : {},
+  })
+}
+
+async function loadStats() {
+  try {
+    targets.value = (await getStats()).targets
+  } catch {
+    targets.value = []
+  }
+}
+
 let timer: ReturnType<typeof setTimeout> | undefined
-watch([q, mediaType, rating], () => {
+watch([q, mediaType, rating, targetFilter], () => {
+  clearTimeout(timer)
+  timer = setTimeout(load, 300)
+})
+watch(tagFilter, () => {
+  syncToQuery()
   clearTimeout(timer)
   timer = setTimeout(load, 300)
 })
@@ -51,6 +85,8 @@ async function load() {
       q: q.value || undefined,
       media_type: mediaType.value || undefined,
       rating: rating.value === '' ? undefined : Number(rating.value),
+      tag: tagFilter.value || undefined,
+      target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
       limit: PAGE,
     })
   } catch (e) {
@@ -68,6 +104,8 @@ async function loadMore() {
       q: q.value || undefined,
       media_type: mediaType.value || undefined,
       rating: rating.value === '' ? undefined : Number(rating.value),
+      tag: tagFilter.value || undefined,
+      target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
       limit: PAGE,
       offset: shown.value,
     })
@@ -84,8 +122,10 @@ async function rate(msg: Message, value: number) {
     const updated = await patchMessage(msg.id, { rating: value })
     const item = data.value?.items.find((m) => m.id === msg.id)
     if (item) Object.assign(item, updated)
+    toastSuccess(value === 0 ? '已清除评级' : `评级设为 ${value} 星`)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
+    toastError(e instanceof Error ? e.message : '保存失败')
   }
 }
 
@@ -95,7 +135,11 @@ function onDrawerUpdate(updated: Message) {
   if (selected.value?.id === updated.id) selected.value = updated
 }
 
-onMounted(load)
+onMounted(() => {
+  syncFromQuery()
+  loadStats()
+  load()
+})
 </script>
 
 <template>
@@ -110,6 +154,18 @@ onMounted(load)
     <!-- 筛选栏 -->
     <div class="mb-6 flex flex-wrap items-center gap-3">
       <Input v-model="q" placeholder="搜索正文…" class="max-w-xs" aria-label="搜索正文" />
+      <label class="flex items-center gap-1.5 text-sm text-steam-dim">
+        <select
+          v-model="targetFilter"
+          class="h-9 rounded-md border border-ink-line bg-ink-raised px-2 text-sm text-steam focus:border-gold focus:outline-none"
+          aria-label="按目标频道筛选"
+        >
+          <option value="">全部频道</option>
+          <option v-for="t in targets" :key="t.chat_id" :value="t.chat_id">
+            频道 {{ t.chat_id }}（{{ t.count }}）
+          </option>
+        </select>
+      </label>
       <label class="flex items-center gap-1.5 text-sm text-steam-dim">
         <select
           v-model="mediaType"
@@ -128,6 +184,19 @@ onMounted(load)
       </label>
       <Button variant="secondary" size="sm" @click="load">刷新</Button>
       <span v-if="error" class="text-xs text-destructive">{{ error }}</span>
+    </div>
+
+    <!-- 标签筛选 chip：点 × 清除 -->
+    <div v-if="tagFilter" class="mb-4 inline-flex items-center gap-2 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-sm text-gold">
+      <span>标签筛选：#{{ tagFilter }}</span>
+      <button
+        type="button"
+        class="rounded-full p-0.5 transition-colors hover:bg-gold/20 cursor-pointer"
+        aria-label="清除标签筛选"
+        @click="tagFilter = ''"
+      >
+        <X class="h-3.5 w-3.5" />
+      </button>
     </div>
 
     <div v-if="loading && !shown" class="flex items-center gap-2 text-steam-dim">

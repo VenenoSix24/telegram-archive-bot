@@ -1,4 +1,5 @@
 import type {
+  EditableConfig,
   Message,
   MessagesResponse,
   Stats,
@@ -39,12 +40,21 @@ export async function getTags(): Promise<TagsResponse> {
   return request('/tags')
 }
 
+export async function getConfig(): Promise<EditableConfig> {
+  return request('/config')
+}
+
+export async function putConfig(cfg: EditableConfig): Promise<EditableConfig> {
+  return request('/config', { method: 'PUT', body: JSON.stringify(cfg) })
+}
+
 export interface MessageQuery {
   q?: string
   tag?: string
   media_type?: string
   rating?: number
   source_chat_id?: number
+  target_chat_id?: number
   limit?: number
   offset?: number
 }
