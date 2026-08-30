@@ -1,14 +1,35 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { Loader2, Plus, Trash2, Save, RotateCcw } from 'lucide-vue-next'
+import { Loader2, Plus, Trash2, Save, RotateCcw, Palette } from 'lucide-vue-next'
 import { getConfig, getStats, putConfig } from '@/lib/api'
 import type { EditableConfig } from '@/lib/types'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
+import { cn } from '@/lib/utils'
+import {
+  currentMode, currentTheme, setMode, setTheme,
+  type Mode, type ThemeKey,
+} from '@/composables/useTheme'
 
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+
+const themeOptions: { key: ThemeKey; label: string }[] = [
+  { key: 'projector', label: '放映室（琥珀）' },
+  { key: 'midnight', label: '深海（冰青）' },
+  { key: 'moss', label: '苔原（苔绿）' },
+]
+const modeOptions: { key: Mode; label: string }[] = [
+  { key: 'system', label: '跟随系统' },
+  { key: 'dark', label: '深色' },
+  { key: 'light', label: '浅色' },
+]
+
+/** Vue reactive 代理无法 structuredClone，配置全是纯 JSON 结构，用 JSON 深拷贝。 */
+function _clone<T>(input: T): T {
+  return JSON.parse(JSON.stringify(input))
+}
 
 const form = reactive<EditableConfig>({
   source_chats: [],
@@ -29,7 +50,7 @@ onMounted(async () => {
   try {
     const cfg = await getConfig()
     Object.assign(form, cfg)
-    saved = structuredClone(cfg)
+    saved = _clone(cfg)
     await getStats() // 触发一次预热，顺带确认后端可用
   } catch (e) {
     error.value = e instanceof Error ? e.message : '配置读取失败'
@@ -65,9 +86,9 @@ async function save() {
   saving.value = true
   error.value = ''
   try {
-    const updated = await putConfig(structuredClone(form))
+    const updated = await putConfig(_clone(form))
     Object.assign(form, updated)
-    saved = structuredClone(updated)
+    saved = _clone(updated)
     toastSuccess('已保存，重启进程后生效')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
@@ -78,7 +99,7 @@ async function save() {
 }
 
 function reset() {
-  if (saved) Object.assign(form, structuredClone(saved))
+  if (saved) Object.assign(form, _clone(saved))
 }
 </script>
 
@@ -87,9 +108,54 @@ function reset() {
     <header class="mb-6 flex items-end justify-between gap-4 md:pb-2">
       <div>
         <h1 class="font-display text-3xl font-semibold tracking-tight">设置</h1>
-        <p class="mt-1 text-sm text-steam-dim">修改 config.yaml 白名单项（凭据不可改）</p>
+        <p class="mt-1 text-sm text-steam-dim">外观即时生效，其余配置保存后重启生效</p>
       </div>
     </header>
+
+    <!-- 主题外观（纯前端，localStorage，立即生效） -->
+    <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
+      <div class="mb-3 flex items-center gap-1.5 text-sm font-medium text-steam">
+        <Palette class="h-4 w-4" /> 主题外观
+      </div>
+      <p class="mb-2 text-xs text-steam-dim">配色主题</p>
+      <div class="mb-4 flex flex-wrap gap-2" role="radiogroup" aria-label="配色主题">
+        <button
+          v-for="t in themeOptions"
+          :key="t.key"
+          type="button"
+          role="radio"
+          :aria-checked="currentTheme === t.key"
+          :class="cn(
+            'rounded-full border px-3 py-1.5 text-sm transition-colors cursor-pointer',
+            currentTheme === t.key
+              ? 'border-gold text-gold'
+              : 'border-ink-line text-steam-dim hover:text-steam',
+          )"
+          @click="setTheme(t.key)"
+        >
+          {{ t.label }}
+        </button>
+      </div>
+      <p class="mb-2 text-xs text-steam-dim">明暗模式</p>
+      <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="明暗模式">
+        <button
+          v-for="m in modeOptions"
+          :key="m.key"
+          type="button"
+          role="radio"
+          :aria-checked="currentMode === m.key"
+          :class="cn(
+            'rounded-full border px-3 py-1.5 text-sm transition-colors cursor-pointer',
+            currentMode === m.key
+              ? 'border-gold text-gold'
+              : 'border-ink-line text-steam-dim hover:text-steam',
+          )"
+          @click="setMode(m.key)"
+        >
+          {{ m.label }}
+        </button>
+      </div>
+    </section>
 
     <div v-if="loading" class="flex items-center gap-2 text-steam-dim">
       <Loader2 class="h-4 w-4 animate-spin" /> 载入中…
@@ -126,6 +192,13 @@ function reset() {
             :aria-label="`源群 ${i + 1} 默认 Tag`"
             @input="(e: Event) => { const v = (e.target as HTMLInputElement).value; s.default_tags = v ? v.split(' ').filter(Boolean) : [] }"
           />
+          <input
+            v-model.number="s.target_channel_id"
+            type="number"
+            placeholder="目标频道（留空走全局）"
+            class="h-9 w-44 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+            :aria-label="`源群 ${i + 1} 目标频道`"
+          />
           <button
             type="button"
             class="rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive cursor-pointer"
@@ -140,13 +213,16 @@ function reset() {
 
       <!-- 目标频道 -->
       <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
-        <h2 class="mb-3 text-sm font-medium text-steam">总频道（目标）</h2>
+        <h2 class="mb-3 text-sm font-medium text-steam">总频道（默认目标）</h2>
         <input
           v-model="form.target_channel_id"
           type="number"
           placeholder="chat_id（如 -100123456789）"
           class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
         />
+        <p class="mt-2 text-xs text-steam-dim/80">
+          未单独指定目标频道的源群归档到这里。每个源群可在上方「目标频道」列填独立频道 id，实现多对多归档。
+        </p>
       </section>
 
       <!-- 限速 / 开关 -->

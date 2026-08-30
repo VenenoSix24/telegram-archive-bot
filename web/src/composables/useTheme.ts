@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue'
 
 export type ThemeKey = 'projector' | 'midnight' | 'moss'
-export type Mode = 'dark' | 'light'
+/** mode：dark/light 为显式，system 跟随系统 prefers-color-scheme */
+export type Mode = 'dark' | 'light' | 'system'
 
 const THEME_KEY = 'archive:theme'
 const MODE_KEY = 'archive:mode'
@@ -19,24 +20,26 @@ function initialTheme(): ThemeKey {
 }
 
 function initialMode(): Mode {
-  return localStorage.getItem(MODE_KEY) === 'light' ? 'light' : 'dark'
+  const stored = localStorage.getItem(MODE_KEY)
+  return stored === 'light' || stored === 'dark' ? stored : 'system'
 }
 
 const theme = ref<ThemeKey>(initialTheme())
 const mode = ref<Mode>(initialMode())
 
-export function isDark() {
-  return mode.value === 'dark'
+/** 取实际生效的明暗：system 时读系统偏好 */
+function effectiveMode(): 'dark' | 'light' {
+  if (mode.value !== 'system') return mode.value
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
 export function applyTheme() {
   const el = document.documentElement
   el.dataset.theme = theme.value
-  el.dataset.mode = mode.value
+  el.dataset.mode = effectiveMode()
+  el.style.colorScheme = effectiveMode()
   localStorage.setItem(THEME_KEY, theme.value)
   localStorage.setItem(MODE_KEY, mode.value)
-  // 让浏览器弹窗/下拉等原生控件跟随配色
-  el.style.colorScheme = mode.value
   void THEME_LOADERS[theme.value]()
 }
 
@@ -46,8 +49,9 @@ export function setTheme(t: ThemeKey) {
   applyTheme()
 }
 
-export function toggleMode() {
-  mode.value = mode.value === 'dark' ? 'light' : 'dark'
+export function setMode(m: Mode) {
+  if (m === mode.value) return
+  mode.value = m
   applyTheme()
 }
 
@@ -56,8 +60,18 @@ export function cycleTheme() {
   setTheme(order[(order.indexOf(theme.value) + 1) % order.length])
 }
 
+/** 跟随系统时监听系统偏好变化，无需刷新即换肤 */
+if (window.matchMedia) {
+  const mq = window.matchMedia('(prefers-color-scheme: light)')
+  mq.addEventListener('change', () => {
+    if (mode.value === 'system') applyTheme()
+  })
+}
+
 export const currentTheme = computed(() => theme.value)
 export const currentMode = computed(() => mode.value)
+/** 实际渲染明暗（system 已解析） */
+export const renderedDark = computed(() => effectiveMode() === 'dark')
 
 // 模块加载即应用（含 build 后首屏）；App 挂载后再 apply 一次以同步 local 变化
 applyTheme()
