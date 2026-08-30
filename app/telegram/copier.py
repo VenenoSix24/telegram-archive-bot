@@ -58,14 +58,22 @@ def _save_target(
 
 
 async def _source_thumb(client, first_message) -> tuple[str, bytes] | None:
-    """视频/文档缩略图随附：下载 KB 级缩略图，避免目标频道黑图。
+    """视频/文档缩略图随附，避免目标频道黑图。
 
-    引用复制媒体时 Telegram 服务端不会为复制出的消息生成缩略图，需带源
-    缩略图。仅对带缩略图的单条文档生效；相册多图不受影响（图即缩略图）。
+    引用复制媒体时服务端不会为复制出的消息生成缩略图；源缩略图可能藏在
+    media.video_cover（封面 photo，很多视频主 document 无 thumbs）或
+    document.thumbs，按此顺序取。仅单条文档生效；相册多图不受影响。
     """
     media = first_message.media
     if not isinstance(media, MessageMediaDocument):
         return None
+    cover = getattr(media, "video_cover", None)
+    if cover is not None:
+        try:
+            data = await client.download_file(cover)
+            return ("thumb.jpg", data)
+        except Exception:
+            logger.debug("video_cover download failed for msg %s", first_message.id)
     if not getattr(media.document, "thumbs", None):
         return None
     try:
