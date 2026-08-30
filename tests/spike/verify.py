@@ -26,14 +26,16 @@ from app.telegram.client import build_client
 def _print_event(m) -> None:
     media_type = type(m.media).__name__ if m.media else None
     forward_from = None
-    if m.forward:
-        fwd = m.forward
-        peer = fwd.from_id
-        forward_from = (
-            f"user={peer.user_id}" if peer and peer.user_id else
-            f"channel={peer.channel_id}" if peer and peer.channel_id else
-            str(peer)
-        )
+    if m.forward and m.forward.from_id:
+        peer = m.forward.from_id
+        if hasattr(peer, "user_id") and peer.user_id:
+            forward_from = f"user={peer.user_id}"
+        elif hasattr(peer, "chat_id") and peer.chat_id:
+            forward_from = f"chat={peer.chat_id}"
+        elif hasattr(peer, "channel_id") and peer.channel_id:
+            forward_from = f"channel={peer.channel_id}"
+        else:
+            forward_from = str(peer)
     print(
         f"| chat={m.chat_id} msg={m.id} text={(m.message or '')[:60]!r} "
         f"media={media_type} grouped={m.grouped_id} "
