@@ -54,11 +54,10 @@ def attach_new_message_handler(
 
     @client.on(events.NewMessage(chats=ids))
     async def on_new_message(event):
-        incoming = build_incoming(
-            event.message,
-            event.chat_id,
-            build_source_url(event.chat, event.message.id),
+        source_url = (
+            build_source_url(event.chat, event.message.id) if config.show_link else None
         )
+        incoming = build_incoming(event.message, event.chat_id, source_url)
         try:
             process_incoming(config, conn, queue, incoming)
         except Exception:

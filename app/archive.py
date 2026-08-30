@@ -54,7 +54,8 @@ async def _run() -> int:
 
     chat_cfg = next((c for c in config.source_chats if c.chat_id == chat_id), None)
     source_tags = chat_cfg.default_tags if chat_cfg else []
-    incoming = build_incoming(anchor, chat_id, build_source_url(chat, anchor.id))
+    source_url = build_source_url(chat, anchor.id) if config.show_link else None
+    incoming = build_incoming(anchor, chat_id, source_url)
 
     mid = record_message(
         conn,
