@@ -12,7 +12,11 @@ import sqlite3
 from telethon import events
 
 from app.config import Config
-from app.processor.adapter import IncomingMessage, build_incoming, build_source_url
+from app.processor.adapter import (
+    IncomingMessage,
+    build_incoming,
+    resolve_source_url,
+)
 from app.processor.commands import parse_command
 from app.processor.recorder import record_message
 from app.queue.manager import QueueManager
@@ -54,8 +58,8 @@ def attach_new_message_handler(
 
     @client.on(events.NewMessage(chats=ids))
     async def on_new_message(event):
-        source_url = (
-            build_source_url(event.chat, event.message.id) if config.show_link else None
+        source_url = await resolve_source_url(
+            client, event.message, event.chat, show_link=config.show_link
         )
         incoming = build_incoming(event.message, event.chat_id, source_url)
         try:

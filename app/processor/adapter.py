@@ -62,6 +62,29 @@ def build_source_url(chat_entity, message_id: int) -> str | None:
     return None
 
 
+async def resolve_source_url(client, message, chat_entity, *, show_link: bool = True) -> str | None:
+    """归档来源：优先溯转发链的原始消息，退回消息所在群自身。
+
+    从频道转发到分类群的帖子，来源显示原频道帖子链接（溯源）；
+    无转发、非频道帖子、或无法访问原始频道时，退回分类群消息链接。
+    """
+    if not show_link:
+        return None
+    fwd = getattr(message, "forward", None)
+    if fwd is not None:
+        peer = getattr(fwd, "from_id", None)
+        channel_id = getattr(peer, "channel_id", None)
+        post_id = getattr(fwd, "channel_post", None)
+        if channel_id and post_id:
+            try:
+                original = await client.get_entity(peer)
+            except Exception:
+                original = None
+            if original is not None:
+                return build_source_url(original, post_id)
+    return build_source_url(chat_entity, message.id)
+
+
 def build_incoming(message, chat_id: int, source_url: str | None) -> IncomingMessage:
     return IncomingMessage(
         source_chat_id=chat_id,
