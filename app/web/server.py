@@ -16,9 +16,15 @@ from app.web.app import create_app
 logger = logging.getLogger(__name__)
 
 
-def start_server_task(config: Config) -> uvicorn.Server:
+def start_server_task(
+    config: Config,
+    *,
+    client=None,
+    conn=None,
+    indexer=None,
+) -> uvicorn.Server:
     """Build app + uvicorn server; caller runs serve() as an asyncio task."""
-    app = create_app(config)
+    app = create_app(config, client=client, conn=conn, indexer=indexer)
     server = uvicorn.Server(
         uvicorn.Config(
             app,
