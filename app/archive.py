@@ -11,7 +11,7 @@ import sys
 
 from app.config import ConfigError, load_config
 from app.database.migrate import apply_migrations, open_db
-from app.processor.adapter import build_incoming, build_source_url
+from app.processor.adapter import build_incoming, resolve_source_url
 from app.processor.recorder import record_message
 from app.telegram.client import build_client
 from app.telegram.copier import archive_message_by_db_id, collect_album
@@ -54,7 +54,9 @@ async def _run() -> int:
 
     chat_cfg = next((c for c in config.source_chats if c.chat_id == chat_id), None)
     source_tags = chat_cfg.default_tags if chat_cfg else []
-    source_url = build_source_url(chat, anchor.id) if config.show_link else None
+    source_url = await resolve_source_url(
+        client, anchor, chat, show_link=config.show_link
+    )
     incoming = build_incoming(anchor, chat_id, source_url)
 
     mid = record_message(
