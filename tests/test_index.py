@@ -38,6 +38,15 @@ def test_compute_tag_counts_counts_and_sorts(conn):
     assert compute_tag_counts(conn) == [("游戏", 2), ("软件", 1)]
 
 
+def test_compute_tag_counts_by_target(conn):
+    _seed(conn)
+    conn.execute("UPDATE messages SET target_chat_id=-10 WHERE id IN (1, 2)")
+    conn.execute("UPDATE messages SET target_chat_id=-11 WHERE id=3")
+    conn.commit()
+    assert compute_tag_counts(conn, target_chat_id=-10) == [("游戏", 2)]
+    assert compute_tag_counts(conn, target_chat_id=-11) == [("软件", 1)]
+
+
 def test_format_tag_index(conn):
     _seed(conn)
     text = format_tag_index(compute_tag_counts(conn))

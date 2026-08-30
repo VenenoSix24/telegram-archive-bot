@@ -14,6 +14,7 @@ from app.processor.handlers import (
     attach_reply_command_handler,
 )
 from app.queue.manager import QueueManager
+from app.tags.indexer import IndexUpdater
 from app.telegram.client import build_client, validate_config_chats
 from app.telegram.copier import archive_message_by_db_id
 
@@ -80,8 +81,10 @@ async def _run() -> int:
     if recovered:
         logger.info("重启恢复 %s 条 processing 任务为 pending", recovered)
     worker = asyncio.create_task(queue.run())
-    attach_new_message_handler(client, config, conn, queue)
-    attach_reply_command_handler(client, config, conn)
+    indexer = IndexUpdater(client, config, conn)
+    indexer.start()
+    attach_new_message_handler(client, config, conn, queue, indexer)
+    attach_reply_command_handler(client, config, conn, indexer)
 
     logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:
@@ -90,6 +93,7 @@ async def _run() -> int:
         worker.cancel()
         with suppress(asyncio.CancelledError):
             await worker
+        await indexer.stop()
         await client.disconnect()
         conn.close()
     return 0
