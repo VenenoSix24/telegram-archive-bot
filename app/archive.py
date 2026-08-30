@@ -14,7 +14,7 @@ from app.database.migrate import apply_migrations, open_db
 from app.processor.adapter import build_incoming, build_source_url
 from app.processor.recorder import record_message
 from app.telegram.client import build_client
-from app.telegram.copier import archive_message_by_db_id
+from app.telegram.copier import archive_message_by_db_id, collect_album
 
 
 async def _run() -> int:
@@ -49,9 +49,12 @@ async def _run() -> int:
         conn.close()
         return 2
 
+    # 相册锚定组首条，保证文字/tag 挂锚、同组只归档一次（避免重复）。
+    anchor = (await collect_album(client, chat, msg))[0]
+
     chat_cfg = next((c for c in config.source_chats if c.chat_id == chat_id), None)
     source_tags = chat_cfg.default_tags if chat_cfg else []
-    incoming = build_incoming(msg, chat_id, build_source_url(chat, msg.id))
+    incoming = build_incoming(anchor, chat_id, build_source_url(chat, anchor.id))
 
     mid = record_message(
         conn,

@@ -17,20 +17,25 @@ logger = logging.getLogger(__name__)
 _ALBUM_SCAN_LIMIT = 200
 
 
+async def collect_album(client, chat, first_message) -> list:
+    """收集同一相册的全部消息（按 id 升序，首条为锚）；非相册返回 [first_message]。
+
+    v1 用扫描最近消息的方式实现分组（相册通常刚发生，limit 内即可覆盖）。
+    """
+    if not first_message.grouped_id:
+        return [first_message]
+    recent = await client.get_messages(chat, limit=_ALBUM_SCAN_LIMIT)
+    grouped = [m for m in recent if m.grouped_id == first_message.grouped_id]
+    return sorted(grouped, key=lambda m: m.id) or [first_message]
+
+
 async def _fetch_source_messages(client, chat, row: sqlite3.Row) -> list:
-    """取源消息；若是 Album，额外收集同组媒体消息（v1 扫描最近消息实现）。"""
     first = await client.get_messages(chat, ids=row["source_message_id"])
     if first is None:
         raise FileNotFoundError(
             f"源消息已删除或不可访问: chat={row['source_chat_id']} msg={row['source_message_id']}"
         )
-    if not first.grouped_id:
-        return [first]
-    recent = await client.get_messages(chat, limit=_ALBUM_SCAN_LIMIT)
-    grouped = [m for m in recent if m.grouped_id == first.grouped_id]
-    if not grouped:
-        return [first]
-    return sorted(grouped, key=lambda m: m.id)
+    return await collect_album(client, chat, first)
 
 
 def _save_target(

@@ -18,8 +18,8 @@ def conn(tmp_path):
     return c
 
 
-def _msg(text="正文", mid=7):
-    return SimpleNamespace(id=mid, message=text, media=None, grouped_id=None)
+def _msg(text="正文", mid=7, grouped_id=None):
+    return SimpleNamespace(id=mid, message=text, media=None, grouped_id=grouped_id)
 
 
 def _tags(conn, message_id):
@@ -90,3 +90,10 @@ def test_record_merge_order(conn):
         ("GTA5", "original"),
         ("MOD", "manual"),
     ]
+
+
+def test_record_album_group_dedupes(conn):
+    first = _record(conn, _msg(text="相册文字", grouped_id="grp1"))
+    second = _record(conn, _msg(text="同组其他", grouped_id="grp1", mid=8))
+    assert first == 1
+    assert second is None
