@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from io import BytesIO
+
+from telethon.tl.types import MessageMediaDocument
 
 from app.renderer.db import render_from_db
 
@@ -54,6 +57,26 @@ def _save_target(
     conn.commit()
 
 
+async def _source_thumb(client, first_message) -> tuple[str, bytes] | None:
+    """视频/文档缩略图随附：下载 KB 级缩略图，避免目标频道黑图。
+
+    引用复制媒体时 Telegram 服务端不会为复制出的消息生成缩略图，需带源
+    缩略图。仅对带缩略图的单条文档生效；相册多图不受影响（图即缩略图）。
+    """
+    media = first_message.media
+    if not isinstance(media, MessageMediaDocument):
+        return None
+    if not getattr(media.document, "thumbs", None):
+        return None
+    try:
+        buf = BytesIO()
+        await client.download_media(first_message, file=buf, thumb=-1)
+        return ("thumb.jpg", buf.getvalue())
+    except Exception:
+        logger.debug("thumb download failed for msg %s", first_message.id)
+        return None
+
+
 async def archive_message_by_db_id(
     client,
     config,
@@ -81,7 +104,14 @@ async def archive_message_by_db_id(
 
     medias = [m.media for m in msgs if m.media]
     if medias:
-        sent = await client.send_file(target, file=medias, caption=rendered)
+        send_kwargs: dict = {}
+        if len(medias) == 1:
+            thumb = await _source_thumb(client, msgs[0])
+            if thumb:
+                send_kwargs["thumb"] = thumb
+        sent = await client.send_file(
+            target, file=medias, caption=rendered, **send_kwargs
+        )
         sent_list = sent if isinstance(sent, list) else [sent]
     else:
         sent_msg = await client.send_message(target, rendered)
