@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 局部滚动条太刺眼，弱化 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(220 8% 22%) transparent;
+}
+
+body {
+  font-feature-settings: 'tnum' 1; /* 数据字面量等宽数字，时长/时间戳对齐 */
+}
+
+/* 减少动效偏好：遵守 prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 键盘焦点可见，不只靠颜色 */
+:focus-visible {
+  outline: 2px solid hsl(38 92% 55%);
+  outline-offset: 2px;
+}

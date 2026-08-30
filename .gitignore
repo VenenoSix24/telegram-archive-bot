@@ -39,8 +39,15 @@ venv/
 # 缩略图本地缓存（web V2 浏览用，不进 Git）
 thumbs/
 
+# web 前端构建与依赖
+web/node_modules/
+web/dist/
+
 # 本地设计文档与决策记录（开发规范 3.4：不进公开仓库）
 开发文档*.md
 开发规范*.md
 docs/decisions/
 .history/
+
+# Claude Code 本地运行配置（机器相关，不进 Git）
+.claude/launch.json

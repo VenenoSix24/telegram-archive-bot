@@ -1,0 +1,65 @@
+export type MediaType =
+  | 'photo'
+  | 'video'
+  | 'document'
+  | 'audio'
+  | 'voice'
+  | 'sticker'
+  | 'text'
+  | 'other'
+
+export type TagType = 'source' | 'original' | 'manual'
+
+export interface MessageTag {
+  name: string
+  type: TagType
+}
+
+export interface Message {
+  id: number
+  source_chat_id: number
+  source_message_id: number
+  target_chat_id: number | null
+  target_message_id: number | null
+  media_type: MediaType
+  media_group_id: string | null
+  original_text: string
+  rendered_text: string
+  rating: number
+  source_url: string | null
+  target_url: string | null
+  file_name: string | null
+  file_size: number | null
+  duration: number | null
+  status: string
+  created_at: string
+  tags: MessageTag[]
+}
+
+export interface MessagesResponse {
+  items: Message[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface Stats {
+  messages: {
+    total: number
+    archived: number
+    sources: number
+    by_type: Record<string, number>
+  }
+  tags: { total: number; with_messages: number }
+  queue: Record<string, number>
+}
+
+export interface TagCount {
+  name: string
+  count: number
+}
+
+export interface TagsResponse {
+  items: TagCount[]
+  total: number
+}
