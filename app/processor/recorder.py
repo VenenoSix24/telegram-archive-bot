@@ -124,3 +124,40 @@ def add_manual_tags(
     conn.execute("UPDATE messages SET rendered_text=? WHERE id=?", (rendered, message_id))
     conn.commit()
     return rendered
+
+
+def remove_tags(
+    conn: sqlite3.Connection, message_id: int, tags: list[str]
+) -> str | None:
+    """移除指定 tag 并重渲染，返回新 rendered_text；记录不存在返回 None。
+
+    只删这些 tag 的 message_tags 关联，其余 tag 类型保持不变
+    （Web 删除 tag、反向同步场景，与 add_manual_tags 对称）。
+    """
+    if not tags:
+        return None
+    row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+    if row is None:
+        return None
+    existing = conn.execute(
+        "SELECT t.name, mt.type FROM message_tags mt "
+        "JOIN tags t ON t.id = mt.tag_id "
+        "WHERE mt.message_id = ? ORDER BY mt.rowid",
+        (message_id,),
+    ).fetchall()
+    if not existing:
+        return None
+    removed = set(tags)
+    rest = [(r["name"], r["type"]) for r in existing if r["name"] not in removed]
+    conn.execute("DELETE FROM message_tags WHERE message_id=?", (message_id,))
+    for name, tag_type in rest:
+        tag_id = conn.execute("SELECT id FROM tags WHERE name=?", (name,)).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO message_tags (message_id, tag_id, type) VALUES (?, ?, ?)",
+            (message_id, tag_id, tag_type),
+        )
+
+    rendered = render_from_db(conn, row)
+    conn.execute("UPDATE messages SET rendered_text=? WHERE id=?", (rendered, message_id))
+    conn.commit()
+    return rendered
