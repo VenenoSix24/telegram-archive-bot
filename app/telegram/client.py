@@ -45,14 +45,23 @@ async def resolve_chat_name(client: TelegramClient, chat_id: int) -> str:
     return name
 
 
-async def validate_config_chats(client: TelegramClient, config: Config) -> dict:
-    """校验配置中的每个 chat 是否可访问，返回 chat_id → 名称 映射。
-
-    不可访问的 chat 会中断启动并给出具体 chat_id，方便用户在 config.yaml 里修正。
-    """
-    resolved: dict[int, str] = {}
+async def resolve_chat_names(client: TelegramClient, config: Config) -> dict[int, str]:
     ids = {c.chat_id for c in config.source_chats}
     ids.update(config.all_target_channel_ids())
+    names: dict[int, str] = {}
+    for chat_id in sorted(ids):
+        try:
+            names[chat_id] = await resolve_chat_name(client, chat_id)
+        except Exception:
+            names[chat_id] = str(chat_id)
+    return names
+
+
+async def validate_config_chats(client: TelegramClient, config: Config) -> dict:
+    """校验配置中的每个 chat 是否可访问，返回 chat_id → 名称 映射。"""
+    ids = {c.chat_id for c in config.source_chats}
+    ids.update(config.all_target_channel_ids())
+    resolved: dict[int, str] = {}
 
     for chat_id in sorted(ids):
         try:

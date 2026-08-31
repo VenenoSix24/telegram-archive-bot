@@ -16,7 +16,7 @@ from app.processor.handlers import (
 )
 from app.queue.manager import QueueManager
 from app.tags.indexer import IndexUpdater
-from app.telegram.client import build_client, validate_config_chats
+from app.telegram.client import build_client, resolve_chat_names, validate_config_chats
 from app.telegram.copier import archive_message_by_db_id
 from app.web.server import start_server_task
 
@@ -50,8 +50,10 @@ async def _run() -> int:
         conn.close()
         return 3
 
+    chats = await resolve_chat_names(client, config)
     try:
-        chats = await validate_config_chats(client, config)
+        validate_config_chats_result = await validate_config_chats(client, config)
+        chats.update(validate_config_chats_result)
     except RuntimeError as exc:
         logger.error("%s", exc)
         await client.disconnect()
@@ -59,13 +61,15 @@ async def _run() -> int:
         return 4
 
     for src in config.source_chats:
-        target_id = config.target_for(src.chat_id)
+        target_ids = config.targets_for(src.chat_id)
         logger.info(
-            "source: %s (%s) -> target %s (%s)",
+            "source: %s (%s) -> targets %s",
             chats[src.chat_id],
             src.chat_id,
-            chats[target_id],
-            target_id,
+            ", ".join(
+                f"{chats.get(target_id, target_id)} ({target_id})"
+                for target_id in target_ids
+            ),
         )
 
     for target_id in sorted(config.all_target_channel_ids()):

@@ -83,10 +83,7 @@ async def archive_message_by_db_id(
     conn: sqlite3.Connection,
     message_id: int,
 ) -> int:
-    """按 messages 记录复制到目标频道并回填 DB，返回目标频道首条消息 id。
-
-    供 Queue sender（Phase 8）调用；发送失败向上抛，由 Queue 处理重试。
-    """
+    """按 messages 记录复制到所有目标频道并回填 DB。"""
     row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
     if row is None:
         raise KeyError(f"messages id={message_id} not found")
@@ -100,7 +97,8 @@ async def archive_message_by_db_id(
         if not row["original_text"] and anchor_text:
             body_override = anchor_text
     rendered = render_from_db(conn, row, body_override=body_override)
-    target_id = config.target_for(row["source_chat_id"])
+    targets = config.targets_for(row["source_chat_id"])
+    target_id = targets[0]
     target = await client.get_entity(target_id)
 
     medias = [m.media for m in msgs if m.media]
@@ -115,8 +113,6 @@ async def archive_message_by_db_id(
         sent_list = [sent_msg]
 
     first = sent_list[0]
-    # 归档消息链接：公开频道 t.me/<名称>/<id>，私密频道 t.me/c/<内部id>/<id>
-    #（与源链接同套逻辑，见 build_source_url）。
     target_url = build_source_url(target, first.id)
     # 归档成功后再抓缩略图（引用复制拿到的是原始 media，可正常下载小图）。
     thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
