@@ -58,6 +58,25 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
     ]
     keys = row.keys()
     original_html = row["original_html"] if "original_html" in keys else ""
+    try:
+        target_rows = conn.execute(
+            "SELECT target_chat_id, target_message_id, target_url, status "
+            "FROM message_targets WHERE message_id=? ORDER BY id",
+            (row["id"],),
+        )
+    except sqlite3.OperationalError as exc:
+        if "no such table: message_targets" not in str(exc):
+            raise
+        target_rows = []
+    targets = [
+        {
+            "chat_id": target["target_chat_id"],
+            "message_id": target["target_message_id"],
+            "url": target["target_url"],
+            "status": target["status"],
+        }
+        for target in target_rows
+    ]
     return {
         "id": row["id"],
         "source_chat_id": row["source_chat_id"],
@@ -72,6 +91,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         "rating": row["rating"],
         "source_url": row["source_url"],
         "target_url": row["target_url"],
+        "targets": targets,
         "file_name": row["file_name"],
         "file_size": row["file_size"],
         "duration": row["duration"],
