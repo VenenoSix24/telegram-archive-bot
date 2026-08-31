@@ -3,8 +3,9 @@
 .env.*
 !.env.example
 
-# real config (only config.example.yaml is committed)
+# 真实 config (only config.example.yaml is committed)
 config.yaml
+config.yaml.bak
 
 # telethon session (禁止提交 GitHub)
 *.session
@@ -47,6 +48,7 @@ web/dist/
 开发文档*.md
 开发规范*.md
 docs/decisions/
+docs/transfers/
 .history/
 
 # Claude Code 本地运行配置（机器相关，不进 Git）
