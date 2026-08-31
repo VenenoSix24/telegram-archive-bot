@@ -54,9 +54,10 @@ export interface EditableConfig {
     chat_id: number | null
     name: string
     default_tags: string[]
-    target_channel_id: number | null
+    target_channel_ids: number[]
+    private: boolean
   }[]
-  target_channel_id: number | null
+  target_channels: { chat_id: number | null; name: string; private: boolean }[]
   forward_interval: number
   retry_count: number
   show_link: boolean
@@ -66,6 +67,7 @@ export interface EditableConfig {
   admins: number[]
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'
+  sync_target_edits: boolean
 }
 
 export interface Stats {
