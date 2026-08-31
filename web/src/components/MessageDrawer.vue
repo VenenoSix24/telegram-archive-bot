@@ -53,6 +53,12 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && props.message) emit('close')
 }
 
+function displayChatId(value: number | null) {
+  if (value == null) return ''
+  const digits = String(Math.abs(value))
+  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
+}
+
 watch(() => props.message, (message) => {
   if (message) lockBody()
   else unlockBody()
@@ -228,7 +234,7 @@ async function mutate(
                 </div>
                 <div class="flex items-center gap-2 font-mono">
                   <span class="w-20 shrink-0 text-steam-dim/70">来源频道</span>
-                  <span class="text-steam">{{ message.source_chat_id }}</span>
+                  <span class="text-steam">{{ displayChatId(message.source_chat_id) }}</span>
                 </div>
                 <div class="flex items-center gap-2 font-mono">
                   <span class="w-20 shrink-0 text-steam-dim/70">来源消息</span>
@@ -236,7 +242,7 @@ async function mutate(
                 </div>
                 <div v-if="message.target_chat_id != null" class="flex items-center gap-2 font-mono">
                   <span class="w-20 shrink-0 text-steam-dim/70">归档频道</span>
-                  <span class="text-steam">{{ message.target_chat_id }}</span>
+                  <span class="text-steam">{{ displayChatId(message.target_chat_id) }}</span>
                 </div>
                 <div v-if="message.target_message_id != null" class="flex items-center gap-2 font-mono">
                   <span class="w-20 shrink-0 text-steam-dim/70">归档消息</span>

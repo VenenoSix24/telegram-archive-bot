@@ -36,6 +36,23 @@ def _bool(raw, default: bool) -> bool:
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _display_chat_id(value):
+    if value is None:
+        return None
+    number = int(value)
+    digits = str(abs(number))
+    if number < 0 and digits.startswith("100") and len(digits) > 6:
+        return int(digits[3:])
+    return number
+
+
+def _stored_chat_id(value, private: bool):
+    number = int(value)
+    if private and number > 0 and not str(number).startswith("100"):
+        return int(f"-100{number}")
+    return number
+
+
 def read_editable_config(path: Path) -> dict:
     raw = _read_raw(path)
     tg = raw.get("telegram", {})
@@ -47,35 +64,42 @@ def read_editable_config(path: Path) -> dict:
     thumbs = raw.get("thumbnails", {})
     sync_target_edits = bool(raw.get("sync_target_edits", False))
 
+    target_channel_id = (tg.get("target_channel") or {}).get("chat_id")
+    source_chats = [
+        {
+            "chat_id": _display_chat_id(c.get("chat_id")),
+            "name": c.get("name", ""),
+            "private": bool(c.get("private", True)),
+            "default_tags": list(c.get("default_tags", [])),
+            "target_channel_ids": [
+                _display_chat_id(chat_id)
+                for chat_id in (
+                    list(c.get("target_channel_ids", []))
+                    or ([c["target_channel_id"]] if c.get("target_channel_id") is not None else [])
+                )
+            ],
+        }
+        for c in tg.get("source_chats", [])
+    ]
+    target_channels = [
+        {
+            "chat_id": _display_chat_id(c.get("chat_id")),
+            "name": c.get("name", ""),
+            "private": bool(c.get("private", True)),
+        }
+        for c in tg.get("target_channels", [])
+    ]
+    if not target_channels and target_channel_id is not None:
+        target_channels = [
+            {"chat_id": _display_chat_id(target_channel_id), "name": "", "private": False}
+        ]
+
     return {
-        "source_chats": [
-            {
-                "chat_id": c.get("chat_id"),
-                "name": c.get("name", ""),
-                "private": bool(c.get("private", True)),
-                "target_channel_ids": list(c.get("target_channel_ids", [])) or (
-                    [c["target_channel_id"]]
-                    if c.get("target_channel_id") is not None
-                    else []
-                ),
-            }
-            for c in tg.get("source_chats", [])
-        ],
-        "target_channels": [
-            {
-                "chat_id": c.get("chat_id"),
-                "name": c.get("name", ""),
-                "private": bool(c.get("private", True)),
-            }
-            for c in tg.get("target_channels", [])
-        ] or ([
-            {
-                "chat_id": (tg.get("target_channel") or {}).get("chat_id"),
-                "name": "",
-                "private": False,
-            }
-        ] if (tg.get("target_channel") or {}).get("chat_id") is not None else []),
-        "target_channel_id": (tg.get("target_channel") or {}).get("chat_id"),
+        "source_chats": source_chats,
+        "target_channels": target_channels,
+        "target_channel_id": _display_chat_id(target_channel_id) or (
+            target_channels[0]["chat_id"] if target_channels else None
+        ),
         "forward_interval": fw.get("interval", 3),
         "retry_count": fw.get("retry_count", 3),
         "show_link": _bool(src.get("show_link"), True),
@@ -102,8 +126,35 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
 
     raw = _read_raw(path)
     tg = raw.setdefault("telegram", {})
-    tg["source_chats"] = merged["source_chats"]
-    tg["target_channels"] = merged["target_channels"]
+    target_private = {
+        int(target["chat_id"]): bool(target.get("private", True))
+        for target in merged["target_channels"]
+        if target.get("chat_id") is not None
+    }
+    source_chats = []
+    for source in merged["source_chats"]:
+        source_private = bool(source.get("private", True))
+        source_chats.append(
+            {
+                **source,
+                "chat_id": _stored_chat_id(source["chat_id"], source_private),
+                "target_channel_ids": [
+                    _stored_chat_id(
+                        target_id,
+                        target_private.get(int(target_id), False),
+                    )
+                    for target_id in source.get("target_channel_ids", [])
+                ],
+            }
+        )
+    tg["source_chats"] = source_chats
+    tg["target_channels"] = [
+        {
+            **target,
+            "chat_id": _stored_chat_id(target["chat_id"], bool(target.get("private", True))),
+        }
+        for target in merged["target_channels"]
+    ]
     if not merged["target_channels"]:
         raise ValueError("至少需要一个目标频道")
     tg.pop("target_channel", None)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { Loader2, Plus, Trash2, Save, RotateCcw, Palette } from 'lucide-vue-next'
+import { ChevronDown, Loader2, Plus, Trash2, Save, RotateCcw, Palette, X } from 'lucide-vue-next'
 import { getConfig, getStats, putConfig } from '@/lib/api'
 import type { EditableConfig } from '@/lib/types'
 import Button from '@/components/ui/Button.vue'
@@ -14,6 +14,7 @@ import {
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+const openTargetMenu = ref<number | null>(null)
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
   { key: 'projector', label: '放映室（琥珀）' },
@@ -72,7 +73,13 @@ onMounted(async () => {
 })
 
 function addSource() {
-  form.source_chats.push({ chat_id: null, name: '', default_tags: [], target_channel_ids: [], private: true })
+  form.source_chats.push({
+    chat_id: null,
+    name: '',
+    default_tags: [],
+    target_channel_ids: [],
+    private: true,
+  })
 }
 
 function removeSource(idx: number) {
@@ -99,6 +106,28 @@ function addAdmin() {
 
 function removeAdmin(idx: number) {
   form.admins.splice(idx, 1)
+}
+
+function displayChatId(value: number | null) {
+  if (value == null) return ''
+  const digits = String(Math.abs(value))
+  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
+}
+
+function targetLabel(target: { chat_id: number | null; name: string }, fallback = '未命名频道') {
+  return target.name || (target.chat_id == null ? fallback : `频道 ${displayChatId(target.chat_id)}`)
+}
+
+function toggleTarget(source: EditableConfig['source_chats'][number], id: number | null) {
+  if (id == null) return
+  const selected = source.target_channel_ids.includes(id)
+  source.target_channel_ids = selected
+    ? source.target_channel_ids.filter((targetId) => targetId !== id)
+    : [...source.target_channel_ids, id]
+}
+
+function resetName(item: { name: string }) {
+  item.name = ''
 }
 
 async function save() {
@@ -203,7 +232,7 @@ function reset() {
         </div>
         <div v-for="(s, i) in form.source_chats" :key="i" class="mb-3 rounded-md border border-ink-line bg-ink-raised/40 p-3 sm:p-4">
           <div class="mb-3 flex items-center justify-between gap-3">
-            <h3 class="text-sm font-medium text-steam">源群 {{ i + 1 }}</h3>
+            <h3 class="text-sm font-medium text-steam">{{ s.name || `源群 ${i + 1}` }}</h3>
             <button
               type="button"
               class="shrink-0 rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive cursor-pointer"
@@ -215,11 +244,11 @@ function reset() {
           </div>
           <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-[minmax(0,1.25fr)_minmax(8rem,.75fr)_minmax(10rem,1fr)_minmax(11rem,1.15fr)]">
             <label class="min-w-0">
-              <span class="mb-1 block text-xs text-steam-dim">chat_id（必填）</span>
+              <span class="mb-1 block text-xs text-steam-dim">chat_id（必填，填写内部 ID）</span>
               <input
-                v-model="s.chat_id"
+                v-model.number="s.chat_id"
                 type="number"
-                placeholder="频道内部 ID"
+                placeholder="例如 123456789"
                 class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
                 :aria-label="`源群 ${i + 1} chat_id`"
               />
@@ -229,13 +258,25 @@ function reset() {
             </label>
             <label class="min-w-0">
               <span class="mb-1 block text-xs text-steam-dim">名称</span>
-              <input
-                v-model="s.name"
-                type="text"
-                placeholder="名称"
-                class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                :aria-label="`源群 ${i + 1} 名称`"
-              />
+              <div class="flex gap-1.5">
+                <input
+                  v-model="s.name"
+                  type="text"
+                  placeholder="留空自动获取 Telegram 名称"
+                  class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+                  :aria-label="`源群 ${i + 1} 名称`"
+                />
+                <button
+                  v-if="s.name"
+                  type="button"
+                  class="rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam cursor-pointer"
+                  :aria-label="`重置源群 ${i + 1} 名称`"
+                  title="恢复自动名称"
+                  @click="resetName(s)"
+                >
+                  <X class="h-4 w-4" />
+                </button>
+              </div>
             </label>
             <label class="min-w-0">
               <span class="mb-1 block text-xs text-steam-dim">默认 Tag</span>
@@ -247,19 +288,36 @@ function reset() {
                 @input="(e: Event) => { const v = (e.target as HTMLInputElement).value; s.default_tags = v ? v.split(' ').filter(Boolean) : [] }"
               />
             </label>
-            <label class="min-w-0 sm:col-span-2 md:col-span-1">
+            <div class="min-w-0 sm:col-span-2 md:col-span-1">
               <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
-              <select
-                v-model="s.target_channel_ids"
-                multiple
-                class="min-h-20 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-2 py-1 text-sm text-steam focus:border-gold focus:outline-none"
-                :aria-label="`源群 ${i + 1} 目标频道`"
-              >
-                <option v-for="target in form.target_channels" :key="String(target.chat_id)" :value="target.chat_id">
-                  {{ target.name || `频道 ${target.chat_id}` }}
-                </option>
-              </select>
-            </label>
+              <div class="relative">
+                <button
+                  type="button"
+                  class="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-ink-line bg-ink-raised px-3 text-left text-sm text-steam focus:border-gold focus:outline-none cursor-pointer"
+                  :aria-expanded="openTargetMenu === i"
+                  :aria-label="`源群 ${i + 1} 目标频道`"
+                  @click="openTargetMenu = openTargetMenu === i ? null : i"
+                >
+                  <span class="truncate">
+                    {{ s.target_channel_ids.length ? `${s.target_channel_ids.length} 个目标频道` : '全部目标频道' }}
+                  </span>
+                  <ChevronDown class="h-4 w-4 shrink-0 text-steam-dim" />
+                </button>
+                <div v-if="openTargetMenu === i" class="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-auto rounded-md border border-ink-line bg-ink-surface p-1 shadow-lg">
+                  <button
+                    v-for="target in form.target_channels"
+                    :key="String(target.chat_id)"
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-ink-raised cursor-pointer"
+                    @click="toggleTarget(s, target.chat_id)"
+                  >
+                    <span class="flex h-4 w-4 items-center justify-center rounded border border-ink-line text-xs" :class="s.target_channel_ids.includes(target.chat_id as number) ? 'border-gold bg-gold text-ink' : ''">{{ s.target_channel_ids.includes(target.chat_id as number) ? '✓' : '' }}</span>
+                    <span class="truncate">{{ targetLabel(target) }}</span>
+                  </button>
+                  <p v-if="!form.target_channels.length" class="px-2 py-2 text-xs text-steam-dim">请先添加目标频道</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <p v-if="!form.source_chats.length" class="text-xs text-steam-dim">还没有源群</p>
@@ -274,29 +332,51 @@ function reset() {
           </Button>
         </div>
         <div v-for="(target, i) in form.target_channels" :key="i" class="mb-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_auto]">
-          <input
-            v-model.number="target.chat_id"
-            type="number"
-            placeholder="频道内部 ID"
-            class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-            :aria-label="`目标频道 ${i + 1} chat_id`"
-          />
-          <input
-            v-model="target.name"
-            type="text"
-            placeholder="名称（可留空自动读取）"
-            class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-            :aria-label="`目标频道 ${i + 1} 名称`"
-          />
+          <div class="min-w-0">
+            <input
+              v-model.number="target.chat_id"
+              type="number"
+              placeholder="频道内部 ID"
+              class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+              :aria-label="`目标频道 ${i + 1} chat_id`"
+            />
+            <label class="mt-2 flex items-center gap-2 text-xs text-steam-dim">
+              <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密
+            </label>
+          </div>
+          <div class="flex min-w-0 gap-1.5">
+            <input
+              v-model="target.name"
+              type="text"
+              placeholder="留空自动获取 Telegram 名称"
+              class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+              :aria-label="`目标频道 ${i + 1} 名称`"
+            />
+            <button
+              v-if="target.name"
+              type="button"
+              class="rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam cursor-pointer"
+              :aria-label="`重置目标频道 ${i + 1} 名称`"
+              title="恢复自动名称"
+              @click="resetName(target)"
+            >
+              <X class="h-4 w-4" />
+            </button>
+          </div>
           <button type="button" class="justify-self-end rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive cursor-pointer" :aria-label="`删除目标频道 ${i + 1}`" @click="removeTarget(i)">
             <Trash2 class="h-4 w-4" />
           </button>
         </div>
         <p v-if="!form.target_channels.length" class="text-xs text-steam-dim">还没有目标频道</p>
         <p class="mt-2 text-xs text-steam-dim/80">源群未选择独立目标时，将归档到全部目标频道。</p>
-        <label class="mt-3 flex items-center gap-2 text-sm text-steam">
+      </section>
+
+      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
+        <h2 class="mb-1 text-sm font-medium text-steam">目标消息同步</h2>
+        <p class="mb-3 text-xs leading-5 text-steam-dim">默认只更新被编辑的目标消息。开启后，Telegram 中对任一目标消息的正文、Tag 或 Rating 编辑会同步到同一源消息的其他目标副本。</p>
+        <label class="flex items-center gap-2 text-sm text-steam">
           <input v-model="form.sync_target_edits" type="checkbox" class="h-4 w-4 accent-gold" />
-          Telegram 目标消息编辑时同步到其他目标
+          同步到所有目标副本
         </label>
       </section>
 
@@ -353,11 +433,6 @@ function reset() {
             </select>
           </label>
         </div>
-      </section>
-
-      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
-        <h2 class="mb-3 text-sm font-medium text-steam">Telegram 名称</h2>
-        <p class="text-xs leading-5 text-steam-dim">群组和频道名称将在正式启动时由已登录账号自动读取；这里填写的名称会作为自定义显示名称。</p>
       </section>
 
       <!-- 搜索模板 + 管理员 -->
