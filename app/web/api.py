@@ -29,6 +29,7 @@ _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 
 class PatchBody(BaseModel):
     target_id: int | None = None
+    body: str | None = None
     add_tags: list[str] | None = None
     remove_tag_names: list[str] | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -61,7 +62,8 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
     original_html = row["original_html"] if "original_html" in keys else ""
     try:
         target_rows = conn.execute(
-            "SELECT id, target_chat_id, target_message_id, target_url, status "
+            "SELECT id, target_chat_id, target_message_id, target_url, status, "
+            "original_text, original_html, rendered_text, rating "
             "FROM message_targets WHERE message_id=? ORDER BY id",
             (row["id"],),
         )
@@ -69,16 +71,29 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         if "no such table: message_targets" not in str(exc):
             raise
         target_rows = []
-    targets = [
-        {
+    targets = []
+    for target in target_rows:
+        target_tags = [
+            {"name": tag["name"], "type": tag["type"]}
+            for tag in conn.execute(
+                "SELECT t.name, tt.type FROM target_tags tt "
+                "JOIN tags t ON t.id=tt.tag_id WHERE tt.target_id=? "
+                "ORDER BY tt.type, t.name",
+                (target["id"],),
+            )
+        ]
+        targets.append({
             "id": target["id"],
             "chat_id": target["target_chat_id"],
             "message_id": target["target_message_id"],
             "url": target["target_url"],
             "status": target["status"],
-        }
-        for target in target_rows
-    ]
+            "original_text": target["original_text"],
+            "original_html": target["original_html"],
+            "rendered_text": target["rendered_text"],
+            "rating": target["rating"],
+            "tags": target_tags,
+        })
     if not targets and row["target_chat_id"] is not None:
         targets = [{
             "id": None,
@@ -304,7 +319,12 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
         request: Request,
         body: PatchBody,
     ) -> dict:
-        if body.add_tags is None and body.remove_tag_names is None and body.rating is None:
+        if (
+            body.add_tags is None
+            and body.remove_tag_names is None
+            and body.rating is None
+            and body.body is None
+        ):
             raise HTTPException(status_code=422, detail="nothing to change")
         client = request.app.state.client
         conn = request.app.state.conn
@@ -316,6 +336,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             conn,
             message_id,
             target_id=body.target_id,
+            body=body.body,
             add_tags=body.add_tags,
             remove_tag_names=body.remove_tag_names,
             rating=body.rating,

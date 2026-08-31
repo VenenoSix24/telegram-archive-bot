@@ -21,6 +21,11 @@ export interface MessageTarget {
   message_id: number | null
   url: string | null
   status: string
+  original_text: string
+  original_html: string
+  rendered_text: string
+  rating: number
+  tags: MessageTag[]
 }
 
 export interface Message {
