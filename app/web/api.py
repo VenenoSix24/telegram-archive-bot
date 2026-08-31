@@ -191,10 +191,18 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                 "SELECT COUNT(DISTINCT tag_id) AS n FROM message_tags"
             ).fetchone()["n"]
             tags = conn.execute("SELECT COUNT(*) AS n FROM tags").fetchone()["n"]
-            target_rows = conn.execute(
-                "SELECT target_chat_id, COUNT(*) AS n FROM messages "
-                "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
-            ).fetchall()
+            try:
+                target_rows = conn.execute(
+                    "SELECT target_chat_id, COUNT(*) AS n FROM message_targets "
+                    "WHERE status='archived' GROUP BY target_chat_id ORDER BY n DESC"
+                ).fetchall()
+            except sqlite3.OperationalError as exc:
+                if "no such table: message_targets" not in str(exc):
+                    raise
+                target_rows = conn.execute(
+                    "SELECT target_chat_id, COUNT(*) AS n FROM messages "
+                    "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
+                ).fetchall()
             targets = [
                 {"chat_id": r["target_chat_id"], "count": r["n"]} for r in target_rows
             ]
