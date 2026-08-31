@@ -56,7 +56,9 @@ async def backfill_thumbs(
                     if m.grouped_id == source.grouped_id
                 ]
                 messages.sort(key=lambda m: m.id)
-            selected = choose_thumbnail_message(messages, config.thumbnail_media)
+            selected = choose_thumbnail_message(
+                messages, getattr(config, "thumbnail_media", "first_video")
+            )
             path = await cache.fetch(client, selected, row["id"])
             if path is None:
                 continue
