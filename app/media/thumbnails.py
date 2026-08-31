@@ -52,6 +52,8 @@ def choose_thumbnail_message(messages: list, strategy: str = "first_video"):
             if document and any(isinstance(a, DocumentAttributeVideo) for a in document.attributes):
                 return message
     return messages[0]
+
+
 class ThumbnailCache:
     """缩略图存取。单进程主事件循环触发抓取，Web 经独立连接只读。"""
 
@@ -68,6 +70,17 @@ class ThumbnailCache:
     async def fetch(self, client, message, message_id: int) -> Path | None:
         """下载并缓存消息缩略图，返回本地路径；无缩略图/失败返回 None。"""
         media = message.media
+        cover = getattr(media, "video_cover", None)
+        if cover is not None:
+            self._dir.mkdir(parents=True, exist_ok=True)
+            dest = self.path_for(message_id)
+            try:
+                await client.download_media(cover, file=dest, thumb=-1)
+            except Exception:
+                dest.unlink(missing_ok=True)
+            else:
+                if dest.exists():
+                    return dest
         if isinstance(media, MessageMediaPhoto):
             thumb = _pick_photo_thumb(media.photo)
         elif isinstance(media, MessageMediaDocument):

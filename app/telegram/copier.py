@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from telethon import utils
+
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.adapter import build_source_url
 from app.renderer.db import render_from_db
@@ -24,6 +26,17 @@ logger = logging.getLogger(__name__)
 
 _ALBUM_SCAN_LIMIT = 200
 _THUMB_CACHE = ThumbnailCache()
+
+
+def _input_media_with_cover(message):
+    media = message.media
+    cover = getattr(media, "video_cover", None)
+    document = getattr(media, "document", None)
+    if document is None or cover is None:
+        return media
+    converted = utils.get_input_media(document)
+    converted.video_cover = utils.get_input_photo(cover)
+    return converted
 
 
 async def collect_album(client, chat, first_message) -> list:
@@ -92,7 +105,10 @@ async def archive_message_by_db_id(
 
     medias = [m.media for m in msgs if m.media]
     if medias:
-        sent = await client.send_file(target, file=medias, caption=rendered, parse_mode="html")
+        media_inputs = [_input_media_with_cover(m) for m in msgs if m.media]
+        sent = await client.send_file(
+            target, file=media_inputs, caption=rendered, parse_mode="html"
+        )
         sent_list = sent if isinstance(sent, list) else [sent]
     else:
         sent_msg = await client.send_message(target, rendered, parse_mode="html")

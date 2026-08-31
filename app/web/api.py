@@ -8,6 +8,7 @@ Telethon client 与共享 conn，完成「写 DB → 重渲染 → edit 目标�
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from pydantic import BaseModel, Field
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
 from app.web.config_editor import apply_editable_config, read_editable_config
+
+logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "archive_session"
 
@@ -254,6 +257,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                 fetched = await fetch_from(row["source_chat_id"], row["source_message_id"])
 
         except Exception:
+            logger.exception("thumbnail fetch failed for messages#%s", message_id)
             fetched = None
         if fetched is None or not fetched.exists():
             raise HTTPException(status_code=404, detail="thumbnail unavailable")
