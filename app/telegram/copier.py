@@ -68,15 +68,29 @@ def _save_target(
     target_message_id: int,
     target_url: str | None,
     thumb_path: str | None,
+    original_text: str,
+    original_html: str,
+    rendered_text: str,
 ) -> None:
     conn.execute(
         "INSERT INTO message_targets "
-        "(message_id, target_chat_id, target_message_id, target_url, status) "
-        "VALUES (?, ?, ?, ?, 'archived') "
+        "(message_id, target_chat_id, target_message_id, target_url, "
+        "original_text, original_html, rendered_text, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 'archived') "
         "ON CONFLICT(message_id, target_chat_id) DO UPDATE SET "
         "target_message_id=excluded.target_message_id, "
-        "target_url=excluded.target_url, status='archived'",
-        (message_id, target_chat_id, target_message_id, target_url),
+        "target_url=excluded.target_url, status='archived', "
+        "original_text=excluded.original_text, original_html=excluded.original_html, "
+        "rendered_text=excluded.rendered_text",
+        (
+            message_id,
+            target_chat_id,
+            target_message_id,
+            target_url,
+            original_text,
+            original_html,
+            rendered_text,
+        ),
     )
     conn.execute(
         "UPDATE messages SET target_chat_id=?, target_message_id=?, target_url=?, "
@@ -154,6 +168,9 @@ async def archive_message_by_db_id(
             target_message_id=first.id,
             target_url=target_url,
             thumb_path=thumb_path,
+            original_text=row["original_text"],
+            original_html=row["original_html"] if "original_html" in row.keys() else "",
+            rendered_text=rendered,
         )
         if first_target_message_id is None:
             first_target_message_id = first.id
