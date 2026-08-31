@@ -23,6 +23,14 @@ from app.web.server import start_server_task
 logger = logging.getLogger(__name__)
 
 
+async def _serve_web(web_server) -> None:
+    """Keep uvicorn startup failures from taking down the Telegram worker."""
+    try:
+        await web_server.serve()
+    except SystemExit as exc:
+        logger.error("web server stopped during startup (exit code %s)", exc.code)
+
+
 async def _run() -> int:
     setup_logging()
     try:
@@ -94,7 +102,7 @@ async def _run() -> int:
         web_server = start_server_task(
             config, client=client, conn=conn, indexer=indexer
         )
-        web_task = asyncio.create_task(web_server.serve())
+        web_task = asyncio.create_task(_serve_web(web_server))
 
     logger.info("connected，归档管道运行中——Ctrl+C 停止")
     try:

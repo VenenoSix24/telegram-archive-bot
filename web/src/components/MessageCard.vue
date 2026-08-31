@@ -85,7 +85,7 @@ const fileInfo = computed(() => {
     <!-- 评分区：星级即控件，浏览时直接改 -->
     <div class="flex items-center justify-between px-3 pt-2" @click.stop>
       <StarRating :value="message.rating" size="lg" interactive @change="(n) => emit('rate', n)" />
-      <span class="font-mono text-[11px] text-steam-dim">#{{ message.id }}</span>
+      <span class="hidden font-mono text-[11px] text-steam-dim md:inline">#{{ message.id }}</span>
     </div>
 
     <!-- tags -->
@@ -129,8 +129,8 @@ const fileInfo = computed(() => {
       >
         无链接
       </span>
-      <span v-if="message.source_url" class="ml-auto truncate font-mono text-[10px] text-steam-dim/50">
-        {{ message.source_chat_id }}
+      <span class="ml-auto font-mono text-[10px] text-steam-dim/50 md:hidden">
+        #{{ message.id }}
       </span>
     </div>
   </article>

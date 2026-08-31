@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { sanitizeTelegramHtml } from '@/lib/telegramHtml'
 import { Calendar, Film, Link2, Plus, Send, Tag as TagIcon, X } from 'lucide-vue-next'
 import type { Message } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
@@ -16,11 +17,55 @@ const newTag = ref('')
 const busy = ref(false)
 const error = ref('')
 const drawerThumbFailed = ref(false)
+let lockedScrollY = 0
+let savedBodyStyles: Partial<Record<'overflow' | 'position' | 'top' | 'width' | 'paddingRight', string>> | null = null
 
-watch(() => props.message, () => {
+function lockBody() {
+  if (savedBodyStyles || typeof window === 'undefined') return
+  lockedScrollY = window.scrollY
+  const { body } = document
+  savedBodyStyles = {
+    overflow: body.style.overflow,
+    position: body.style.position,
+    top: body.style.top,
+    width: body.style.width,
+    paddingRight: body.style.paddingRight,
+  }
+  const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+  body.style.overflow = 'hidden'
+  body.style.position = 'fixed'
+  body.style.top = `-${lockedScrollY}px`
+  body.style.width = '100%'
+  if (scrollbarWidth) body.style.paddingRight = `${scrollbarWidth}px`
+}
+
+function unlockBody() {
+  if (!savedBodyStyles || typeof window === 'undefined') return
+  const { body } = document
+  for (const [property, value] of Object.entries(savedBodyStyles)) {
+    body.style[property as 'overflow' | 'position' | 'top' | 'width' | 'paddingRight'] = value ?? ''
+  }
+  savedBodyStyles = null
+  window.scrollTo(0, lockedScrollY)
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && props.message) emit('close')
+}
+
+watch(() => props.message, (message) => {
+  if (message) lockBody()
+  else unlockBody()
+
   newTag.value = ''
   error.value = ''
   drawerThumbFailed.value = false
+})
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  unlockBody()
 })
 
 const metaLine = computed(() => {
@@ -38,6 +83,10 @@ const openUrl = computed(() => {
 })
 
 const srcUrl = computed(() => (props.message ? sourceLinkOf(props.message) : null))
+const safeOriginalHtml = computed(() => {
+  if (!props.message) return ''
+  return sanitizeTelegramHtml(props.message.original_html, props.message.original_text)
+})
 
 async function setRating(n: number) {
   if (!props.message) return
@@ -101,6 +150,7 @@ async function mutate(
             v-if="message"
             class="flex h-full w-full max-w-lg flex-col bg-ink-surface shadow-2xl"
             role="dialog"
+            aria-modal="true"
             aria-label="消息详情"
           >
             <header class="flex items-center justify-between border-b border-ink-line px-5 py-3">
@@ -147,32 +197,58 @@ async function mutate(
                   @change="setRating"
                 />
                 <span class="text-xs text-steam-dim">{{ message.rating || '未评级' }}</span>
+                <button
+                  v-if="message.rating"
+                  type="button"
+                  class="ml-auto inline-flex min-h-8 items-center rounded-md border border-ink-line px-2.5 py-1 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:bg-ink-raised hover:text-gold"
+                  :disabled="busy"
+                  @click="setRating(0)"
+                >
+                  清除评级
+                </button>
               </div>
 
               <!-- 元数据 -->
               <p v-if="metaLine" class="mb-3 font-mono text-xs text-steam-dim">{{ metaLine }}</p>
 
               <!-- 正文 -->
-              <p
-                v-if="message.original_text || message.rendered_text"
-                class="whitespace-pre-wrap text-sm leading-relaxed text-steam"
-              >
-                {{ message.original_text || message.rendered_text }}
-              </p>
+              <!-- eslint-disable vue/no-v-html -->
+              <div
+                v-if="message.original_text || message.original_html || message.rendered_text"
+                class="telegram-content text-sm leading-relaxed text-steam"
+                v-html="safeOriginalHtml"
+              />
+              <!-- eslint-enable vue/no-v-html -->
 
-              <!-- 时间/来源 -->
+              <!-- 时间与来源元数据 -->
               <dl class="mt-4 space-y-1.5 border-t border-ink-line pt-3 text-xs text-steam-dim">
                 <div class="flex items-center gap-2">
-                  <Calendar class="h-3.5 w-3.5" />
+                  <Calendar class="h-3.5 w-3.5 shrink-0" />
                   {{ formatTime(message.created_at) }}
                 </div>
-                <div v-if="srcUrl" class="flex items-center gap-2">
-                  <Link2 class="h-3.5 w-3.5" />
+                <div class="flex items-center gap-2 font-mono">
+                  <span class="w-20 shrink-0 text-steam-dim/70">来源频道</span>
+                  <span class="text-steam">{{ message.source_chat_id }}</span>
+                </div>
+                <div class="flex items-center gap-2 font-mono">
+                  <span class="w-20 shrink-0 text-steam-dim/70">来源消息</span>
+                  <span class="text-steam">#{{ message.source_message_id }}</span>
+                </div>
+                <div v-if="message.target_chat_id != null" class="flex items-center gap-2 font-mono">
+                  <span class="w-20 shrink-0 text-steam-dim/70">归档频道</span>
+                  <span class="text-steam">{{ message.target_chat_id }}</span>
+                </div>
+                <div v-if="message.target_message_id != null" class="flex items-center gap-2 font-mono">
+                  <span class="w-20 shrink-0 text-steam-dim/70">归档消息</span>
+                  <span class="text-steam">#{{ message.target_message_id }}</span>
+                </div>
+                <div v-if="srcUrl" class="flex items-start gap-2">
+                  <Link2 class="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <a
                     :href="srcUrl"
                     target="_blank"
-                    rel="noopener"
-                    class="truncate text-steam hover:text-gold"
+                    rel="noopener noreferrer"
+                    class="min-w-0 break-all text-steam hover:text-gold"
                   >
                     {{ srcUrl }}
                   </a>

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.media.thumbnails import ThumbnailCache
+from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
 from app.web.config_editor import apply_editable_config, read_editable_config
 
@@ -53,6 +53,8 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
             (row["id"],),
         )
     ]
+    keys = row.keys()
+    original_html = row["original_html"] if "original_html" in keys else ""
     return {
         "id": row["id"],
         "source_chat_id": row["source_chat_id"],
@@ -62,6 +64,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         "media_type": row["media_type"],
         "media_group_id": row["media_group_id"],
         "original_text": row["original_text"],
+        "original_html": original_html,
         "rendered_text": row["rendered_text"],
         "rating": row["rating"],
         "source_url": row["source_url"],
@@ -113,7 +116,7 @@ def _sql_filters(query) -> tuple[str, list]:
     return where, params
 
 
-def build_api_router(database_path: str, config_path: str | None = None) -> APIRouter:
+def build_api_router(database_path: str, config_path: str | None = None, config=None) -> APIRouter:
     router = APIRouter(dependencies=[Depends(_require_auth)])
 
     @router.get("/health")
@@ -223,19 +226,33 @@ def build_api_router(database_path: str, config_path: str | None = None) -> APIR
         client = request.app.state.client
         if client is None:
             raise HTTPException(status_code=404, detail="thumbnail unavailable")
-        # 当前 Web 只有 read 端点不碰 conn；懒抓用独立短连接补写 thumb_path。
         with _connect(database_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM messages WHERE id=?", (message_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
         try:
-            chat = await client.get_entity(row["source_chat_id"])
-            source = await client.get_messages(chat, ids=row["source_message_id"])
-            fetched = (
-                await ThumbnailCache().fetch(client, source, message_id)
-                if source is not None
-                else None
-            )
+            cache = ThumbnailCache()
+
+            async def fetch_from(chat_id, telegram_message_id):
+                if not chat_id or not telegram_message_id:
+                    return None
+                chat = await client.get_entity(chat_id)
+                message = await client.get_messages(chat, ids=telegram_message_id)
+                if message is None:
+                    return None
+                if message.grouped_id and config:
+                    group = [
+                        item for item in await client.get_messages(chat, limit=200)
+                        if item.grouped_id == message.grouped_id
+                    ]
+                    group.sort(key=lambda item: item.id)
+                    message = choose_thumbnail_message(group, config.thumbnail_media)
+                return await cache.fetch(client, message, message_id)
+
+            fetched = None
+            if config is None or config.thumbnail_source != "source":
+                fetched = await fetch_from(row["target_chat_id"], row["target_message_id"])
+            if fetched is None and (config is None or config.thumbnail_source != "archive"):
+                fetched = await fetch_from(row["source_chat_id"], row["source_message_id"])
+
         except Exception:
             fetched = None
         if fetched is None or not fetched.exists():

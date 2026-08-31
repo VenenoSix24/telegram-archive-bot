@@ -42,9 +42,14 @@ async def apply_message_edit(
     if rendered is None:
         return False
 
-    await client.edit_message(
-        row["target_chat_id"], row["target_message_id"], rendered
-    )
+    try:
+        await client.edit_message(
+            row["target_chat_id"], row["target_message_id"], rendered, parse_mode="html"
+        )
+    except TypeError as exc:
+        if "parse_mode" not in str(exc):
+            raise
+        await client.edit_message(row["target_chat_id"], row["target_message_id"], rendered)
     if indexer is not None:
         indexer.schedule()
     return True

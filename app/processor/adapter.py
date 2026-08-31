@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from telethon.extensions import html
 from telethon.tl.types import (
     DocumentAttributeAudio,
     DocumentAttributeFilename,
@@ -26,6 +27,7 @@ class IncomingMessage:
     media_type: str | None
     media_group_id: str | None
     source_url: str | None
+    text_html: str = ""
     file_name: str | None = None
     file_size: int | None = None
     duration: int | None = None
@@ -109,10 +111,12 @@ async def resolve_source_url(client, message, chat_entity, *, show_link: bool = 
 
 def build_incoming(message, chat_id: int, source_url: str | None) -> IncomingMessage:
     file_name, file_size, duration = media_file_meta(message.media)
+    entities = getattr(message, "entities", None) or []
     return IncomingMessage(
         source_chat_id=chat_id,
         source_message_id=message.id,
         text=message.message or "",
+        text_html=html.unparse(message.message or "", entities) if entities else "",
         media_type=classify_media(message.media),
         media_group_id=message.grouped_id,
         source_url=source_url,

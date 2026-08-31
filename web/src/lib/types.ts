@@ -24,6 +24,7 @@ export interface Message {
   media_type: MediaType
   media_group_id: string | null
   original_text: string
+  original_html: string
   rendered_text: string
   rating: number
   source_url: string | null
@@ -63,6 +64,8 @@ export interface EditableConfig {
   rating_enabled: boolean
   url_template: string | null
   admins: number[]
+  thumbnail_media: 'first_video' | 'first'
+  thumbnail_source: 'auto' | 'archive' | 'source'
 }
 
 export interface Stats {

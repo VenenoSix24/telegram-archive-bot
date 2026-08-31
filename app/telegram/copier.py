@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from app.media.thumbnails import ThumbnailCache
+from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.adapter import build_source_url
 from app.renderer.db import render_from_db
 
@@ -92,10 +92,10 @@ async def archive_message_by_db_id(
 
     medias = [m.media for m in msgs if m.media]
     if medias:
-        sent = await client.send_file(target, file=medias, caption=rendered)
+        sent = await client.send_file(target, file=medias, caption=rendered, parse_mode="html")
         sent_list = sent if isinstance(sent, list) else [sent]
     else:
-        sent_msg = await client.send_message(target, rendered)
+        sent_msg = await client.send_message(target, rendered, parse_mode="html")
         sent_list = [sent_msg]
 
     first = sent_list[0]
@@ -103,9 +103,10 @@ async def archive_message_by_db_id(
     #（与源链接同套逻辑，见 build_source_url）。
     target_url = build_source_url(target, first.id)
     # 归档成功后再抓缩略图（引用复制拿到的是原始 media，可正常下载小图）。
+    thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
     thumb_path = None
-    if msgs:
-        thumb = await _THUMB_CACHE.fetch(client, msgs[0], message_id)
+    if thumb_message:
+        thumb = await _THUMB_CACHE.fetch(client, thumb_message, message_id)
         if thumb is not None:
             thumb_path = str(thumb)
     _save_target(

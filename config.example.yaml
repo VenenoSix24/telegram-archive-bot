@@ -40,6 +40,12 @@ tags:
 rating:
   enabled: true
 
+thumbnails:
+  # Album 缩略图媒体：first_video=组内第一个视频，first=组内第一条媒体
+  media: first_video
+  # 缩略图来源：auto=归档优先并回退源消息，archive=仅归档，source=仅源消息
+  source: auto
+
 search:
   # 私有频道时使用 url_template，{tag} 会被替换成对应 Tag；
   # 公开频道自动生成 https://t.me/channel_name/123
