@@ -101,6 +101,26 @@ admins:
     assert cfg.all_target_channel_ids() == {-1008, -1009}
 
 
+def test_load_multiple_targets(env, tmp_path):
+    yaml_text = """
+telegram:
+  source_chats:
+    - chat_id: -1001
+      name: 游戏
+      target_channel_ids: [-1008, -1009]
+  target_channels:
+    - chat_id: -1008
+      name: 频道 A
+    - chat_id: -1009
+      name: 频道 B
+admins:
+  - 1
+"""
+    cfg = load_config(_write_config(tmp_path, yaml_text))
+    assert cfg.targets_for(-1001) == [-1008, -1009]
+    assert cfg.all_target_channel_ids() == {-1008, -1009}
+
+
 def test_missing_env_raises(monkeypatch, tmp_path):
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)
     monkeypatch.delenv("TELEGRAM_API_HASH", raising=False)

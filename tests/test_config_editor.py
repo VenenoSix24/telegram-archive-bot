@@ -39,6 +39,8 @@ def test_read_editable_config(tmp_path):
     p = _write(tmp_path)
     cfg = read_editable_config(p)
     assert cfg["source_chats"][0]["chat_id"] == -1001
+    assert cfg["target_channels"] == [{"chat_id": -1002, "name": "", "private": False}]
+    assert cfg["target_channel_id"] == -1002
     assert cfg["target_channel_id"] == -1002
     assert cfg["forward_interval"] == 3
     assert cfg["admins"] == [111]
@@ -46,7 +48,17 @@ def test_read_editable_config(tmp_path):
     assert "api_id" not in cfg
 
 
-def test_apply_updates_and_backs_up(tmp_path):
+def test_apply_multiple_targets(tmp_path):
+    p = _write(tmp_path)
+    targets = [
+        {"chat_id": -1002, "name": "A", "private": True},
+        {"chat_id": -1003, "name": "B", "private": True},
+    ]
+    new = apply_editable_config(p, {"target_channels": targets})
+    assert new["target_channels"] == targets
+
+
+
     p = _write(tmp_path)
     new = apply_editable_config(p, {"forward_interval": 5, "admins": [111, 222]})
     assert new["forward_interval"] == 5

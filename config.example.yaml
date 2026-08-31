@@ -1,12 +1,12 @@
 telegram:
   # 源群统一模型：监听这些群，全部新消息自动归档。
-  # 每个源群可带 default_tags；可选 target_channel_id 指定归档频道（缺省走全局）。
+  # 每个源群可带 default_tags；可选 target_channel_ids 指定多个归档频道（缺省使用全部目标）
   source_chats:
     - chat_id: -100123456789
       name: 游戏
       default_tags:
         - 游戏
-      # target_channel_id: -100111222333  # 可选，缺省归档到全局 target_channel
+      # target_channel_ids: [-100111222333, -100444555666]  # 可选，缺省使用全部目标
 
     - chat_id: -100987654321
       name: 软件
@@ -18,10 +18,10 @@ telegram:
       name: 中转群
       default_tags: []
 
-  # 全局目标频道：未单独指定 target_channel_id 的源群归档到这里
-  #（broadcast channel + 关联讨论组）
-  target_channel:
-    chat_id: -100111222333
+  # 目标频道列表：源群未指定 target_channel_ids 时，归档到这里的全部频道
+  target_channels:
+    - chat_id: -100111222333
+      name: 测试频道
 
 forward:
   # 默认每隔 N 秒发送一条
@@ -45,6 +45,9 @@ thumbnails:
   media: first_video
   # 缩略图来源：auto=归档优先并回退源消息，archive=仅归档，source=仅源消息
   source: auto
+
+# Telegram 目标消息手动编辑时是否同步到同一源消息的其他目标
+sync_target_edits: false
 
 search:
   # 私有频道时使用 url_template，{tag} 会被替换成对应 Tag；
