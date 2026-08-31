@@ -47,6 +47,8 @@ class Config:
     web_host: str
     web_port: int
     web_token: str
+    thumbnail_media: str = "first_video"
+    thumbnail_source: str = "auto"
 
     def target_for(self, source_chat_id: int) -> int:
         """该源群的目标频道：源群指定优先，否则用全局 target_channel。"""
@@ -94,6 +96,7 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
     tags_cfg = raw.get("tags", {})
     rating = raw.get("rating", {})
     search = raw.get("search", {})
+    thumbs = raw.get("thumbnails", {})
 
     source_chats = [
         SourceChat(
@@ -158,4 +161,6 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=int(os.getenv("WEB_PORT", "8000")),
         web_token=web_token,
+        thumbnail_media=thumbs.get("media", "first_video"),
+        thumbnail_source=thumbs.get("source", "auto"),
     )

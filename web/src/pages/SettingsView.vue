@@ -25,6 +25,15 @@ const modeOptions: { key: Mode; label: string }[] = [
   { key: 'dark', label: '深色' },
   { key: 'light', label: '浅色' },
 ]
+const thumbnailMediaOptions = [
+  { key: 'first_video' as const, label: '组内第一个视频' },
+  { key: 'first' as const, label: '组内第一条媒体' },
+]
+const thumbnailSourceOptions = [
+  { key: 'auto' as const, label: '自动（归档优先，源消息回退）' },
+  { key: 'archive' as const, label: '归档频道' },
+  { key: 'source' as const, label: '源消息' },
+]
 
 /** Vue reactive 代理无法 structuredClone，配置全是纯 JSON 结构，用 JSON 深拷贝。 */
 function _clone<T>(input: T): T {
@@ -41,6 +50,8 @@ const form = reactive<EditableConfig>({
   rating_enabled: true,
   url_template: null,
   admins: [],
+  thumbnail_media: 'first_video' as 'first_video' | 'first',
+  thumbnail_source: 'auto' as 'auto' | 'archive' | 'source',
 })
 
 /** 最终落盘前不覆盖：保存改的是提交内容，页面状态独立 */
@@ -277,6 +288,24 @@ function reset() {
           <input v-model="form.rating_enabled" type="checkbox" class="h-4 w-4 accent-gold" />
           启用 Rating
         </label>
+      </section>
+
+      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
+        <h2 class="mb-3 text-sm font-medium text-steam">缩略图</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="min-w-0">
+            <span class="mb-1 block text-xs text-steam-dim">Album 缩略图媒体</span>
+            <select v-model="form.thumbnail_media" class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
+              <option v-for="option in thumbnailMediaOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+            </select>
+          </label>
+          <label class="min-w-0">
+            <span class="mb-1 block text-xs text-steam-dim">缩略图来源</span>
+            <select v-model="form.thumbnail_source" class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
+              <option v-for="option in thumbnailSourceOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+            </select>
+          </label>
+        </div>
       </section>
 
       <!-- 搜索模板 + 管理员 -->

@@ -64,6 +64,8 @@ export interface EditableConfig {
   rating_enabled: boolean
   url_template: string | null
   admins: number[]
+  thumbnail_media: 'first_video' | 'first'
+  thumbnail_source: 'auto' | 'archive' | 'source'
 }
 
 export interface Stats {

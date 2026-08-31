@@ -44,6 +44,7 @@ def read_editable_config(path: Path) -> dict:
     rating = raw.get("rating", {})
     search = raw.get("search", {})
     fw = raw.get("forward", {})
+    thumbs = raw.get("thumbnails", {})
 
     return {
         "source_chats": [
@@ -63,6 +64,8 @@ def read_editable_config(path: Path) -> dict:
         "rating_enabled": _bool(rating.get("enabled"), True),
         "url_template": search.get("url_template"),
         "admins": [int(a) for a in raw.get("admins", [])],
+        "thumbnail_media": thumbs.get("media", "first_video"),
+        "thumbnail_source": thumbs.get("source", "auto"),
     }
 
 
@@ -88,6 +91,8 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw.setdefault("rating", {})["enabled"] = merged["rating_enabled"]
     raw.setdefault("search", {})["url_template"] = merged["url_template"]
     raw["admins"] = merged["admins"]
+    raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
+    raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
 
     buf = StringIO()
     _yaml.dump(raw, buf)
