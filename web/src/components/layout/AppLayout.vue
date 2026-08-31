@@ -112,20 +112,21 @@ const shouldShowNav = computed(() => !!route.name)
     <nav
       v-if="shouldShowNav"
       aria-label="移动端导航"
-      class="fixed inset-x-0 bottom-4 z-40 mx-auto flex max-w-[20rem] items-center justify-around gap-1 rounded-full border border-ink-line/70 bg-ink-surface/85 px-2 py-1.5 shadow-lg backdrop-blur-md md:hidden"
+      class="fixed bottom-4 left-1/2 z-40 flex w-[min(calc(100vw-2rem),18rem)] -translate-x-1/2 items-center justify-between gap-0 rounded-2xl border border-ink-line/70 bg-ink-surface/90 px-1.5 py-1.5 shadow-lg backdrop-blur-md md:hidden"
     >
       <RouterLink
         v-for="item in nav"
         :key="item.name"
         :to="{ name: item.name }"
         :aria-current="isActive(item.name) ? 'page' : undefined"
+        :aria-label="item.label"
         :class="cn(
-          'flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-[10px] transition-colors',
+          'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] transition-colors',
           isActive(item.name) ? 'bg-gold/15 text-gold' : 'text-steam-dim hover:text-steam',
         )"
       >
         <component :is="item.icon" class="h-5 w-5" />
-        {{ item.label }}
+        <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
   </div>

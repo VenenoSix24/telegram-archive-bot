@@ -24,6 +24,7 @@ export interface Message {
   media_type: MediaType
   media_group_id: string | null
   original_text: string
+  original_html: string
   rendered_text: string
   rating: number
   source_url: string | null
