@@ -18,6 +18,7 @@ async def apply_message_edit(
     conn: sqlite3.Connection,
     message_id: int,
     *,
+    target_id: int | None = None,
     add_tags: list[str] | None = None,
     remove_tag_names: list[str] | None = None,
     rating: int | None = None,
@@ -31,6 +32,17 @@ async def apply_message_edit(
     if row is None or not row["target_chat_id"]:
         return False
 
+    target = None
+    try:
+        target = conn.execute(
+            "SELECT * FROM message_targets WHERE id=? AND message_id=?",
+            (target_id, message_id),
+        ).fetchone() if target_id is not None else None
+    except sqlite3.OperationalError as exc:
+        if "no such table: message_targets" not in str(exc):
+            raise
+    target_chat_id = target["target_chat_id"] if target else row["target_chat_id"]
+    target_message_id = target["target_message_id"] if target else row["target_message_id"]
     rendered = None
     # 各 DB 函数内部都会以最新行重渲染，最后一次写库的结果即最终文本。
     if add_tags:
@@ -44,12 +56,12 @@ async def apply_message_edit(
 
     try:
         await client.edit_message(
-            row["target_chat_id"], row["target_message_id"], rendered, parse_mode="html"
+            target_chat_id, target_message_id, rendered, parse_mode="html"
         )
     except TypeError as exc:
         if "parse_mode" not in str(exc):
             raise
-        await client.edit_message(row["target_chat_id"], row["target_message_id"], rendered)
+        await client.edit_message(target_chat_id, target_message_id, rendered)
     if indexer is not None:
         indexer.schedule()
     return True

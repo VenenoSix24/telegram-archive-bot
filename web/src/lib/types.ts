@@ -16,6 +16,7 @@ export interface MessageTag {
 }
 
 export interface MessageTarget {
+  id: number | null
   chat_id: number
   message_id: number | null
   url: string | null
