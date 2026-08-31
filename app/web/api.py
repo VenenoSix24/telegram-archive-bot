@@ -73,15 +73,17 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         target_rows = []
     targets = []
     for target in target_rows:
-        target_tags = [
-            {"name": tag["name"], "type": tag["type"]}
-            for tag in conn.execute(
-                "SELECT t.name, tt.type FROM target_tags tt "
-                "JOIN tags t ON t.id=tt.tag_id WHERE tt.target_id=? "
-                "ORDER BY tt.type, t.name",
+        try:
+            target_tag_rows = conn.execute(
+                "SELECT t.name, tt.type FROM target_tags tt JOIN tags t ON t.id=tt.tag_id "
+                "WHERE tt.target_id=? ORDER BY tt.type, t.name",
                 (target["id"],),
             )
-        ]
+        except sqlite3.OperationalError as exc:
+            if "no such table: target_tags" not in str(exc):
+                raise
+            target_tag_rows = []
+        target_tags = [{"name": tag["name"], "type": tag["type"]} for tag in target_tag_rows]
         targets.append({
             "id": target["id"],
             "chat_id": target["target_chat_id"],

@@ -94,6 +94,15 @@ def _save_target(
             rating,
         ),
     )
+    target_row = conn.execute(
+        "SELECT id FROM message_targets WHERE message_id=? AND target_chat_id=?",
+        (message_id, target_chat_id),
+    ).fetchone()
+    conn.execute(
+        "INSERT OR IGNORE INTO target_tags (target_id, tag_id, type) "
+        "SELECT ?, tag_id, type FROM message_tags WHERE message_id=?",
+        (target_row["id"], message_id),
+    )
     conn.execute(
         "UPDATE messages SET target_chat_id=?, target_message_id=?, target_url=?, "
         "thumb_path=? WHERE id=? AND target_chat_id IS NULL",
