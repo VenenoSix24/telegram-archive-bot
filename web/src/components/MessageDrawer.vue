@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { sanitizeTelegramHtml } from '@/lib/telegramHtml'
 import { Calendar, Film, Link2, Plus, Send, Tag as TagIcon, X } from 'lucide-vue-next'
-import type { Message } from '@/lib/types'
+import type { Message, MessageTarget } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
 import Button from '@/components/ui/Button.vue'
 import StarRating from '@/components/ui/StarRating.vue'
@@ -17,6 +17,9 @@ const newTag = ref('')
 const busy = ref(false)
 const error = ref('')
 const drawerThumbFailed = ref(false)
+const selectedTargetId = ref<number | null>(null)
+const bodyDraft = ref('')
+const editingBody = ref(false)
 let lockedScrollY = 0
 let savedBodyStyles: Partial<Record<'overflow' | 'position' | 'top' | 'width' | 'paddingRight', string>> | null = null
 
@@ -66,6 +69,9 @@ watch(() => props.message, (message) => {
   newTag.value = ''
   error.value = ''
   drawerThumbFailed.value = false
+  selectedTargetId.value = message?.targets?.[0]?.id ?? null
+  bodyDraft.value = message?.targets?.[0]?.original_text ?? message?.original_text ?? ''
+  editingBody.value = false
 })
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
@@ -89,30 +95,53 @@ const openUrl = computed(() => {
 })
 
 const srcUrl = computed(() => (props.message ? sourceLinkOf(props.message) : null))
-const safeOriginalHtml = computed(() => {
-  if (!props.message) return ''
-  return sanitizeTelegramHtml(props.message.original_html, props.message.original_text)
-})
+function targetFor(message: Message | null): MessageTarget | null {
+  if (!message || selectedTargetId.value == null) return null
+  return message.targets.find((target) => target.id === selectedTargetId.value) ?? null
+}
+
+const activeTarget = computed(() => targetFor(props.message))
+const activeRating = computed(() => activeTarget.value?.rating ?? props.message?.rating ?? 0)
+const activeTags = computed(() => activeTarget.value?.tags ?? props.message?.tags ?? [])
+const activeBody = computed(() => activeTarget.value?.original_text ?? props.message?.original_text ?? '')
+const activeRendered = computed(() => activeTarget.value?.rendered_text ?? props.message?.rendered_text ?? '')
+
+function selectTarget(id: number | null) {
+  selectedTargetId.value = id
+  bodyDraft.value = activeBody.value
+  editingBody.value = false
+}
+
+function startBodyEdit() {
+  bodyDraft.value = activeBody.value
+  editingBody.value = true
+}
+
+async function saveBody() {
+  await mutate({ target_id: selectedTargetId.value ?? undefined, body: bodyDraft.value }, '正文已更新')
+  editingBody.value = false
+}
+
 
 async function setRating(n: number) {
   if (!props.message) return
-  await mutate({ rating: n }, n === 0 ? '已清除评级' : `评级设为 ${n} 星`)
+  await mutate({ target_id: selectedTargetId.value ?? undefined, rating: n }, n === 0 ? '已清除评级' : `评级设为 ${n} 星`)
 }
 
 async function addTag() {
   const name = newTag.value.trim()
-  if (!name || !props.message || props.message.tags.some((t) => t.name === name)) return
-  await mutate({ add_tags: [name] }, `已添加标签「${name}」`)
+  if (!name || !props.message || activeTags.value.some((t) => t.name === name)) return
+  await mutate({ target_id: selectedTargetId.value ?? undefined, add_tags: [name] }, `已添加标签「${name}」`)
   newTag.value = ''
 }
 
 async function removeTag(tagName: string) {
   if (!props.message) return
-  await mutate({ remove_tag_names: [tagName] }, `已移除标签「${tagName}」`)
+  await mutate({ target_id: selectedTargetId.value ?? undefined, remove_tag_names: [tagName] }, `已移除标签「${tagName}」`)
 }
 
 async function mutate(
-  change: { rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
+  change: { target_id?: number; body?: string; rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
   doneText: string,
 ) {
   if (!props.message) return
@@ -193,16 +222,31 @@ async function mutate(
                 <Film class="h-12 w-12" />
               </div>
 
+              <!-- 目标副本 -->
+              <div v-if="message.targets.length > 1" class="mb-4">
+                <label class="mb-1 block text-xs text-steam-dim" for="target-copy">编辑目标副本</label>
+                <select
+                  id="target-copy"
+                  :value="selectedTargetId ?? ''"
+                  class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none"
+                  @change="selectTarget(Number(($event.target as HTMLSelectElement).value))"
+                >
+                  <option v-for="target in message.targets" :key="target.id ?? target.chat_id" :value="target.id">
+                    目标 {{ displayChatId(target.chat_id) }} · #{{ target.message_id }}
+                  </option>
+                </select>
+              </div>
+
               <!-- 评级 -->
               <div class="mb-4 flex items-center gap-3">
                 <StarRating
-                  :value="message.rating"
+                  :value="activeRating"
                   size="lg"
                   interactive
                   :disabled="busy"
                   @change="setRating"
                 />
-                <span class="text-xs text-steam-dim">{{ message.rating || '未评级' }}</span>
+                <span class="text-xs text-steam-dim">{{ activeRating || '未评级' }}</span>
                 <button
                   v-if="message.rating"
                   type="button"
@@ -219,11 +263,19 @@ async function mutate(
 
               <!-- 正文 -->
               <!-- eslint-disable vue/no-v-html -->
-              <div
-                v-if="message.original_text || message.original_html || message.rendered_text"
-                class="telegram-content text-sm leading-relaxed text-steam"
-                v-html="safeOriginalHtml"
-              />
+                <div
+                  v-if="activeBody || activeRendered"
+                  class="telegram-content text-sm leading-relaxed text-steam"
+                  v-html="sanitizeTelegramHtml(activeTarget?.original_html || '', activeBody || activeRendered)"
+                />
+                <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">编辑正文</Button>
+                <div v-if="editingBody" class="mt-3 space-y-2">
+                  <textarea v-model="bodyDraft" rows="6" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑正文" />
+                  <div class="flex gap-2">
+                    <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
+                    <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
+                  </div>
+                </div>
               <!-- eslint-enable vue/no-v-html -->
 
               <!-- 时间与来源元数据 -->
@@ -268,7 +320,7 @@ async function mutate(
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   <button
-                    v-for="tag in message.tags"
+                    v-for="tag in activeTags"
                     :key="tag.name + tag.type"
                     type="button"
                     :disabled="busy"
@@ -278,7 +330,7 @@ async function mutate(
                   >
                     {{ tag.name }}
                   </button>
-                  <span v-if="!message.tags.length" class="text-xs text-steam-dim/60">暂无标签</span>
+                  <span v-if="!activeTags.length" class="text-xs text-steam-dim/60">暂无标签</span>
                 </div>
 
                 <!-- 添加标签 -->
