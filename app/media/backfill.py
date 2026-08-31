@@ -50,9 +50,16 @@ async def backfill_thumbs(
                 continue
             messages = [source]
             if source.grouped_id:
-                messages = [m for m in await client.get_messages(chat, limit=200) if m.grouped_id == source.grouped_id]
+                messages = [
+                    m
+                    for m in await client.get_messages(chat, limit=200)
+                    if m.grouped_id == source.grouped_id
+                ]
                 messages.sort(key=lambda m: m.id)
-            path = await cache.fetch(client, choose_thumbnail_message(messages, config.thumbnail_media), row["id"])
+            selected = choose_thumbnail_message(
+                messages, getattr(config, "thumbnail_media", "first_video")
+            )
+            path = await cache.fetch(client, selected, row["id"])
             if path is None:
                 continue
             conn.execute(
