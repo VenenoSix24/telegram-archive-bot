@@ -92,10 +92,10 @@ async def archive_message_by_db_id(
 
     medias = [m.media for m in msgs if m.media]
     if medias:
-        sent = await client.send_file(target, file=medias, caption=rendered)
+        sent = await client.send_file(target, file=medias, caption=rendered, parse_mode="html")
         sent_list = sent if isinstance(sent, list) else [sent]
     else:
-        sent_msg = await client.send_message(target, rendered)
+        sent_msg = await client.send_message(target, rendered, parse_mode="html")
         sent_list = [sent_msg]
 
     first = sent_list[0]

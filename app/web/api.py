@@ -53,6 +53,8 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
             (row["id"],),
         )
     ]
+    keys = row.keys()
+    original_html = row["original_html"] if "original_html" in keys else ""
     return {
         "id": row["id"],
         "source_chat_id": row["source_chat_id"],
@@ -62,6 +64,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         "media_type": row["media_type"],
         "media_group_id": row["media_group_id"],
         "original_text": row["original_text"],
+        "original_html": original_html,
         "rendered_text": row["rendered_text"],
         "rating": row["rating"],
         "source_url": row["source_url"],

@@ -29,9 +29,13 @@ def render_from_db(
         )
     ]
     body = body_override if body_override is not None else (message_row["original_text"] or "")
+    body_html = None
+    if body_override is None and "original_html" in message_row.keys():
+        body_html = message_row["original_html"] or None
     return render_message(
         rating=message_row["rating"] if rating_override is None else rating_override,
         tags=tags,
         body=body,
+        body_html=body_html,
         source_url=message_row["source_url"],
     )
