@@ -28,6 +28,7 @@ _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 
 
 class PatchBody(BaseModel):
+    target_id: int | None = None
     add_tags: list[str] | None = None
     remove_tag_names: list[str] | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -60,7 +61,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
     original_html = row["original_html"] if "original_html" in keys else ""
     try:
         target_rows = conn.execute(
-            "SELECT target_chat_id, target_message_id, target_url, status "
+            "SELECT id, target_chat_id, target_message_id, target_url, status "
             "FROM message_targets WHERE message_id=? ORDER BY id",
             (row["id"],),
         )
@@ -70,6 +71,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         target_rows = []
     targets = [
         {
+            "id": target["id"],
             "chat_id": target["target_chat_id"],
             "message_id": target["target_message_id"],
             "url": target["target_url"],
@@ -77,6 +79,14 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         }
         for target in target_rows
     ]
+    if not targets and row["target_chat_id"] is not None:
+        targets = [{
+            "id": None,
+            "chat_id": row["target_chat_id"],
+            "message_id": row["target_message_id"],
+            "url": row["target_url"],
+            "status": row["status"],
+        }]
     return {
         "id": row["id"],
         "source_chat_id": row["source_chat_id"],
@@ -305,6 +315,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             client,
             conn,
             message_id,
+            target_id=body.target_id,
             add_tags=body.add_tags,
             remove_tag_names=body.remove_tag_names,
             rating=body.rating,
