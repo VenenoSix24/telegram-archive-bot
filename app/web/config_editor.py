@@ -45,17 +45,36 @@ def read_editable_config(path: Path) -> dict:
     search = raw.get("search", {})
     fw = raw.get("forward", {})
     thumbs = raw.get("thumbnails", {})
+    sync_target_edits = bool(raw.get("sync_target_edits", False))
 
     return {
         "source_chats": [
             {
                 "chat_id": c.get("chat_id"),
                 "name": c.get("name", ""),
-                "default_tags": list(c.get("default_tags", [])),
-                "target_channel_id": c.get("target_channel_id"),
+                "private": bool(c.get("private", True)),
+                "target_channel_ids": list(c.get("target_channel_ids", [])) or (
+                    [c["target_channel_id"]]
+                    if c.get("target_channel_id") is not None
+                    else []
+                ),
             }
             for c in tg.get("source_chats", [])
         ],
+        "target_channels": [
+            {
+                "chat_id": c.get("chat_id"),
+                "name": c.get("name", ""),
+                "private": bool(c.get("private", True)),
+            }
+            for c in tg.get("target_channels", [])
+        ] or ([
+            {
+                "chat_id": (tg.get("target_channel") or {}).get("chat_id"),
+                "name": "",
+                "private": False,
+            }
+        ] if (tg.get("target_channel") or {}).get("chat_id") is not None else []),
         "target_channel_id": (tg.get("target_channel") or {}).get("chat_id"),
         "forward_interval": fw.get("interval", 3),
         "retry_count": fw.get("retry_count", 3),
@@ -66,6 +85,7 @@ def read_editable_config(path: Path) -> dict:
         "admins": [int(a) for a in raw.get("admins", [])],
         "thumbnail_media": thumbs.get("media", "first_video"),
         "thumbnail_source": thumbs.get("source", "auto"),
+        "sync_target_edits": sync_target_edits,
     }
 
 
@@ -83,7 +103,10 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw = _read_raw(path)
     tg = raw.setdefault("telegram", {})
     tg["source_chats"] = merged["source_chats"]
-    tg["target_channel"] = {"chat_id": merged["target_channel_id"]}
+    tg["target_channels"] = merged["target_channels"]
+    if not merged["target_channels"]:
+        raise ValueError("至少需要一个目标频道")
+    tg.pop("target_channel", None)
     raw.setdefault("forward", {})["interval"] = merged["forward_interval"]
     raw.setdefault("forward", {})["retry_count"] = merged["retry_count"]
     raw.setdefault("source", {})["show_link"] = merged["show_link"]
@@ -93,6 +116,7 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw["admins"] = merged["admins"]
     raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
     raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
+    raw["sync_target_edits"] = merged["sync_target_edits"]
 
     buf = StringIO()
     _yaml.dump(raw, buf)
