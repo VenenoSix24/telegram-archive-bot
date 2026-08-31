@@ -1,0 +1,5 @@
+- 当前分支已有 migrations/0005_target_fields.sql，为 message_targets 增加独立正文、HTML、渲染、rating、thumb_path，并有 target_tags 表。
+- copier 已为每个目标写入 message_targets，但需要确认字段完整写入和旧库兼容。
+- API 已返回 targets，并支持 target_id 传给编辑服务；编辑服务目前仍通过 messages 的 Tag/Rating/渲染函数操作，尚未真正更新目标行。
+- Web Message 类型已有 MessageTarget，但详情抽屉仍只显示顶层字段，没有目标选择和正文编辑控件。
+- 现有全量测试基线为 115 passed；旧测试数据库部分没有 message_targets 表，需要兼容。
