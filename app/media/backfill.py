@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from app.config import Config
-from app.media.thumbnails import ThumbnailCache
+from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,11 @@ async def backfill_thumbs(
             source = await client.get_messages(chat, ids=row["source_message_id"])
             if source is None:
                 continue
-            path = await cache.fetch(client, source, row["id"])
+            messages = [source]
+            if source.grouped_id:
+                messages = [m for m in await client.get_messages(chat, limit=200) if m.grouped_id == source.grouped_id]
+                messages.sort(key=lambda m: m.id)
+            path = await cache.fetch(client, choose_thumbnail_message(messages, config.thumbnail_media), row["id"])
             if path is None:
                 continue
             conn.execute(

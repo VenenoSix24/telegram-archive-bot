@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from telethon.tl.types import (
+    DocumentAttributeVideo,
     MessageMediaDocument,
     MessageMediaPhoto,
     PhotoCachedSize,
@@ -40,6 +41,17 @@ def _pick_photo_thumb(photo):
     return min(mid, key=lambda s: s.w) if mid else min(candidates, key=lambda s: s.w)
 
 
+def choose_thumbnail_message(messages: list, strategy: str = "first_video"):
+    """Choose the album message whose thumbnail should represent the group."""
+    if not messages:
+        return None
+    if strategy == "first_video":
+        for message in messages:
+            media = getattr(message, "media", None)
+            document = getattr(media, "document", None)
+            if document and any(isinstance(a, DocumentAttributeVideo) for a in document.attributes):
+                return message
+    return messages[0]
 class ThumbnailCache:
     """缩略图存取。单进程主事件循环触发抓取，Web 经独立连接只读。"""
 
@@ -59,7 +71,8 @@ class ThumbnailCache:
         if isinstance(media, MessageMediaPhoto):
             thumb = _pick_photo_thumb(media.photo)
         elif isinstance(media, MessageMediaDocument):
-            thumb = -1  # 文档首张 thumbnail（视频封面等，本身是封面小图）
+            document = media.document
+            thumb = -1 if document.thumbs else None
         else:
             return None
         if thumb is None:

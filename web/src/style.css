@@ -59,7 +59,66 @@ body,
   }
 }
 
-/* 键盘焦点可见，不只靠颜色 */
+.telegram-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.telegram-content a {
+  color: rgb(var(--gold));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.telegram-content p {
+  margin: 0.75rem 0;
+}
+
+.telegram-content p:first-child {
+  margin-top: 0;
+}
+
+.telegram-content p:last-child {
+  margin-bottom: 0;
+}
+
+.telegram-content ul,
+.telegram-content ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.telegram-content li {
+  margin: 0.25rem 0;
+}
+
+.telegram-content blockquote {
+  margin: 0.75rem 0;
+  border-left: 3px solid rgb(var(--gold-muted));
+  padding-left: 0.75rem;
+  color: rgb(var(--steam-dim));
+}
+
+.telegram-content pre {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  white-space: pre;
+  border-radius: 0.5rem;
+  background: rgb(var(--ink-raised));
+  padding: 0.75rem;
+}
+
+.telegram-content code {
+  border-radius: 0.25rem;
+  background: rgb(var(--ink-raised));
+  padding: 0.1rem 0.25rem;
+}
+
+.telegram-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
 :focus-visible {
   outline: 2px solid rgb(var(--gold));
   outline-offset: 2px;

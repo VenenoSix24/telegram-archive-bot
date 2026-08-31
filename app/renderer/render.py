@@ -7,6 +7,7 @@ tag 区的 hashtag（避免与上方 tag 行重复），改模板可重新生成
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 
 from app.tags.engine import render_tags
@@ -33,17 +34,22 @@ def render_message(
     tags: list[str],
     body: str,
     source_url: str | None,
+    body_html: str | None = None,
 ) -> str:
     """按固定顺序组装最终频道消息文本；空段落自动省略。"""
     lines: list[str] = []
     stars = format_rating(rating)
-    tag_line = render_tags(tags)
+    tag_line = html_lib.escape(render_tags(tags))
     if stars:
         lines.append(f"推荐指数：{stars}")
     if tag_line:
         lines.append(tag_line)
 
-    cleaned = _strip_echoed_tags(body) if body else ""
+    cleaned = (
+        body_html
+        if body_html is not None
+        else html_lib.escape(_strip_echoed_tags(body) if body else "")
+    )
     if cleaned:
         if lines:
             lines.append("")
@@ -53,5 +59,5 @@ def render_message(
         if lines:
             lines.append("")
         lines.append("来自：")
-        lines.append(source_url)
+        lines.append(html_lib.escape(source_url, quote=True))
     return "\n".join(lines)

@@ -53,14 +53,16 @@ def record_message(
 
     conn.execute(
         "INSERT INTO messages (source_chat_id, source_message_id, media_type, "
-        "media_group_id, original_text, source_url, status, file_name, file_size, duration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "media_group_id, original_text, original_html, source_url, status, "
+        "file_name, file_size, duration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" ,
         (
             incoming.source_chat_id,
             incoming.source_message_id,
             incoming.media_type or "text",
             incoming.media_group_id,
             incoming.text,
+            getattr(incoming, "text_html", ""),
             incoming.source_url,
             status,
             incoming.file_name or "",
