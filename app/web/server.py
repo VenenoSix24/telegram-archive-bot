@@ -41,5 +41,6 @@ def start_server_task(
             access_log=False,
         )
     )
-    logger.info("web UI on http://%s:%d", config.web_host, config.web_port)
+    # Web 地址由 main.py 的启动横幅集中展示，这里降为 debug 避免 URL 重复刷屏
+    logger.debug("web UI on http://%s:%d", config.web_host, config.web_port)
     return server
