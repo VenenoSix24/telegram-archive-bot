@@ -25,6 +25,7 @@ async def apply_message_edit(
     *,
     target_id: int | None = None,
     body: str | None = None,
+    body_html: str | None = None,
     add_tags: list[str] | None = None,
     remove_tag_names: list[str] | None = None,
     rating: int | None = None,
@@ -99,13 +100,14 @@ async def apply_message_edit(
         rating=next_rating,
         tags=tags,
         body=next_body,
+        body_html=body_html,
         source_url=row["source_url"],
     )
     await _telegram_edit(client, target["target_chat_id"], target["target_message_id"], rendered)
     conn.execute(
-        "UPDATE message_targets SET rating=?, original_text=?, original_html='', rendered_text=? "
+        "UPDATE message_targets SET rating=?, original_text=?, original_html=?, rendered_text=? "
         "WHERE id=?",
-        (next_rating, next_body, rendered, target_id),
+        (next_rating, next_body, body_html or "", rendered, target_id),
     )
     conn.commit()
     if indexer is not None:
