@@ -33,7 +33,10 @@ const showThumb = computed(
   () => props.message.media_type === 'photo' || props.message.media_type === 'video',
 )
 
-const thumbSrc = computed(() => `/api/v1/messages/${props.message.id}/thumb`)
+const thumbSrc = computed(() => {
+  const target = props.message.target_id
+  return `/api/v1/messages/${props.message.id}/thumb${target == null ? '' : `?target_id=${target}`}`
+})
 
 const body = computed(() => {
   const t = props.message.original_text || props.message.rendered_text || ''

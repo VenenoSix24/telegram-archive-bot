@@ -28,6 +28,8 @@ _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 
 
 class PatchBody(BaseModel):
+    target_id: int | None = None
+    body: str | None = None
     add_tags: list[str] | None = None
     remove_tag_names: list[str] | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -58,6 +60,50 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
     ]
     keys = row.keys()
     original_html = row["original_html"] if "original_html" in keys else ""
+    try:
+        target_rows = conn.execute(
+            "SELECT id, target_chat_id, target_message_id, target_url, status, "
+            "original_text, original_html, rendered_text, rating "
+            "FROM message_targets WHERE message_id=? ORDER BY id",
+            (row["id"],),
+        )
+    except sqlite3.OperationalError as exc:
+        if "no such table: message_targets" not in str(exc):
+            raise
+        target_rows = []
+    targets = []
+    for target in target_rows:
+        try:
+            target_tag_rows = conn.execute(
+                "SELECT t.name, tt.type FROM target_tags tt JOIN tags t ON t.id=tt.tag_id "
+                "WHERE tt.target_id=? ORDER BY tt.type, t.name",
+                (target["id"],),
+            )
+        except sqlite3.OperationalError as exc:
+            if "no such table: target_tags" not in str(exc):
+                raise
+            target_tag_rows = []
+        target_tags = [{"name": tag["name"], "type": tag["type"]} for tag in target_tag_rows]
+        targets.append({
+            "id": target["id"],
+            "chat_id": target["target_chat_id"],
+            "message_id": target["target_message_id"],
+            "url": target["target_url"],
+            "status": target["status"],
+            "original_text": target["original_text"],
+            "original_html": target["original_html"],
+            "rendered_text": target["rendered_text"],
+            "rating": target["rating"],
+            "tags": target_tags,
+        })
+    if not targets and row["target_chat_id"] is not None:
+        targets = [{
+            "id": None,
+            "chat_id": row["target_chat_id"],
+            "message_id": row["target_message_id"],
+            "url": row["target_url"],
+            "status": row["status"],
+        }]
     return {
         "id": row["id"],
         "source_chat_id": row["source_chat_id"],
@@ -72,6 +118,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         "rating": row["rating"],
         "source_url": row["source_url"],
         "target_url": row["target_url"],
+        "targets": targets,
         "file_name": row["file_name"],
         "file_size": row["file_size"],
         "duration": row["duration"],
@@ -83,40 +130,32 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
 
 
 def _sql_filters(query) -> tuple[str, list]:
-    """查询参数 → (WHERE 子句骨架, 参数)；只允许白名单字段。
-
-    q 走 original_text / rendered_text LIKE；tag 通过 message_tags 关联过滤。
-    全部参数化，杜绝注入。
-    """
+    """构造仍可直接映射到 messages 表的筛选条件。"""
     conds: list[str] = []
     params: list[object] = []
     media_type = query.get("media_type")
     if media_type:
         conds.append("media_type = ?")
         params.append(media_type)
-    rating = query.get("rating")
-    if rating not in (None, ""):
-        conds.append("rating = ?")
-        params.append(int(rating))
-    source = query.get("source_chat_id")
-    if source:
-        conds.append("source_chat_id = ?")
-        params.append(int(source))
-    target = query.get("target_chat_id")
-    if target:
-        conds.append("target_chat_id = ?")
-        params.append(int(target))
-    q = query.get("q")
-    if q:
-        conds.append("(original_text LIKE ? OR rendered_text LIKE ?)")
-        params.extend((f"%{q}%", f"%{q}%"))
-    tag = query.get("tag")
-    if tag:
-        conds.append("id IN (SELECT message_id FROM message_tags mt "
-                     "JOIN tags tg ON tg.id = mt.tag_id WHERE tg.name = ?)")
-        params.append(tag)
     where = f"WHERE {' AND '.join(conds)}" if conds else ""
     return where, params
+
+
+def _matches_message(message: dict, query) -> bool:
+    rating = query.get("rating")
+    if rating not in (None, "") and message["rating"] != int(rating):
+        return False
+    target = query.get("target_chat_id")
+    if target and message["target_chat_id"] != int(target):
+        return False
+    text = query.get("q")
+    searchable = f'{message["original_text"] or ""} {message["rendered_text"] or ""}'
+    if text and text.lower() not in searchable.lower():
+        return False
+    tag = query.get("tag")
+    if tag and tag not in {item["name"] for item in message["tags"]}:
+        return False
+    return True
 
 
 def build_api_router(database_path: str, config_path: str | None = None, config=None) -> APIRouter:
@@ -146,10 +185,18 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                 "SELECT COUNT(DISTINCT tag_id) AS n FROM message_tags"
             ).fetchone()["n"]
             tags = conn.execute("SELECT COUNT(*) AS n FROM tags").fetchone()["n"]
-            target_rows = conn.execute(
-                "SELECT target_chat_id, COUNT(*) AS n FROM messages "
-                "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
-            ).fetchall()
+            try:
+                target_rows = conn.execute(
+                    "SELECT target_chat_id, COUNT(*) AS n FROM message_targets "
+                    "WHERE status='archived' GROUP BY target_chat_id ORDER BY n DESC"
+                ).fetchall()
+            except sqlite3.OperationalError as exc:
+                if "no such table: message_targets" not in str(exc):
+                    raise
+                target_rows = conn.execute(
+                    "SELECT target_chat_id, COUNT(*) AS n FROM messages "
+                    "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
+                ).fetchall()
             targets = [
                 {"chat_id": r["target_chat_id"], "count": r["n"]} for r in target_rows
             ]
@@ -186,19 +233,46 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
 
     @router.get("/messages")
     def list_messages(
-        request: Request, limit: int = 30, offset: int = 0
+        request: Request, limit: int = 30, offset: int = 0, status: str = "active"
     ) -> dict:
         where, params = _sql_filters(request.query_params)
+        if status not in {"active", "deleted", "all"}:
+            raise HTTPException(status_code=400, detail="invalid status")
+        if status == "active":
+            where = f"{where} {'AND' if where else 'WHERE'} status='archived'"
+        elif status == "deleted":
+            where = f"{where} {'AND' if where else 'WHERE'} status='deleted'"
+        if status not in {"active", "deleted", "all"}:
+            raise HTTPException(status_code=400, detail="invalid status")
         with _connect(database_path) as conn:
-            total = conn.execute(
-                f"SELECT COUNT(*) AS n FROM messages {where}", params
-            ).fetchone()["n"]
             rows = conn.execute(
-                f"SELECT * FROM messages {where} ORDER BY id DESC "
-                "LIMIT ? OFFSET ?",
-                [*params, limit, offset],
+                f"SELECT * FROM messages {where} ORDER BY id DESC", params
             ).fetchall()
-            items = [_message_dict(conn, r) for r in rows]
+            expanded = []
+            for row in rows:
+                message = _message_dict(conn, row)
+                if len(message["targets"]) <= 1:
+                    if _matches_message(message, request.query_params):
+                        expanded.append(message)
+                    continue
+                for target in message["targets"]:
+                    item = {
+                        **message,
+                        "target_id": target["id"],
+                        "target_chat_id": target["chat_id"],
+                        "target_message_id": target["message_id"],
+                        "target_url": target["url"],
+                        "original_text": target["original_text"],
+                        "original_html": target["original_html"],
+                        "rendered_text": target["rendered_text"],
+                        "rating": target["rating"],
+                        "tags": target["tags"],
+                        "targets": [target],
+                    }
+                    if _matches_message(item, request.query_params):
+                        expanded.append(item)
+            total = len(expanded)
+            items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     @router.get("/messages/{message_id}")
@@ -212,7 +286,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             return _message_dict(conn, row)
 
     @router.get("/messages/{message_id}/thumb")
-    async def message_thumb(message_id: int, request: Request):
+    async def message_thumb(message_id: int, request: Request, target_id: int | None = None):
         """返回消息缩略图；本地缺失且有 client 时懒抓并落库（计划书 D5 懒补）。"""
         with _connect(database_path) as conn:
             row = conn.execute(
@@ -220,7 +294,18 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="message not found")
-            existing = row["thumb_path"]
+            target_row = None
+            if target_id is not None:
+                try:
+                    target_row = conn.execute(
+                        "SELECT * FROM message_targets WHERE id=? AND message_id=?",
+                        (target_id, message_id),
+                    ).fetchone()
+                except sqlite3.OperationalError:
+                    target_row = None
+                if target_row is None:
+                    raise HTTPException(status_code=404, detail="target not found")
+            existing = target_row["thumb_path"] if target_row else row["thumb_path"]
 
         path = Path(existing) if existing else None
         if path is not None and path.exists():
@@ -248,11 +333,17 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                     ]
                     group.sort(key=lambda item: item.id)
                     message = choose_thumbnail_message(group, config.thumbnail_media)
-                return await cache.fetch(client, message, message_id)
+                return await cache.fetch(client, message, target_id or message_id)
 
             fetched = None
+            if target_row:
+                archive_chat_id = target_row["target_chat_id"]
+                archive_message_id = target_row["target_message_id"]
+            else:
+                archive_chat_id = row["target_chat_id"]
+                archive_message_id = row["target_message_id"]
             if config is None or config.thumbnail_source != "source":
-                fetched = await fetch_from(row["target_chat_id"], row["target_message_id"])
+                fetched = await fetch_from(archive_chat_id, archive_message_id)
             if fetched is None and (config is None or config.thumbnail_source != "archive"):
                 fetched = await fetch_from(row["source_chat_id"], row["source_message_id"])
 
@@ -263,6 +354,9 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             raise HTTPException(status_code=404, detail="thumbnail unavailable")
         with _connect(database_path) as conn:
             conn.execute(
+                "UPDATE message_targets SET thumb_path=? WHERE id=?",
+                (str(fetched), target_id),
+            ) if target_id is not None else conn.execute(
                 "UPDATE messages SET thumb_path=? WHERE id=?", (str(fetched), message_id)
             )
             conn.commit()
@@ -274,7 +368,12 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
         request: Request,
         body: PatchBody,
     ) -> dict:
-        if body.add_tags is None and body.remove_tag_names is None and body.rating is None:
+        if (
+            body.add_tags is None
+            and body.remove_tag_names is None
+            and body.rating is None
+            and body.body is None
+        ):
             raise HTTPException(status_code=422, detail="nothing to change")
         client = request.app.state.client
         conn = request.app.state.conn
@@ -285,6 +384,8 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             client,
             conn,
             message_id,
+            target_id=body.target_id,
+            body=body.body,
             add_tags=body.add_tags,
             remove_tag_names=body.remove_tag_names,
             rating=body.rating,
