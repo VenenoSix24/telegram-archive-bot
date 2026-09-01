@@ -18,6 +18,7 @@ const busy = ref(false)
 const error = ref('')
 const drawerThumbFailed = ref(false)
 const bodyDraft = ref('')
+const bodyHtmlDraft = ref('')
 const editingBody = ref(false)
 let lockedScrollY = 0
 let savedBodyStyles: Partial<Record<'overflow' | 'position' | 'top' | 'width' | 'paddingRight', string>> | null = null
@@ -69,6 +70,7 @@ watch(() => props.message, (message) => {
   error.value = ''
   drawerThumbFailed.value = false
   bodyDraft.value = message?.original_text ?? ''
+  bodyHtmlDraft.value = message?.original_html ?? ''
   editingBody.value = false
 })
 
@@ -99,13 +101,25 @@ const activeTags = computed(() => props.message?.tags ?? [])
 const activeBody = computed(() => props.message?.original_text ?? '')
 const activeRendered = computed(() => props.message?.rendered_text ?? '')
 
+function textToHtml(value: string) {
+  const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped.replace(/\r?\n/g, '<br>')
+}
+
+function htmlToText(value: string) {
+  const doc = new DOMParser().parseFromString(value, 'text/html')
+  return doc.body.textContent ?? ''
+}
+
 function startBodyEdit() {
   bodyDraft.value = activeBody.value
+  bodyHtmlDraft.value = props.message?.original_html || textToHtml(activeBody.value)
   editingBody.value = true
 }
 
 async function saveBody() {
-  await mutate({ body: bodyDraft.value }, '正文已更新')
+  const body = bodyHtmlDraft.value ? htmlToText(bodyHtmlDraft.value) : bodyDraft.value
+  await mutate({ body, body_html: bodyHtmlDraft.value || undefined }, '正文已更新')
   editingBody.value = false
 }
 
@@ -128,7 +142,7 @@ async function removeTag(tagName: string) {
 }
 
 async function mutate(
-  change: { target_id?: number; body?: string; rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
+  change: { target_id?: number; body?: string; body_html?: string; rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
   doneText: string,
 ) {
   if (!props.message) return
@@ -246,7 +260,9 @@ async function mutate(
                 />
                 <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">编辑正文</Button>
                 <div v-if="editingBody" class="mt-3 space-y-2">
-                  <textarea v-model="bodyDraft" rows="6" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑正文" />
+                  <textarea v-model="bodyHtmlDraft" rows="7" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 font-mono text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑 Telegram HTML 正文" />
+                  <p class="text-xs text-steam-dim">支持 Telegram HTML：&lt;b&gt;粗体&lt;/b&gt;、&lt;i&gt;斜体&lt;/i&gt;、&lt;a href=""&gt;链接&lt;/a&gt;、&lt;code&gt;代码&lt;/code&gt;。</p>
+                  <div v-if="bodyHtmlDraft" class="telegram-content rounded-md border border-ink-line bg-ink-raised/50 p-3 text-sm leading-relaxed text-steam" v-html="sanitizeTelegramHtml(bodyHtmlDraft, bodyDraft)" />
                   <div class="flex gap-2">
                     <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
                     <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
