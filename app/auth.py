@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.config import ConfigError, load_config
+from app.config import ConfigError, config_dir, load_config
 from app.logging_setup import setup_logging
 from app.telegram.client import build_client
 
@@ -18,7 +18,7 @@ def _ask(prompt: str) -> str:
 
 
 async def _run() -> int:
-    setup_logging()
+    setup_logging(config_dir() / "logs")
     try:
         config = load_config()
     except ConfigError as exc:
