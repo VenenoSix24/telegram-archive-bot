@@ -3,9 +3,11 @@ import { durationLabel, formatTime } from '@/lib/format'
 
 describe('durationLabel', () => {
   it('formats seconds to mm:ss', () => {
-    expect(durationLabel(95)).toBe('1:35')
-    expect(durationLabel(0)).toBe('0:00')
+    expect(durationLabel(95)).toBe('01:35')
+    expect(durationLabel(0)).toBe('00:00')
     expect(durationLabel(600)).toBe('10:00')
+    expect(durationLabel(3600)).toBe('01:00:00')
+    expect(durationLabel(3661.9)).toBe('01:01:01')
   })
 
   it('returns empty for null', () => {

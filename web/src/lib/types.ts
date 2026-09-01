@@ -26,10 +26,12 @@ export interface MessageTarget {
   rendered_text: string
   rating: number
   tags: MessageTag[]
+  name?: string
 }
 
 export interface Message {
   id: number
+  material_id: string
   target_id?: number | null
   source_chat_id: number
   source_message_id: number

@@ -18,8 +18,8 @@ function statsOf(type: string) {
 }
 
 function onDrawerUpdate(updated: Message) {
-  recent.value = recent.value.map((m) => (m.id === updated.id ? updated : m))
-  if (selected.value?.id === updated.id) selected.value = updated
+  recent.value = recent.value.map((m) => (m.material_id === updated.material_id ? updated : m))
+  if (selected.value?.material_id === updated.material_id) selected.value = updated
 }
 
 onMounted(async () => {
@@ -91,7 +91,7 @@ onMounted(async () => {
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <MessageCard
             v-for="m in recent"
-            :key="m.id"
+            :key="m.material_id"
             :message="m"
             @open="selected = m"
           />

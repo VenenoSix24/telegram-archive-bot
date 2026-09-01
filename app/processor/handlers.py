@@ -192,6 +192,16 @@ def attach_target_edit_handler(client, config: Config, conn: sqlite3.Connection,
             body_html=html_text,
             indexer=indexer,
         )
+        if config.sync_target_edits:
+            siblings = conn.execute(
+                "SELECT id FROM message_targets WHERE message_id=? AND id<>? AND status='archived'",
+                (row["message_id"], row["id"]),
+            ).fetchall()
+            for sibling in siblings:
+                await apply_message_edit(
+                    client, conn, row["message_id"], target_id=sibling["id"],
+                    body=text, body_html=html_text, indexer=indexer,
+                )
 
     return on_target_edited
 

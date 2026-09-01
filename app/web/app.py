@@ -25,6 +25,7 @@ def create_app(
     client=None,
     conn=None,
     indexer=None,
+    chat_names: dict[int, str] | None = None,
 ) -> FastAPI:
     sessions = Sessions()
     app = FastAPI(title="Telegram Archive Bot", version="0.2.0")
@@ -35,7 +36,14 @@ def create_app(
     app.state.indexer = indexer
     app.include_router(build_auth_router(config.web_token, sessions), prefix="/api/v1")
     app.include_router(
-        build_api_router(config.database_path, config.config_path, config=config),
+        build_api_router(
+            config.database_path,
+            config.config_path,
+            config=config,
+            client=client,
+            conn=conn,
+            chat_names=chat_names,
+        ),
         prefix="/api/v1",
     )
     if _DIST.is_dir():
