@@ -14,6 +14,7 @@ from app.processor.handlers import (
     attach_new_message_handler,
     attach_reply_command_handler,
     attach_target_delete_handler,
+    attach_target_edit_handler,
 )
 from app.queue.manager import QueueManager
 from app.tags.indexer import IndexUpdater
@@ -100,6 +101,7 @@ async def _run() -> int:
     indexer.start()
     attach_new_message_handler(client, config, conn, queue, indexer)
     attach_reply_command_handler(client, config, conn, indexer)
+    attach_target_edit_handler(client, config, conn, indexer)
     attach_target_delete_handler(client, config, conn)
     attach_management_command_handler(client, config, conn, queue)
 
