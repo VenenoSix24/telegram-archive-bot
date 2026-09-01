@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ChevronDown, Download, Loader2, MoveDown, MoveUp, Palette, Plus, RotateCcw, Save, Trash2, Upload, X } from 'lucide-vue-next'
 import { backup, backupDownloadUrl, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup } from '@/lib/api'
 import type { BackupItem, EditableConfig } from '@/lib/types'
 import Button from '@/components/ui/Button.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
+import { displayChatId } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   currentMode, currentTheme, setMode, setTheme,
@@ -122,15 +123,17 @@ function removeAdmin(idx: number) {
   form.admins.splice(idx, 1)
 }
 
-function displayChatId(value: number | null) {
-  if (value == null) return ''
-  const digits = String(Math.abs(value))
-  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
-}
-
 function targetLabel(target: { chat_id: number | null; name: string }, fallback = '未命名频道') {
   return target.name || (target.chat_id == null ? fallback : `频道 ${displayChatId(target.chat_id)}`)
 }
+
+// 目标频道下拉：点击菜单外任意位置关闭，不必再点一次按钮
+function onDocumentClick(event: MouseEvent) {
+  const node = event.target as HTMLElement | null
+  if (!node?.closest('[data-target-menu]')) openTargetMenu.value = null
+}
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 
 function toggleTarget(source: EditableConfig['source_chats'][number], id: number | null) {
   if (id == null) return
@@ -399,7 +402,7 @@ async function resetDb() {
             </div>
             <div class="min-w-0 sm:col-span-2 md:col-span-1">
               <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
-              <div class="relative">
+              <div class="relative" data-target-menu>
                 <button
                   type="button"
                   class="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-ink-line bg-ink-raised px-3 text-left text-sm text-steam focus:border-gold focus:outline-none cursor-pointer"
@@ -499,7 +502,7 @@ async function resetDb() {
             <p class="mb-2 text-xs text-steam-dim">新消息预览</p>
             <div class="whitespace-pre-wrap text-sm leading-relaxed text-steam">
               <template v-for="(key, index) in form.message_template" :key="key">
-                <span v-if="index">\n\n</span>{{ templatePreviewBlock(key) }}
+                <span v-if="index">{{ '\n\n' }}</span>{{ templatePreviewBlock(key) }}
               </template>
             </div>
           </div>
