@@ -124,7 +124,12 @@ async def _run() -> int:
     web_server = None
     if config.web_enabled:
         web_server = start_server_task(
-            config, client=client, conn=conn, indexer=indexer, chat_names=chats
+            config,
+            client=client,
+            conn=conn,
+            indexer=indexer,
+            chat_names=chats,
+            queue=queue,
         )
         web_task = asyncio.create_task(_serve_web(web_server))
 

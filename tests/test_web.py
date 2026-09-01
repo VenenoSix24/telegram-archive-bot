@@ -377,3 +377,55 @@ def test_messages_thumb_without_client_404(tmp_path):
     with TestClient(_create(cfg, client=None, conn=None)) as client:
         client.post("/api/v1/auth/login", json={"token": "secret-token"})
         assert client.get("/api/v1/messages/1/thumb").status_code == 404
+
+
+def test_restore_rejects_invalid_database_backup(tmp_path):
+    """恢复前校验备份文件：坏备份必须 400 且不碰当前库。"""
+    db = _seeded_messages_db(tmp_path)
+    before = sqlite3.connect(db).execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+    bad = Path(db).parent / f"{Path(db).name}.20260101T000000Z.bak"
+    bad.write_text("not a sqlite database", encoding="utf-8")
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        resp = client.post("/api/v1/ops/restore", json={"name": bad.name})
+
+    assert resp.status_code == 400
+    after = sqlite3.connect(db).execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+    assert after == before
+
+
+def test_restore_valid_backup_pauses_queue(tmp_path):
+    """合法恢复照常进行，但队列要被暂停以等待重启。"""
+    from app.web.backup import backup_database
+
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO schema_version VALUES ('0006_message_template')")
+    conn.commit()
+    conn.close()
+    backup_path = backup_database(Path(db))
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    class FakeQueue:
+        def __init__(self):
+            self.paused = False
+
+        def pause(self):
+            self.paused = True
+
+        def is_paused(self):
+            return self.paused
+
+    queue = FakeQueue()
+    with TestClient(create_app(cfg, queue=queue)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        resp = client.post("/api/v1/ops/restore", json={"name": backup_path.name})
+
+    assert resp.status_code == 200
+    assert resp.json()["restart_required"] is True
+    assert queue.paused is True
