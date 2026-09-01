@@ -283,7 +283,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             return _message_dict(conn, row)
 
     @router.get("/messages/{message_id}/thumb")
-    async def message_thumb(message_id: int, request: Request):
+    async def message_thumb(message_id: int, request: Request, target_id: int | None = None):
         """返回消息缩略图；本地缺失且有 client 时懒抓并落库（计划书 D5 懒补）。"""
         with _connect(database_path) as conn:
             row = conn.execute(
@@ -291,7 +291,18 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="message not found")
-            existing = row["thumb_path"]
+            target_row = None
+            if target_id is not None:
+                try:
+                    target_row = conn.execute(
+                        "SELECT * FROM message_targets WHERE id=? AND message_id=?",
+                        (target_id, message_id),
+                    ).fetchone()
+                except sqlite3.OperationalError:
+                    target_row = None
+                if target_row is None:
+                    raise HTTPException(status_code=404, detail="target not found")
+            existing = target_row["thumb_path"] if target_row else row["thumb_path"]
 
         path = Path(existing) if existing else None
         if path is not None and path.exists():
@@ -319,11 +330,17 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                     ]
                     group.sort(key=lambda item: item.id)
                     message = choose_thumbnail_message(group, config.thumbnail_media)
-                return await cache.fetch(client, message, message_id)
+                return await cache.fetch(client, message, target_id or message_id)
 
             fetched = None
+            if target_row:
+                archive_chat_id = target_row["target_chat_id"]
+                archive_message_id = target_row["target_message_id"]
+            else:
+                archive_chat_id = row["target_chat_id"]
+                archive_message_id = row["target_message_id"]
             if config is None or config.thumbnail_source != "source":
-                fetched = await fetch_from(row["target_chat_id"], row["target_message_id"])
+                fetched = await fetch_from(archive_chat_id, archive_message_id)
             if fetched is None and (config is None or config.thumbnail_source != "archive"):
                 fetched = await fetch_from(row["source_chat_id"], row["source_message_id"])
 
@@ -334,6 +351,9 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             raise HTTPException(status_code=404, detail="thumbnail unavailable")
         with _connect(database_path) as conn:
             conn.execute(
+                "UPDATE message_targets SET thumb_path=? WHERE id=?",
+                (str(fetched), target_id),
+            ) if target_id is not None else conn.execute(
                 "UPDATE messages SET thumb_path=? WHERE id=?", (str(fetched), message_id)
             )
             conn.commit()
