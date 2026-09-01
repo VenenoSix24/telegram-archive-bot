@@ -30,7 +30,7 @@ export interface MessageTarget {
 
 export interface Message {
   id: number
-  material_id: number
+  material_id: string
   target_id?: number | null
   source_chat_id: number
   source_message_id: number

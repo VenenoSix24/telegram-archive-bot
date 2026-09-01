@@ -110,7 +110,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         }]
     return {
         "id": row["id"],
-        "material_id": row["id"],
+        "material_id": f"message:{row['id']}",
         "source_chat_id": row["source_chat_id"],
         "source_message_id": row["source_message_id"],
         "target_chat_id": row["target_chat_id"],
@@ -269,7 +269,7 @@ def build_api_router(
                     item = {
                         **message,
                         "id": message["id"],
-                        "material_id": target["id"],
+                        "material_id": f"target:{target['id']}",
                         "target_id": target["id"],
                         "target_chat_id": target["chat_id"],
                         "target_message_id": target["message_id"],
@@ -284,7 +284,10 @@ def build_api_router(
                     }
                     if _matches_message(item, request.query_params, status):
                         expanded.append(item)
-            expanded.sort(key=lambda item: (item["material_id"], item["id"]), reverse=True)
+            expanded.sort(
+                key=lambda item: (item["created_at"], item.get("target_id") or 0),
+                reverse=True,
+            )
             total = len(expanded)
             items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}

@@ -208,6 +208,12 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
             "Copy .env.example to .env and fill in a token (e.g. `openssl rand -hex 32`)."
         )
 
+    config_file = Path(config_path).resolve()
+    database_value = raw.get("database", {}).get("path", "archive.sqlite")
+    database_path = Path(database_value)
+    if not database_path.is_absolute():
+        database_path = config_file.parent / database_path
+
     return Config(
         api_id=api_id,
         api_hash=env["TELEGRAM_API_HASH"],
@@ -222,8 +228,8 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         rating_enabled=bool(rating.get("enabled", True)),
         admins=admins,
         url_template=search.get("url_template"),
-        database_path=raw.get("database", {}).get("path", "archive.sqlite"),
-        config_path=str(config_path),
+        database_path=str(database_path),
+        config_path=str(config_file),
         web_enabled=web_enabled,
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=int(os.getenv("WEB_PORT", "8000")),
