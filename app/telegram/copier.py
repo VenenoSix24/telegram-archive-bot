@@ -18,14 +18,17 @@ import sqlite3
 
 from telethon import utils
 
-from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
+from app.media.thumbnails import (
+    ThumbnailCache,
+    choose_thumbnail_message,
+    thumbs_dir_for,
+)
 from app.processor.adapter import build_source_url
 from app.renderer.db import render_from_db
 
 logger = logging.getLogger(__name__)
 
 _ALBUM_SCAN_LIMIT = 200
-_THUMB_CACHE = ThumbnailCache()
 
 
 def _input_media_with_cover(message):
@@ -76,12 +79,13 @@ def _save_target(
 ) -> None:
     conn.execute(
         "INSERT INTO message_targets "
-        "(message_id, target_chat_id, target_message_id, target_url, "
+        "(message_id, target_chat_id, target_message_id, target_url, thumb_path, "
         "original_text, original_html, rendered_text, rating, template_layout, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'archived') "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'archived') "
         "ON CONFLICT(message_id, target_chat_id) DO UPDATE SET "
         "target_message_id=excluded.target_message_id, "
         "target_url=excluded.target_url, status='archived', "
+        "thumb_path=COALESCE(excluded.thumb_path, message_targets.thumb_path), "
         "original_text=excluded.original_text, original_html=excluded.original_html, "
         "rendered_text=excluded.rendered_text, rating=excluded.rating, "
         "template_layout=excluded.template_layout",
@@ -90,6 +94,7 @@ def _save_target(
             target_chat_id,
             target_message_id,
             target_url,
+            thumb_path,
             original_text,
             original_html,
             rendered_text,
@@ -171,8 +176,9 @@ async def archive_message_by_db_id(
         thumb_path = None
         thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
         if thumb_message:
-            thumb = await _THUMB_CACHE.fetch(
-                client, thumb_message, target_id, chat_id=target_id
+            thumb_cache = ThumbnailCache(thumbs_dir_for(config.database_path))
+            thumb = await thumb_cache.fetch(
+                client, thumb_message, thumb_message.id, chat_id=row["source_chat_id"]
             )
             if thumb is not None:
                 thumb_path = str(thumb)

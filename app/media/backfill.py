@@ -60,12 +60,17 @@ async def backfill_thumbs(
                 messages, getattr(config, "thumbnail_media", "first_video")
             )
             path = await cache.fetch(
-                client, selected, row["id"], chat_id=row["source_chat_id"]
+                client, selected, selected.id, chat_id=row["source_chat_id"]
             )
             if path is None:
                 continue
             conn.execute(
                 "UPDATE messages SET thumb_path=? WHERE id=?",
+                (str(path), row["id"]),
+            )
+            conn.execute(
+                "UPDATE message_targets SET thumb_path=? "
+                "WHERE message_id=? AND thumb_path IS NULL",
                 (str(path), row["id"]),
             )
             conn.commit()

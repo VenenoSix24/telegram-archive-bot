@@ -6,7 +6,7 @@ import asyncio
 import logging
 from contextlib import suppress
 
-from app.config import ConfigError, load_config
+from app.config import ConfigError, config_dir, load_config
 from app.database.migrate import apply_migrations, open_db
 from app.logging_setup import setup_logging
 from app.processor.handlers import (
@@ -34,7 +34,7 @@ async def _serve_web(web_server) -> None:
 
 
 async def _run() -> int:
-    setup_logging()
+    setup_logging(config_dir() / "logs")
     try:
         config = load_config()
     except ConfigError as exc:
