@@ -6,7 +6,7 @@ Phase 6/7 的命令（/tag /rating）与管理命令（/status /queue …）共�
 
 from __future__ import annotations
 
-MANAGEMENT_COMMANDS = {"tag", "rating", "status", "queue", "pause", "resume", "tags", "id", "skip"}
+MANAGEMENT_COMMANDS = {"tag", "rating", "status", "queue", "pause", "resume", "tags", "id"}
 
 
 def parse_command(text: str | None) -> tuple[str, list[str]] | None:
