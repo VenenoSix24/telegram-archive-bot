@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from telethon.tl.types import MessageMediaPhoto, Photo, PhotoCachedSize
 
 from app.database.migrate import apply_migrations, open_db
 from app.telegram.copier import archive_message_by_db_id
@@ -43,6 +45,7 @@ class FakeClient:
 
 class Config:
     thumbnail_media = "first_video"
+    database_path = "copier.sqlite"
 
     def targets_for(self, source_chat_id):
         return [-1002, -1003]
@@ -83,3 +86,77 @@ async def test_archive_does_not_send_completed_targets_again(conn):
     await archive_message_by_db_id(client, Config(), conn, 1)
 
     assert client.sent == [(-1003, 100)]
+
+
+def _photo_media() -> MessageMediaPhoto:
+    photo = Photo(
+        id=1,
+        access_hash=2,
+        file_reference=b"\x01",
+        date=None,
+        sizes=[PhotoCachedSize(type="s", w=100, h=100, bytes=b"\xff\xd8\xff")],
+        dc_id=1,
+    )
+    return MessageMediaPhoto(photo=photo)
+
+
+class ThumbClient(FakeClient):
+    """带图片媒体与落盘 download_media 的假客户端，用于缩略图键断言。"""
+
+    async def get_messages(self, chat, ids):
+        return SimpleNamespace(id=ids, message="图", media=_photo_media(), grouped_id=None)
+
+    async def send_file(self, target, file, caption, parse_mode):
+        sent = []
+        for _ in file:
+            message = SimpleNamespace(id=self.next_message_id)
+            self.next_message_id += 1
+            sent.append(message)
+        self.sent.append((target.id, sent[0].id))
+        return sent
+
+    async def download_media(self, message, file=None, thumb=None):
+        Path(file).write_bytes(b"\xff\xd8\xff")
+        return file
+
+
+@pytest.mark.asyncio
+async def test_archive_thumb_key_is_source_media_identity(conn, tmp_path):
+    """缩略图键 = 源群 chat_id + 媒体消息 id，与目标频道/数据库 id 无关。"""
+    config = Config()
+    config.database_path = str(tmp_path / "copier.sqlite")
+    client = ThumbClient()
+
+    await archive_message_by_db_id(client, config, conn, 1)
+
+    expected_name = "-1001_7.jpg"  # source_chat_id=-1001, 媒体消息 id=7
+    row = conn.execute("SELECT thumb_path FROM messages WHERE id=1").fetchone()
+    assert Path(row["thumb_path"]).name == expected_name
+    assert Path(row["thumb_path"]).exists()
+    targets = conn.execute(
+        "SELECT target_chat_id, thumb_path FROM message_targets ORDER BY target_chat_id"
+    ).fetchall()
+    assert {t["thumb_path"] for t in targets} == {row["thumb_path"]}
+
+
+@pytest.mark.asyncio
+async def test_archive_retry_keeps_existing_thumb_path(conn, tmp_path):
+    """重试时缩略图抓取失败不得抹掉已有的 thumb_path。"""
+    config = Config()
+    config.database_path = str(tmp_path / "copier.sqlite")
+    await archive_message_by_db_id(ThumbClient(), config, conn, 1)
+
+    class NoDownloadClient(ThumbClient):
+        async def download_media(self, message, file=None, thumb=None):
+            raise OSError("network down")
+
+    conn.execute(
+        "UPDATE message_targets SET status='pending' WHERE target_chat_id=-1003"
+    )
+    conn.commit()
+    await archive_message_by_db_id(NoDownloadClient(), config, conn, 1)
+
+    row = conn.execute(
+        "SELECT thumb_path FROM message_targets WHERE target_chat_id=-1003"
+    ).fetchone()
+    assert Path(row["thumb_path"]).name == "-1001_7.jpg"

@@ -46,9 +46,6 @@ thumbnails:
   # 缩略图来源：auto=归档优先并回退源消息，archive=仅归档，source=仅源消息
   source: auto
 
-# Telegram 目标消息手动编辑时是否同步到同一源消息的其他目标
-sync_target_edits: false
-
 # 归档消息区块顺序；删除 rating/tags/source 可隐藏对应内容，body 必须保留。
 # 修改仅影响之后新归档的消息，历史消息保持原样。
 message_template: [rating, tags, body, source]

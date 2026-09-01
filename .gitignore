@@ -49,6 +49,11 @@ web/dist/
 # 本地设计文档与决策记录（开发规范 3.4：不进公开仓库）
 开发文档*.md
 开发规范*.md
+最新对接文档.md
+任务清单.md
+
+# 前端设计 demo（本地审阅用，不进 Git）
+design_demo/
 docs/decisions/
 docs/transfers/
 .history/
