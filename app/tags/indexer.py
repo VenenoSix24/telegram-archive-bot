@@ -46,19 +46,30 @@ class IndexUpdater:
         return int(row["value"]) if row else None
 
     async def ensure_initial(self) -> None:
-        """为尚未建设索引的目标频道创建置顶消息（幂等）。"""
+        """为尚未建设索引的目标频道创建置顶消息（幂等）。
+
+        单个频道失败（如账号无发言/置顶权限）只记日志跳过，不拖垮其他
+        频道，也不让整个索引任务死亡；失败频道保留无索引状态，
+        _refresh_one 会跳过它。
+        """
         for target_id in sorted(self._config.all_target_channel_ids()):
             if await self._index_message_id(target_id):
                 continue
-            target = await self._client.get_entity(target_id)
-            msg = await self._client.send_message(target, format_tag_index([]))
-            await self._client.pin_message(target, msg.id)
+            try:
+                target = await self._client.get_entity(target_id)
+                msg = await self._client.send_message(target, format_tag_index([]))
+                await self._client.pin_message(target, msg.id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("tag index init failed for %s, skipped", target_id)
+                continue
             self._conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 (self._setting_key(target_id), str(msg.id)),
             )
             self._conn.commit()
-            logger.info("created tag index pinned message %s in %s", msg.id, target_id)
+            logger.info("已为频道 %s 创建 Tag 索引置顶消息 #%s", target_id, msg.id)
 
     async def _refresh_one(self, target_chat_id: int) -> None:
         index_id = await self._index_message_id(target_chat_id)
@@ -80,7 +91,14 @@ class IndexUpdater:
                 logger.exception("tag index refresh failed for %s", target_id)
 
     async def run(self) -> None:
-        await self.ensure_initial()
+        # 初始化失败不能让整个索引任务静默死亡——那之后 Tag 变化永远
+        # 不会反映到 Telegram 侧；记录后继续进入防抖循环。
+        try:
+            await self.ensure_initial()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("tag index init failed, continuing without initial pin")
         while True:
             await self._dirty.wait()
             self._dirty.clear()
