@@ -123,6 +123,26 @@ async def test_flood_wait_keeps_pending(tmp_path):
     assert "flood_wait" in _row(conn, "last_error")
 
 
+async def test_cancel_restores_pending_and_reraises(tmp_path):
+    """关机取消：任务回退 pending 且取消继续传播，worker 才能退出。"""
+    async def slow(mid):
+        await asyncio.sleep(10)
+
+    conn, q = _setup(tmp_path, sender=slow, max_retries=3)
+    _seed_message(conn, 1)
+    q.enqueue(1)
+    qid = _row(conn, "id")
+
+    task = asyncio.create_task(q._process_one(qid, 1))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+    assert _row(conn, "status") == "pending"
+    assert "cancelled" in _row(conn, "last_error")
+
+
 def test_stats(tmp_path):
     conn, q = _setup(tmp_path, sender=_ok, interval=3)
     _seed_message(conn, 1)
