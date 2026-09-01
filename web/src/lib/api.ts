@@ -19,6 +19,13 @@ function onUnauthorized() {
   }
 }
 
+/** 服务器返回 HTML 错误页时透传会污染 UI，统一截断为可读摘要。 */
+async function errorMessage(resp: Response): Promise<string> {
+  const text = (await resp.text()).trim()
+  if (!text || text.startsWith('<')) return `HTTP ${resp.status}`
+  return `HTTP ${resp.status}: ${text.slice(0, 200)}`
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`/api/v1${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -30,7 +37,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new AuthError('session expired')
   }
   if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}: ${await resp.text()}`)
+    throw new Error(await errorMessage(resp))
   }
   return resp.json() as Promise<T>
 }
@@ -85,7 +92,7 @@ export async function importBackup(
     onUnauthorized()
     throw new AuthError('session expired')
   }
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+  if (!response.ok) throw new Error(await errorMessage(response))
   return response.json() as Promise<{ ok: boolean; kind: string; restart_required: boolean }>
 }
 
