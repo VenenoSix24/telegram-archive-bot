@@ -47,7 +47,6 @@ class Config:
     source_chats: list[SourceChat]
     target_channels: list[TargetChannel] = field(default_factory=list)
     target_channel_id: int = 0
-    sync_target_edits: bool = False
     forward_interval: float = 3.0
     retry_count: int = 3
     show_link: bool = True
@@ -128,7 +127,22 @@ def normalize_template_layout(value) -> list[str]:
     return layout
 
 
-def load_config(config_path: str | Path = "config.yaml") -> Config:
+def default_config_path() -> Path:
+    """配置文件定位：默认 CWD 的 config.yaml，可用 ARCHIVE_CONFIG 覆盖。"""
+    return Path(os.environ.get("ARCHIVE_CONFIG", "config.yaml"))
+
+
+def config_dir() -> Path:
+    """日志/session/缩略图/备份等本地文件的统一锚点：配置文件所在目录。
+
+    本地文件一律锚定这里而不是 CWD，避免从不同目录启动时读写分裂
+    （交接文档已知风险 #2）。
+    """
+    return default_config_path().resolve().parent
+
+
+def load_config(config_path: str | Path | None = None) -> Config:
+    config_path = default_config_path() if config_path is None else Path(config_path)
     load_dotenv()
     env = _env_names(["TELEGRAM_API_ID", "TELEGRAM_API_HASH"])
     try:
@@ -146,7 +160,6 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
     rating = raw.get("rating", {})
     search = raw.get("search", {})
     thumbs = raw.get("thumbnails", {})
-    sync_target_edits = bool(raw.get("sync_target_edits", False))
 
     source_chats = [
         SourceChat(
@@ -254,5 +267,4 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         thumbnail_media=thumbs.get("media", "first_video"),
         thumbnail_source=thumbs.get("source", "auto"),
         message_template=normalize_template_layout(raw.get("message_template")),
-        sync_target_edits=sync_target_edits,
     )

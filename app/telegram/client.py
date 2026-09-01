@@ -1,6 +1,6 @@
 """Telethon client building and chat-access validation.
 
-会话文件固定为 telegram_archive.session（被 .gitignore 排除）。
+session 文件与 config.yaml 同目录（被 .gitignore 排除），不依赖 CWD。
 单进程约束：整个程序共用同一个 client 实例，禁止多进程访问 session。
 """
 
@@ -12,11 +12,12 @@ from telethon import TelegramClient
 
 from app.config import Config
 
-SESSION_FILE = "telegram_archive.session"
+SESSION_NAME = "telegram_archive.session"
 
 
 def build_client(config: Config) -> TelegramClient:
-    return TelegramClient(Path(SESSION_FILE), config.api_id, config.api_hash)
+    session = Path(config.config_path).parent / SESSION_NAME
+    return TelegramClient(session, config.api_id, config.api_hash)
 
 
 async def _resolve_entity(client: TelegramClient, chat_id: int):

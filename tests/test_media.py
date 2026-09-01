@@ -104,6 +104,12 @@ def test_thumb_cache_path_for(tmp_path):
     assert ThumbnailCache(Path(tmp_path)).path_for(42).name == "42.jpg"
 
 
+def test_thumbs_dir_follows_database(tmp_path):
+    from app.media.thumbnails import thumbs_dir_for
+
+    assert thumbs_dir_for(tmp_path / "data" / "a.sqlite") == tmp_path / "data" / "thumbs"
+
+
 class _FakeClient:
     """download_media 落盘假客户端：给文件写内存空 JPEG 字节。"""
 
@@ -168,6 +174,20 @@ def test_pick_photo_thumb_no_mid_falls_back_smallest():
     assert picked is sizes[0]
 
 
+class _BackfillClient:
+    """get_messages 按 ids 返回图片消息、download_media 落盘的假客户端。"""
+
+    async def get_entity(self, chat):
+        return None
+
+    async def get_messages(self, chat, ids=None):
+        return _message(_photo_media(), mid=ids)
+
+    async def download_media(self, message, file=None, thumb=None):
+        Path(file).write_bytes(b"\xff\xd8\xff")
+        return file
+
+
 def test_backfill_updates_thumb_path_only_media(conn, tmp_path):
     conn.execute(
         "INSERT INTO messages (source_chat_id, source_message_id, media_type, "
@@ -175,22 +195,32 @@ def test_backfill_updates_thumb_path_only_media(conn, tmp_path):
     )
     conn.commit()
 
-    media = _photo_media()
+    cache = ThumbnailCache(Path(tmp_path) / "thumbs")
+    cfg = SimpleNamespace(forward_interval=0.0)
+    count = asyncio.run(backfill_thumbs(_BackfillClient(), cfg, conn, cache, limit=10))
+    assert count == 1  # 只有 photo 补抓，text 不补
+    row = conn.execute("SELECT thumb_path FROM messages WHERE id=1").fetchone()
+    # 键 = 源群 chat_id + 媒体消息 id，不用数据库 id
+    assert row["thumb_path"].endswith("-1_1.jpg")
 
-    class Client:
-        async def get_entity(self, chat):
-            return None
 
-        async def get_messages(self, chat, ids=None):
-            return _message(media, mid=ids)
-
-        async def download_media(self, message, file=None, thumb=None):
-            Path(file).write_bytes(b"\xff\xd8\xff")
-            return file
+def test_backfill_fills_target_thumb_paths(conn, tmp_path):
+    """补抓结果要同步写入缺失缩略图的目标副本行。"""
+    conn.execute(
+        "INSERT INTO messages (source_chat_id, source_message_id, media_type, "
+        "status) VALUES (-1, 5, 'photo', 'archived')"
+    )
+    conn.execute(
+        "INSERT INTO message_targets (message_id, target_chat_id, "
+        "target_message_id, status) VALUES (1, -1002, 50, 'archived')"
+    )
+    conn.commit()
 
     cache = ThumbnailCache(Path(tmp_path) / "thumbs")
     cfg = SimpleNamespace(forward_interval=0.0)
-    count = asyncio.run(backfill_thumbs(Client(), cfg, conn, cache, limit=10))
-    assert count == 1  # 只有 photo 补抓，text 不补
-    row = conn.execute("SELECT thumb_path FROM messages WHERE id=1").fetchone()
-    assert row["thumb_path"] and "1" in row["thumb_path"]
+    count = asyncio.run(backfill_thumbs(_BackfillClient(), cfg, conn, cache, limit=10))
+    assert count == 1
+    paths = conn.execute(
+        "SELECT thumb_path FROM message_targets WHERE message_id=1"
+    ).fetchall()
+    assert {p["thumb_path"] for p in paths} == {str(tmp_path / "thumbs" / "-1_5.jpg")}

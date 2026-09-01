@@ -21,8 +21,13 @@ from telethon.tl.types import (
     PhotoSizeProgressive,
 )
 
-THUMB_DIR = Path("thumbs")
+THUMB_DIR_NAME = "thumbs"
 _EXT = ".jpg"
+
+
+def thumbs_dir_for(database_path: str | Path) -> Path:
+    """缩略图目录锚定数据库所在目录，与重置清理（backup.reset_database）同源。"""
+    return Path(database_path).resolve().parent / THUMB_DIR_NAME
 
 # Web 卡片缩略图目标宽度：过小糊、过大等于下载原图
 _MIN_W, _MAX_W = 480, 1280
@@ -60,9 +65,14 @@ def choose_thumbnail_message(messages: list, strategy: str = "first_video"):
 
 
 class ThumbnailCache:
-    """缩略图存取。单进程主事件循环触发抓取，Web 经独立连接只读。"""
+    """缩略图存取。单进程主事件循环触发抓取，Web 经独立连接只读。
 
-    def __init__(self, directory: Path = THUMB_DIR) -> None:
+    缓存身份是「下载来源的 Telegram 媒体消息」：chat_id + message_id 均为
+    Telegram 侧 id，不含数据库 id——同一媒体归档到多个目标频道共用一份文件，
+    数据库重置后也不会错误复用。
+    """
+
+    def __init__(self, directory: Path) -> None:
         self._dir = directory
 
     @property

@@ -17,7 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
+from app.media.thumbnails import (
+    ThumbnailCache,
+    choose_thumbnail_message,
+    thumbs_dir_for,
+)
 from app.processor.edit import apply_message_edit
 from app.telegram.client import resolve_chat_name
 from app.web.backup import (
@@ -362,7 +366,7 @@ def build_api_router(
         with _connect(database_path) as conn:
             row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
         try:
-            cache = ThumbnailCache()
+            cache = ThumbnailCache(thumbs_dir_for(database_path))
 
             async def fetch_from(chat_id, telegram_message_id):
                 if not chat_id or not telegram_message_id:
@@ -379,7 +383,7 @@ def build_api_router(
                     group.sort(key=lambda item: item.id)
                     message = choose_thumbnail_message(group, config.thumbnail_media)
                 return await cache.fetch(
-                    client, message, target_id or message_id, chat_id=chat_id
+                    client, message, telegram_message_id, chat_id=chat_id
                 )
 
             fetched = None
