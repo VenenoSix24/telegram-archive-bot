@@ -66,6 +66,13 @@ export interface Target {
   count: number
 }
 
+export interface BackupItem {
+  name: string
+  kind: 'config' | 'database'
+  size: number
+  created_at: string
+}
+
 export interface EditableConfig {
   source_chats: {
     chat_id: number | null
@@ -85,6 +92,7 @@ export interface EditableConfig {
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'
   sync_target_edits: boolean
+  message_template: string[]
 }
 
 export interface Stats {

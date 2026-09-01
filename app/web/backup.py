@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+
+_MAX_IMPORT_BYTES = 100 * 1024 * 1024
 
 
 def _stamp() -> str:
@@ -62,3 +66,65 @@ def reset_database(path: Path) -> None:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         conn.close()
+    cache_dir = path.parent / "thumbs"
+    if cache_dir.is_dir():
+        for cached in cache_dir.iterdir():
+            if cached.is_file():
+                cached.unlink()
+
+
+def backup_metadata(path: Path, kind: str) -> dict:
+    stat = path.stat()
+    return {
+        "name": path.name,
+        "kind": kind,
+        "size": stat.st_size,
+        "created_at": datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+    }
+
+
+def validate_config_backup(path: Path) -> None:
+    from app.web.config_editor import read_editable_config
+
+    read_editable_config(path)
+
+
+def validate_database_backup(path: Path) -> None:
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise ValueError("SQLite integrity check failed")
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "messages" not in tables or "schema_version" not in tables:
+            raise ValueError("not an archive database backup")
+    finally:
+        conn.close()
+
+
+async def import_backup(chunks, destination: Path, kind: str) -> None:
+    """Validate a streamed upload then atomically replace the managed file."""
+    if kind not in {"config", "database"}:
+        raise ValueError("invalid backup kind")
+    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temp:
+        temporary = Path(temp.name)
+        copied = 0
+        async for chunk in chunks:
+            copied += len(chunk)
+            if copied > _MAX_IMPORT_BYTES:
+                temporary.unlink(missing_ok=True)
+                raise ValueError("backup file exceeds 100 MB")
+            temp.write(chunk)
+    try:
+        if kind == "config":
+            validate_config_backup(temporary)
+            backup_config(destination)
+        else:
+            validate_database_backup(temporary)
+            backup_database(destination)
+        os.replace(temporary, destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise

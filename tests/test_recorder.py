@@ -53,6 +53,18 @@ def test_record_saves_message_and_source_tag(conn):
     assert [(t["name"], t["type"]) for t in _tags(conn, 1)] == [("游戏", "source")]
 
 
+def test_record_saves_template_snapshot(conn):
+    mid = record_message(
+        conn,
+        build_incoming(_msg(), -1001, None),
+        source_tags=[],
+        preserve_original=False,
+        template_layout=["body", "tags"],
+    )
+    row = conn.execute("SELECT template_layout FROM messages WHERE id=?", (mid,)).fetchone()
+    assert row["template_layout"] == '["body", "tags"]'
+
+
 def test_record_preserves_original_hashtags(conn):
     mid = _record(conn, _msg(text="#GTA5 教程"))
     assert [(t["name"], t["type"]) for t in _tags(conn, mid)] == [

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ChevronDown, Loader2, Plus, Trash2, Save, RotateCcw, Palette, X } from 'lucide-vue-next'
-import { getConfig, getStats, putConfig, backup, resetDatabase, listBackups, restoreBackup } from '@/lib/api'
-import type { EditableConfig } from '@/lib/types'
+import { ChevronDown, Download, Loader2, MoveDown, MoveUp, Palette, Plus, RotateCcw, Save, Trash2, Upload, X } from 'lucide-vue-next'
+import { backup, backupDownloadUrl, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup } from '@/lib/api'
+import type { BackupItem, EditableConfig } from '@/lib/types'
 import Button from '@/components/ui/Button.vue'
+import TagInput from '@/components/ui/TagInput.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { cn } from '@/lib/utils'
 import {
@@ -16,8 +17,17 @@ const saving = ref(false)
 const error = ref('')
 const openTargetMenu = ref<number | null>(null)
 const opsBusy = ref(false)
-const backups = ref<string[]>([])
+const backups = ref<BackupItem[]>([])
 const selectedBackup = ref('')
+const importKind = ref<'config' | 'database'>('config')
+const importFile = ref<File | null>(null)
+
+const templateBlocks = [
+  { key: 'rating', label: '评级' },
+  { key: 'tags', label: 'Tag' },
+  { key: 'body', label: '正文' },
+  { key: 'source', label: '来源链接' },
+]
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
   { key: 'projector', label: '放映室（琥珀）' },
@@ -57,6 +67,7 @@ const form = reactive<EditableConfig>({
   thumbnail_media: 'first_video' as 'first_video' | 'first',
   thumbnail_source: 'auto' as 'auto' | 'archive' | 'source',
   sync_target_edits: false,
+  message_template: ['rating', 'tags', 'body', 'source'],
 })
 
 /** 最终落盘前不覆盖：保存改的是提交内容，页面状态独立 */
@@ -134,6 +145,42 @@ function resetName(item: { name: string }) {
   item.name = ''
 }
 
+function moveTemplateBlock(index: number, direction: -1 | 1) {
+  const next = index + direction
+  if (next < 0 || next >= form.message_template.length) return
+  const layout = [...form.message_template]
+  ;[layout[index], layout[next]] = [layout[next], layout[index]]
+  form.message_template = layout
+}
+
+function toggleTemplateBlock(key: string) {
+  if (key === 'body') return
+  form.message_template = form.message_template.includes(key)
+    ? form.message_template.filter((block) => block !== key)
+    : [...form.message_template, key]
+}
+
+function templatePreviewBlock(key: string) {
+  return {
+    rating: '推荐指数：⭐⭐⭐⭐',
+    tags: '#游戏 #MOD',
+    body: '示例正文：<b>粗体内容</b> 与链接',
+    source: '来自：\nhttps://t.me/example/123',
+  }[key] || ''
+}
+
+function formatBackup(item: BackupItem) {
+  const kind = item.kind === 'database' ? '数据库' : '配置'
+  const size = item.size < 1024 * 1024
+    ? `${Math.max(1, Math.round(item.size / 1024))} KB`
+    : `${(item.size / 1024 / 1024).toFixed(1)} MB`
+  return `${kind} · ${size} · ${item.name}`
+}
+
+function selectImportFile(event: Event) {
+  importFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
+}
+
 async function save() {
   // 源群 chat_id 必填；收集缺项提示，而不是默默写坏配置
   if (!form.target_channels.length || form.target_channels.some((target) => !target.chat_id)) {
@@ -193,10 +240,26 @@ async function backupItem(kind: 'config' | 'database') {
   opsBusy.value = true
   try {
     const result = await backup(kind)
-    toastSuccess(`备份已创建：${result.path}`)
+    toastSuccess(`备份已创建：${result.backup.name}`)
     await loadBackups()
   } catch (e) {
     toastError(e instanceof Error ? e.message : '备份失败')
+  } finally {
+    opsBusy.value = false
+  }
+}
+
+async function importSelectedBackup() {
+  if (!importFile.value) return
+  if (!window.confirm(`确认导入${importKind.value === 'database' ? '数据库' : '配置'}备份？当前文件会先自动备份。`)) return
+  opsBusy.value = true
+  try {
+    const result = await importBackup(importKind.value, importFile.value)
+    toastSuccess(`${result.kind === 'database' ? '数据库' : '配置'}已导入，请重启进程`)
+    importFile.value = null
+    await loadBackups()
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '导入失败')
   } finally {
     opsBusy.value = false
   }
@@ -331,16 +394,10 @@ async function resetDb() {
                 </button>
               </div>
             </label>
-            <label class="min-w-0">
+            <div class="min-w-0">
               <span class="mb-1 block text-xs text-steam-dim">默认 Tag</span>
-              <input
-                :value="s.default_tags.join(' ')"
-                placeholder="空格分隔"
-                class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                :aria-label="`源群 ${i + 1} 默认 Tag`"
-                @input="(e: Event) => { const v = (e.target as HTMLInputElement).value; s.default_tags = v ? v.split(' ').filter(Boolean) : [] }"
-              />
-            </label>
+              <TagInput v-model="s.default_tags" />
+            </div>
             <div class="min-w-0 sm:col-span-2 md:col-span-1">
               <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
               <div class="relative">
@@ -433,6 +490,32 @@ async function resetDb() {
         </label>
       </section>
 
+      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
+        <h2 class="mb-1 text-sm font-medium text-steam">归档消息模板</h2>
+        <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
+          <div class="space-y-1.5">
+            <div v-for="(key, index) in form.message_template" :key="key" class="flex items-center gap-2 rounded-md border border-ink-line bg-ink-raised px-2 py-1.5">
+              <span class="min-w-0 flex-1 text-sm text-steam">{{ templateBlocks.find((block) => block.key === key)?.label }}</span>
+              <button type="button" class="rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === 0" :aria-label="`上移 ${key}`" @click="moveTemplateBlock(index, -1)"><MoveUp class="h-4 w-4" /></button>
+              <button type="button" class="rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === form.message_template.length - 1" :aria-label="`下移 ${key}`" @click="moveTemplateBlock(index, 1)"><MoveDown class="h-4 w-4" /></button>
+              <button v-if="key !== 'body'" type="button" class="rounded p-1 text-steam-dim hover:bg-destructive/20 hover:text-destructive" :aria-label="`隐藏 ${key}`" @click="toggleTemplateBlock(key)"><X class="h-4 w-4" /></button>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              <button v-for="block in templateBlocks.filter((block) => !form.message_template.includes(block.key))" :key="block.key" type="button" class="rounded-md border border-dashed border-ink-line px-2 py-1 text-xs text-steam-dim hover:border-gold hover:text-gold" @click="toggleTemplateBlock(block.key)">显示 {{ block.label }}</button>
+            </div>
+          </div>
+          <div class="rounded-md border border-ink-line bg-ink-raised/50 p-3">
+            <p class="mb-2 text-xs text-steam-dim">新消息预览</p>
+            <div class="whitespace-pre-wrap text-sm leading-relaxed text-steam">
+              <template v-for="(key, index) in form.message_template" :key="key">
+                <span v-if="index">\n\n</span>{{ templatePreviewBlock(key) }}
+              </template>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 限速 / 开关 -->
       <section class="mb-5 grid gap-4 rounded-card border border-ink-line bg-ink-surface p-4 sm:grid-cols-2">
         <div>
@@ -490,18 +573,35 @@ async function resetDb() {
 
       <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
         <h2 class="mb-1 text-sm font-medium text-steam">备份与数据库</h2>
-        <p class="mb-3 text-xs leading-5 text-steam-dim">配置文件和数据库分开管理。数据库重置会清空归档记录，操作前自动创建备份，完成后需要重启进程。</p>
+        <p class="mb-3 text-xs leading-5 text-steam-dim">备份可保留在应用内，也可下载保存到本地。导入或恢复会先备份当前文件，完成后需要重启进程。</p>
         <div class="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="backupItem('config')">备份配置</Button>
           <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="backupItem('database')">备份数据库</Button>
           <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="resetDb">重置数据库</Button>
         </div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <select v-model="selectedBackup" class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
-            <option value="">选择备份以恢复</option>
-            <option v-for="item in backups" :key="item" :value="item">{{ item }}</option>
+        <div class="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <select v-model="selectedBackup" class="h-9 min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
+            <option value="">选择应用内备份</option>
+            <option v-for="item in backups" :key="item.name" :value="item.name">{{ formatBackup(item) }}</option>
           </select>
           <Button type="button" variant="secondary" size="sm" :disabled="opsBusy || !selectedBackup" @click="restoreSelectedBackup">恢复备份</Button>
+        </div>
+        <div v-if="backups.length" class="mt-2 space-y-1">
+          <div v-for="item in backups" :key="`download-${item.name}`" class="flex min-w-0 items-center justify-between gap-2 text-xs text-steam-dim">
+            <span class="truncate">{{ formatBackup(item) }}</span>
+            <a :href="backupDownloadUrl(item.name)" class="inline-flex shrink-0 items-center gap-1 text-steam hover:text-gold"><Download class="h-3.5 w-3.5" /> 下载</a>
+          </div>
+        </div>
+        <div class="mt-4 border-t border-ink-line pt-3">
+          <p class="mb-2 text-xs text-steam-dim">从本地导入</p>
+          <div class="flex flex-wrap gap-2">
+            <select v-model="importKind" class="h-9 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none" aria-label="导入备份类型">
+              <option value="config">配置文件</option>
+              <option value="database">数据库</option>
+            </select>
+            <input type="file" class="min-w-0 text-xs text-steam-dim file:mr-2 file:rounded-md file:border-0 file:bg-ink-raised file:px-2 file:py-1.5 file:text-xs file:text-steam hover:file:bg-ink-line" accept=".bak,.yaml,.yml,.sqlite,.db" @change="selectImportFile" />
+            <Button type="button" variant="secondary" size="sm" :disabled="opsBusy || !importFile" @click="importSelectedBackup"><Upload class="h-3.5 w-3.5" /> 导入</Button>
+          </div>
         </div>
       </section>
 
