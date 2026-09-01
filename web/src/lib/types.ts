@@ -91,7 +91,6 @@ export interface EditableConfig {
   admins: number[]
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'
-  sync_target_edits: boolean
   message_template: string[]
 }
 

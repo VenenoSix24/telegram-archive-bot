@@ -66,7 +66,6 @@ const form = reactive<EditableConfig>({
   admins: [],
   thumbnail_media: 'first_video' as 'first_video' | 'first',
   thumbnail_source: 'auto' as 'auto' | 'archive' | 'source',
-  sync_target_edits: false,
   message_template: ['rating', 'tags', 'body', 'source'],
 })
 
@@ -479,15 +478,6 @@ async function resetDb() {
         </div>
         <p v-if="!form.target_channels.length" class="text-xs text-steam-dim">还没有目标频道</p>
         <p class="mt-2 text-xs text-steam-dim/80">源群未选择独立目标时，将归档到全部目标频道。</p>
-      </section>
-
-      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
-        <h2 class="mb-1 text-sm font-medium text-steam">目标消息同步</h2>
-        <p class="mb-3 text-xs leading-5 text-steam-dim">默认只更新被编辑的目标消息。开启后，Telegram 中对任一目标消息的正文、Tag 或 Rating 编辑会同步到同一源消息的其他目标副本。</p>
-        <label class="flex items-center gap-2 text-sm text-steam">
-          <input v-model="form.sync_target_edits" type="checkbox" class="h-4 w-4 accent-gold" />
-          同步到所有目标副本
-        </label>
       </section>
 
       <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">

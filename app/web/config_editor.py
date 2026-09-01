@@ -64,7 +64,6 @@ def read_editable_config(path: Path) -> dict:
     search = raw.get("search", {})
     fw = raw.get("forward", {})
     thumbs = raw.get("thumbnails", {})
-    sync_target_edits = bool(raw.get("sync_target_edits", False))
 
     target_channel_id = (tg.get("target_channel") or {}).get("chat_id")
     source_chats = [
@@ -111,7 +110,6 @@ def read_editable_config(path: Path) -> dict:
         "admins": [int(a) for a in raw.get("admins", [])],
         "thumbnail_media": thumbs.get("media", "first_video"),
         "thumbnail_source": thumbs.get("source", "auto"),
-        "sync_target_edits": sync_target_edits,
         "message_template": normalize_template_layout(raw.get("message_template")),
     }
 
@@ -170,7 +168,6 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw["admins"] = merged["admins"]
     raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
     raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
-    raw["sync_target_edits"] = merged["sync_target_edits"]
     raw["message_template"] = normalize_template_layout(merged["message_template"])
 
     buf = StringIO()
