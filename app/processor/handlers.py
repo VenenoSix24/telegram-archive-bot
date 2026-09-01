@@ -161,7 +161,37 @@ def attach_reply_command_handler(
     return on_reply_command
 
 
-def attach_target_delete_handler(client, config: Config, conn: sqlite3.Connection):
+def attach_target_edit_handler(client, config: Config, conn: sqlite3.Connection, indexer=None):
+    """将 Telegram 目标消息的手动正文编辑写回对应副本。"""
+    ids = list(config.all_target_channel_ids())
+    if not ids:
+        return None
+
+    @client.on(events.MessageEdited(chats=ids))
+    async def on_target_edited(event):
+        if not config.sync_target_edits:
+            return
+        row = conn.execute(
+            "SELECT id, message_id FROM message_targets "
+            "WHERE target_chat_id=? AND target_message_id=? AND status='archived'",
+            (event.chat_id, event.message.id),
+        ).fetchone()
+        if row is None:
+            return
+        text = event.message.message or ""
+        await apply_message_edit(
+            client,
+            conn,
+            row["message_id"],
+            target_id=row["id"],
+            body=text,
+            indexer=indexer,
+        )
+
+    return on_target_edited
+
+
+
     """监听目标频道删除事件，只标记目标副本，不删除数据库记录。"""
     ids = list(config.all_target_channel_ids())
     if not ids:
