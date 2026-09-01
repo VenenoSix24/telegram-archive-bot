@@ -290,6 +290,54 @@ def test_messages_list_filter_and_tags(tmp_path):
         assert body["items"][0]["thumb"]["available"] is False
 
 
+
+def test_messages_list_expands_target_copies_and_statuses(tmp_path):
+    db = _make_schema_db(tmp_path, name="targets.sqlite")
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE message_targets (
+            id INTEGER PRIMARY KEY,
+            message_id INTEGER NOT NULL,
+            target_chat_id INTEGER NOT NULL,
+            target_message_id INTEGER,
+            target_url TEXT,
+            status TEXT NOT NULL,
+            original_text TEXT NOT NULL DEFAULT '',
+            original_html TEXT NOT NULL DEFAULT '',
+            rendered_text TEXT NOT NULL DEFAULT '',
+            rating INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE target_tags (
+            target_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, type TEXT NOT NULL
+        );
+        INSERT INTO messages (id, source_chat_id, source_message_id, media_type, status)
+        VALUES (72, -1001, 72, 'text', 'processed');
+        INSERT INTO message_targets (
+            id, message_id, target_chat_id, target_message_id, status, original_text
+        )
+        VALUES (101, 72, -1005, 201, 'archived', 'A copy'),
+               (102, 72, -1006, 202, 'deleted', 'B copy');
+        """
+    )
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        active = client.get("/api/v1/messages?status=active").json()
+        assert active["total"] == 1
+        assert active["items"][0]["id"] == 72
+        assert active["items"][0]["material_id"] == 101
+        assert active["items"][0]["target_chat_id"] == -1005
+
+        deleted = client.get("/api/v1/messages?status=deleted").json()
+        assert deleted["total"] == 1
+        assert deleted["items"][0]["material_id"] == 102
+
+        filtered = client.get("/api/v1/messages?status=all&target_chat_id=-1006").json()
+        assert filtered["total"] == 1
+        assert filtered["items"][0]["material_id"] == 102
+
+
 def test_messages_thumb_without_client_404(tmp_path):
     db = _seeded_messages_db(tmp_path)
     cfg = _config(database_path=db, web_token="secret-token")
