@@ -1,35 +1,59 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Film, Image as ImageIcon, FileText, Loader2 } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { Film, Image as ImageIcon, FileText, Loader2, Mic, Music, Sticker } from 'lucide-vue-next'
 import { getStats, listMessages } from '@/lib/api'
 import type { Message, Stats } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
 import MessageDrawer from '@/components/MessageDrawer.vue'
+import Button from '@/components/ui/Button.vue'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<Message[]>([])
 const loading = ref(true)
+const loadError = ref('')
 const selected = ref<Message | null>(null)
 
-const typeOrder = ['video', 'photo', 'text']
+const typeMeta: Record<string, { label: string; icon: unknown }> = {
+  video: { label: '视频', icon: Film },
+  photo: { label: '图片', icon: ImageIcon },
+  document: { label: '文件', icon: FileText },
+  audio: { label: '音频', icon: Music },
+  voice: { label: '语音', icon: Mic },
+  sticker: { label: '贴纸', icon: Sticker },
+  text: { label: '文本', icon: FileText },
+}
 
 function statsOf(type: string) {
   return stats.value?.messages.by_type[type] ?? 0
 }
+
+// 有量的类型才展示，未知类型兜底到文件图标
+const shownTypes = computed(() => {
+  const keys = new Set([
+    ...Object.keys(typeMeta),
+    ...Object.keys(stats.value?.messages.by_type ?? {}),
+  ])
+  return [...keys].filter((type) => statsOf(type) > 0)
+})
 
 function onDrawerUpdate(updated: Message) {
   recent.value = recent.value.map((m) => (m.material_id === updated.material_id ? updated : m))
   if (selected.value?.material_id === updated.material_id) selected.value = updated
 }
 
-onMounted(async () => {
+async function load() {
+  loadError.value = ''
   try {
     stats.value = await getStats()
     recent.value = (await listMessages({ limit: 8 })).items
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : '数据加载失败'
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
 </script>
 
 <template>
@@ -41,6 +65,12 @@ onMounted(async () => {
 
     <div v-if="loading" class="flex items-center gap-2 text-steam-dim">
       <Loader2 class="h-4 w-4 animate-spin" /> 载入中…
+    </div>
+
+    <!-- 加载失败：整块错误态 + 重试，不再静默空白 -->
+    <div v-else-if="loadError" class="flex flex-col items-center gap-3 py-16 text-steam-dim">
+      <p class="text-sm">{{ loadError }}</p>
+      <Button variant="secondary" size="sm" @click="load">重试</Button>
     </div>
 
     <template v-else-if="stats">
@@ -70,9 +100,9 @@ onMounted(async () => {
       <section class="mt-6 rounded-card border border-ink-line bg-ink-surface p-4">
         <h2 class="mb-3 text-sm font-medium text-steam">媒体构成</h2>
         <div class="flex flex-wrap gap-4 text-sm">
-          <span v-for="t in typeOrder" :key="t" class="inline-flex items-center gap-1.5 text-steam-dim">
-            <component :is="t === 'video' ? Film : t === 'photo' ? ImageIcon : FileText" class="h-4 w-4" />
-            {{ t === 'video' ? '视频' : t === 'photo' ? '图片' : '文本' }}
+          <span v-for="t in shownTypes" :key="t" class="inline-flex items-center gap-1.5 text-steam-dim">
+            <component :is="typeMeta[t]?.icon ?? FileText" class="h-4 w-4" />
+            {{ typeMeta[t]?.label ?? t }}
             <span class="font-mono tabular-nums text-steam">{{ statsOf(t) }}</span>
           </span>
         </div>
@@ -88,13 +118,16 @@ onMounted(async () => {
           <h2 class="text-sm font-medium text-steam">最近归档</h2>
           <RouterLink :to="{ name: 'messages' }" class="text-xs text-gold hover:underline">全部素材 →</RouterLink>
         </div>
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div v-if="recent.length" class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <MessageCard
             v-for="m in recent"
             :key="m.material_id"
             :message="m"
             @open="selected = m"
           />
+        </div>
+        <div v-else class="rounded-card border border-dashed border-ink-line p-8 text-center text-sm text-steam-dim">
+          还没有归档素材，去源群发一条消息试试
         </div>
         <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
       </section>

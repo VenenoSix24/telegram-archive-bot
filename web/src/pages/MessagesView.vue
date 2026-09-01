@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Loader2, SearchX, X } from 'lucide-vue-next'
+import { AlertTriangle, Loader2, SearchX, X } from 'lucide-vue-next'
 import { getStats, listMessages, patchMessage } from '@/lib/api'
 import type { Message, MessagesResponse, Target } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
@@ -9,6 +9,7 @@ import MessageDrawer from '@/components/MessageDrawer.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
+import { displayChatId } from '@/lib/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,10 +25,6 @@ const targetFilter = ref<number | ''>('')
 const statusFilter = ref<'active' | 'deleted' | 'all'>('active')
 const targets = ref<Target[]>([])
 const selected = ref<Message | null>(null)
-const displayChatId = (value: number) => {
-  const digits = String(Math.abs(value))
-  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
-}
 
 const PAGE = 30
 const mediaOptions = [
@@ -246,6 +243,13 @@ onMounted(() => {
         @rate="(n) => rate(m, n)"
         @open="selected = m"
       />
+    </div>
+
+    <!-- 首载失败：整块错误态 + 重试，不能只留筛选栏里一行小红字 -->
+    <div v-else-if="error" class="flex flex-col items-center gap-3 py-16 text-steam-dim">
+      <AlertTriangle class="h-8 w-8" />
+      <p class="text-sm">{{ error }}</p>
+      <Button variant="secondary" size="sm" @click="load">重试</Button>
     </div>
 
     <div v-else-if="data" class="flex flex-col items-center gap-2 py-16 text-steam-dim">
