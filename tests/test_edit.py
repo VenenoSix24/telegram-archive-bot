@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from app.database.migrate import apply_migrations, open_db
 from app.processor.adapter import build_incoming
-from app.processor.edit import apply_message_edit
+from app.processor.edit import apply_message_edit, extract_edited_body
 from app.processor.recorder import record_message
 
 
@@ -140,3 +140,84 @@ def test_target_rating_preserves_existing_html_body(tmp_path):
     assert target["original_html"] == "<b>正文</b>"
     assert "<b>正文</b>" in target["rendered_text"]
     assert "<b>正文</b>" in client.edits[0][2]
+
+
+def test_apply_message_not_modified_treated_as_success(tmp_path):
+    """重复添加已有 Tag 等场景 Telegram 返回 MessageNotModified，不应中断同步。"""
+    from telethon.errors import MessageNotModifiedError
+
+    class NotModifiedClient:
+        async def edit_message(self, *args, **kwargs):
+            raise MessageNotModifiedError(None)
+
+    conn, mid = _setup(tmp_path)
+    assert asyncio_run(apply_message_edit(NotModifiedClient(), conn, mid, rating=4))
+    row = conn.execute("SELECT rating FROM messages WHERE id=?", (mid,)).fetchone()
+    assert row["rating"] == 4
+
+
+def test_extract_edited_body_strips_full_skeleton():
+    text = "推荐指数：⭐⭐⭐\n\n#游戏 #MOD\n\n新正文\n\n来自：\nhttps://t.me/x/1"
+    body, body_html = extract_edited_body(
+        text, text, tags=["游戏", "MOD"], source_url="https://t.me/x/1"
+    )
+    assert body == "新正文"
+    assert body_html == "新正文"
+
+
+def test_extract_edited_body_accepts_anchor_url_line():
+    """Telegram 编辑后 URL 会被自动加上链接实体，剥离时兼容 <a> 形态。"""
+    text = (
+        "推荐指数：⭐⭐⭐\n\n#游戏\n\n正文\n\n来自：\n"
+        '<a href="https://t.me/x/1">https://t.me/x/1</a>'
+    )
+    body, _ = extract_edited_body(text, text, tags=["游戏"], source_url="https://t.me/x/1")
+    assert body == "正文"
+
+
+def test_extract_edited_body_without_skeleton():
+    body, _ = extract_edited_body("只有正文", "只有正文", tags=[], source_url=None)
+    assert body == "只有正文"
+
+
+def test_extract_edited_body_tags_only_layout():
+    text = "#游戏\n\n正文\n\n来自：\nhttps://t.me/x/1"
+    body, _ = extract_edited_body(text, text, tags=["游戏"], source_url="https://t.me/x/1")
+    assert body == "正文"
+
+
+def test_extract_edited_body_multiline_body_kept():
+    text = "推荐指数：⭐\n\n#游戏\n\n第一段\n\n第二段\n\n来自：\nhttps://t.me/x/1"
+    body, _ = extract_edited_body(
+        text, text, tags=["游戏"], source_url="https://t.me/x/1"
+    )
+    assert body == "第一段\n\n第二段"
+
+
+def test_extract_edited_body_append_after_source():
+    """回归：用户习惯在消息末尾（来源块之后）追加内容，来源必须从正文中移除。"""
+    text = (
+        "推荐指数：⭐⭐⭐\n\n#游戏\n\n原始正文\n\n来自：\nhttps://t.me/x/1\n\n"
+        "追加的一句话"
+    )
+    body, _ = extract_edited_body(text, text, tags=["游戏"], source_url="https://t.me/x/1")
+    assert body == "原始正文\n\n追加的一句话"
+
+
+def test_extract_edited_body_self_heals_stale_skeleton():
+    """回归：历史失败轮次留在正文里的来源块（多份）也要全部剥离，逐次自愈。"""
+    text = (
+        "推荐指数：⭐⭐⭐\n\n#游戏\n\n"
+        "原始正文\n\n来自：\nhttps://t.me/x/1\n\n"
+        "第一次追加\n\n来自：\nhttps://t.me/x/1\n\n"
+        "第二次追加\n\n来自：\nhttps://t.me/x/1"
+    )
+    body, _ = extract_edited_body(text, text, tags=["游戏"], source_url="https://t.me/x/1")
+    assert body == "原始正文\n\n第一次追加\n\n第二次追加"
+
+
+def test_extract_edited_body_star_count_change_is_still_skeleton():
+    """用户在 TG 里加减星号时该行仍被识别为骨架，不混入正文。"""
+    text = "推荐指数：⭐⭐⭐⭐⭐\n\n#游戏\n\n正文\n\n来自：\nhttps://t.me/x/1"
+    body, _ = extract_edited_body(text, text, tags=["游戏"], source_url="https://t.me/x/1")
+    assert body == "正文"

@@ -14,14 +14,14 @@ from telethon.extensions import html as telegram_html
 
 from app.config import Config
 from app.media.backfill import backfill_thumbs
-from app.media.thumbnails import ThumbnailCache
+from app.media.thumbnails import ThumbnailCache, thumbs_dir_for
 from app.processor.adapter import (
     IncomingMessage,
     build_incoming,
     resolve_source_url,
 )
 from app.processor.commands import parse_command
-from app.processor.edit import apply_message_edit
+from app.processor.edit import apply_message_edit, extract_edited_body
 from app.processor.recorder import record_message
 from app.processor.reports import (
     format_queue_report,
@@ -102,107 +102,182 @@ def attach_new_message_handler(
 def attach_reply_command_handler(
     client, config: Config, conn: sqlite3.Connection, indexer=None
 ):
-    """源群里对已归档消息回复 /tag 或 /rating 的补充处理。
+    """回复指令 /tag /rating 的应用规则。
 
-    仅管理员（event.sender_id ∈ admins）生效；非指令回复忽略。
-    indexer 非空时，/tag 应用后触发索引更新。
+    源群里回复源消息 → 更新该源消息的全部目标副本（指令作用于共享的源）；
+    目标频道里回复目标消息 → 只更新被回复的那条副本（独立副本模型）。
+    旧数据没有副本行时回退父级路径。仅管理员生效，指令回复会被删除。
     """
-    ids = [c.chat_id for c in config.source_chats]
-    if not ids:
-        return None
+    source_ids = [c.chat_id for c in config.source_chats]
+    target_ids = sorted(config.all_target_channel_ids())
 
-    @client.on(events.NewMessage(chats=ids))
-    async def on_reply_command(event):
-        msg = event.message
+    def _authorize(msg, sender_id):
         if not msg.reply_to_msg_id:
-            return
+            return None
         parsed = parse_command(msg.text)
         if parsed is None:
-            return
+            return None
         cmd, args = parsed
-        if event.sender_id not in config.admins:
-            return
-        if cmd not in ("tag", "rating"):
-            return
+        if cmd not in ("tag", "rating") or sender_id not in config.admins:
+            return None
         if cmd == "rating" and not config.rating_enabled:
-            return
-        row = conn.execute(
-            "SELECT * FROM messages WHERE source_chat_id=? AND source_message_id=?",
-            (event.chat_id, msg.reply_to_msg_id),
-        ).fetchone()
-        if row is None or not row["target_chat_id"]:
-            return
+            return None
+        return cmd, args
+
+    def _manual_tags(args):
+        tags = normalize_tags(" ".join(args))
+        return tags or None
+
+    def _rating_value(args):
+        if len(args) != 1:
+            return None
+        try:
+            value = int(args[0])
+        except ValueError:
+            return None
+        return value if 0 <= value <= 5 else None
+
+    async def _apply(message_id: int, target_id: int | None, cmd: str, args) -> bool:
         if cmd == "tag":
-            manual = normalize_tags(" ".join(args))
-            if not manual:
-                return
-            ok = await apply_message_edit(
-                client, conn, row["id"], add_tags=manual, indexer=indexer
+            tags = _manual_tags(args)
+            if not tags:
+                return False
+            return await apply_message_edit(
+                client, conn, message_id, target_id=target_id, add_tags=tags,
+                indexer=indexer,
             )
-        else:
-            if len(args) != 1:
-                return
-            try:
-                value = int(args[0])
-            except ValueError:
-                return
-            if not 0 <= value <= 5:
-                return
-            ok = await apply_message_edit(client, conn, row["id"], rating=value)
-        if not ok:
-            return
-        await client.delete_messages(event.chat_id, [msg.id])
-        logger.info(
-            "reply %s on %s/%s applied to messages#%s",
-            cmd,
-            event.chat_id,
-            msg.reply_to_msg_id,
-            row["id"],
+        value = _rating_value(args)
+        if value is None:
+            return False
+        return await apply_message_edit(
+            client, conn, message_id, target_id=target_id, rating=value,
+            indexer=indexer,
         )
 
-    return on_reply_command
+    if source_ids:
+        @client.on(events.NewMessage(chats=source_ids))
+        async def on_reply_command(event):
+            msg = event.message
+            authorized = _authorize(msg, event.sender_id)
+            if authorized is None:
+                return
+            cmd, args = authorized
+            row = conn.execute(
+                "SELECT * FROM messages WHERE source_chat_id=? AND source_message_id=?",
+                (event.chat_id, msg.reply_to_msg_id),
+            ).fetchone()
+            if row is None:
+                return
+            copies = conn.execute(
+                "SELECT id FROM message_targets WHERE message_id=? AND status='archived'",
+                (row["id"],),
+            ).fetchall()
+            if copies:
+                ok = True
+                for copy in copies:
+                    try:
+                        applied = await _apply(row["id"], copy["id"], cmd, args)
+                    except Exception:
+                        logger.exception(
+                            "reply %s failed for messages#%s target#%s",
+                            cmd, row["id"], copy["id"],
+                        )
+                        applied = False
+                    ok = applied and ok
+            elif row["target_chat_id"]:
+                ok = await _apply(row["id"], None, cmd, args)
+            else:
+                return
+            if not ok:
+                return
+            await client.delete_messages(event.chat_id, [msg.id])
+            logger.info(
+                "reply %s on %s/%s applied to messages#%s (%s copies)",
+                cmd, event.chat_id, msg.reply_to_msg_id, row["id"], len(copies),
+            )
+
+    if target_ids:
+        @client.on(events.NewMessage(chats=target_ids))
+        async def on_target_reply_command(event):
+            msg = event.message
+            authorized = _authorize(msg, event.sender_id)
+            if authorized is None:
+                return
+            cmd, args = authorized
+            copy = conn.execute(
+                "SELECT id, message_id FROM message_targets "
+                "WHERE target_chat_id=? AND target_message_id=? AND status='archived'",
+                (event.chat_id, msg.reply_to_msg_id),
+            ).fetchone()
+            if copy is None:
+                return
+            try:
+                ok = await _apply(copy["message_id"], copy["id"], cmd, args)
+            except Exception:
+                logger.exception(
+                    "reply %s failed for target#%s", cmd, copy["id"]
+                )
+                ok = False
+            if not ok:
+                return
+            await client.delete_messages(event.chat_id, [msg.id])
+            logger.info(
+                "reply %s on target %s/%s applied to target#%s",
+                cmd, event.chat_id, msg.reply_to_msg_id, copy["id"],
+            )
+
+    return None
 
 
 def attach_target_edit_handler(client, config: Config, conn: sqlite3.Connection, indexer=None):
-    """将 Telegram 目标消息的手动正文编辑写回对应副本。"""
+    """将 Telegram 目标消息的手动正文编辑写回对应副本。
+
+    只更新被编辑的那条副本（独立副本模型）：不做兄弟副本传播，
+    也不需要开关——用户在 Telegram 改了哪条，Web 就同步哪条。
+    """
     ids = list(config.all_target_channel_ids())
     if not ids:
         return None
 
     @client.on(events.MessageEdited(chats=ids))
     async def on_target_edited(event):
-        if not config.sync_target_edits:
-            return
         row = conn.execute(
-            "SELECT id, message_id FROM message_targets "
-            "WHERE target_chat_id=? AND target_message_id=? AND status='archived'",
+            "SELECT mt.id AS target_id, mt.message_id, m.source_url "
+            "FROM message_targets mt JOIN messages m ON m.id=mt.message_id "
+            "WHERE mt.target_chat_id=? AND mt.target_message_id=? AND mt.status='archived'",
             (event.chat_id, event.message.id),
         ).fetchone()
         if row is None:
             return
+        tags = [
+            tag["name"]
+            for tag in conn.execute(
+                "SELECT t.name FROM target_tags tt JOIN tags t ON t.id=tt.tag_id "
+                "WHERE tt.target_id=? ORDER BY tt.rowid",
+                (row["target_id"],),
+            )
+        ]
         text = event.message.message or ""
         html_text = telegram_html.unparse(
             text, getattr(event.message, "entities", None) or []
+        )
+        # 用户编辑的是完整渲染结果，先剥离评级/Tag/来源骨架再回写正文，
+        # 否则重渲染会把模板再套一层（套娃 bug）。
+        body, body_html = extract_edited_body(
+            text,
+            html_text,
+            tags=tags,
+            source_url=row["source_url"],
         )
         await apply_message_edit(
             client,
             conn,
             row["message_id"],
-            target_id=row["id"],
-            body=text,
-            body_html=html_text,
+            target_id=row["target_id"],
+            body=body,
+            body_html=body_html or None,
             indexer=indexer,
         )
-        if config.sync_target_edits:
-            siblings = conn.execute(
-                "SELECT id FROM message_targets WHERE message_id=? AND id<>? AND status='archived'",
-                (row["message_id"], row["id"]),
-            ).fetchall()
-            for sibling in siblings:
-                await apply_message_edit(
-                    client, conn, row["message_id"], target_id=sibling["id"],
-                    body=text, body_html=html_text, indexer=indexer,
-                )
 
     return on_target_edited
 
@@ -266,7 +341,11 @@ def attach_management_command_handler(
         elif cmd == "rethumb":
             limit = _parse_rethumb_limit(args)
             count = await backfill_thumbs(
-                client, config, conn, ThumbnailCache(), limit=limit
+                client,
+                config,
+                conn,
+                ThumbnailCache(thumbs_dir_for(config.database_path)),
+                limit=limit,
             )
             text = f"已补抓 {count} 条缩略图"
         else:
