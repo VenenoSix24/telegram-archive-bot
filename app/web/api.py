@@ -242,6 +242,8 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             where = f"{where} {'AND' if where else 'WHERE'} status='archived'"
         elif status == "deleted":
             where = f"{where} {'AND' if where else 'WHERE'} status='deleted'"
+        if status not in {"active", "deleted", "all"}:
+            raise HTTPException(status_code=400, detail="invalid status")
         with _connect(database_path) as conn:
             rows = conn.execute(
                 f"SELECT * FROM messages {where} ORDER BY id DESC", params
