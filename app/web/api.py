@@ -130,40 +130,32 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
 
 
 def _sql_filters(query) -> tuple[str, list]:
-    """查询参数 → (WHERE 子句骨架, 参数)；只允许白名单字段。
-
-    q 走 original_text / rendered_text LIKE；tag 通过 message_tags 关联过滤。
-    全部参数化，杜绝注入。
-    """
+    """构造仍可直接映射到 messages 表的筛选条件。"""
     conds: list[str] = []
     params: list[object] = []
     media_type = query.get("media_type")
     if media_type:
         conds.append("media_type = ?")
         params.append(media_type)
-    rating = query.get("rating")
-    if rating not in (None, ""):
-        conds.append("rating = ?")
-        params.append(int(rating))
-    source = query.get("source_chat_id")
-    if source:
-        conds.append("source_chat_id = ?")
-        params.append(int(source))
-    target = query.get("target_chat_id")
-    if target:
-        conds.append("target_chat_id = ?")
-        params.append(int(target))
-    q = query.get("q")
-    if q:
-        conds.append("(original_text LIKE ? OR rendered_text LIKE ?)")
-        params.extend((f"%{q}%", f"%{q}%"))
-    tag = query.get("tag")
-    if tag:
-        conds.append("id IN (SELECT message_id FROM message_tags mt "
-                     "JOIN tags tg ON tg.id = mt.tag_id WHERE tg.name = ?)")
-        params.append(tag)
     where = f"WHERE {' AND '.join(conds)}" if conds else ""
     return where, params
+
+
+def _matches_message(message: dict, query) -> bool:
+    rating = query.get("rating")
+    if rating not in (None, "") and message["rating"] != int(rating):
+        return False
+    target = query.get("target_chat_id")
+    if target and message["target_chat_id"] != int(target):
+        return False
+    text = query.get("q")
+    searchable = f'{message["original_text"] or ""} {message["rendered_text"] or ""}'
+    if text and text.lower() not in searchable.lower():
+        return False
+    tag = query.get("tag")
+    if tag and tag not in {item["name"] for item in message["tags"]}:
+        return False
+    return True
 
 
 def build_api_router(database_path: str, config_path: str | None = None, config=None) -> APIRouter:
@@ -258,10 +250,11 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             for row in rows:
                 message = _message_dict(conn, row)
                 if len(message["targets"]) <= 1:
-                    expanded.append(message)
+                    if _matches_message(message, request.query_params):
+                        expanded.append(message)
                     continue
                 for target in message["targets"]:
-                    expanded.append({
+                    item = {
                         **message,
                         "target_id": target["id"],
                         "target_chat_id": target["chat_id"],
@@ -273,7 +266,9 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                         "rating": target["rating"],
                         "tags": target["tags"],
                         "targets": [target],
-                    })
+                    }
+                    if _matches_message(item, request.query_params):
+                        expanded.append(item)
             total = len(expanded)
             items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
