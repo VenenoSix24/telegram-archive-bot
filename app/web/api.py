@@ -245,22 +245,17 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
     ) -> dict:
         where, params = _sql_filters(request.query_params)
         with _connect(database_path) as conn:
-            total = conn.execute(
-                f"SELECT COUNT(*) AS n FROM messages {where}", params
-            ).fetchone()["n"]
             rows = conn.execute(
-                f"SELECT * FROM messages {where} ORDER BY id DESC "
-                "LIMIT ? OFFSET ?",
-                [*params, limit, offset],
+                f"SELECT * FROM messages {where} ORDER BY id DESC", params
             ).fetchall()
-            items = []
+            expanded = []
             for row in rows:
                 message = _message_dict(conn, row)
                 if len(message["targets"]) <= 1:
-                    items.append(message)
+                    expanded.append(message)
                     continue
                 for target in message["targets"]:
-                    items.append({
+                    expanded.append({
                         **message,
                         "target_id": target["id"],
                         "target_chat_id": target["chat_id"],
@@ -273,6 +268,8 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                         "tags": target["tags"],
                         "targets": [target],
                     })
+            total = len(expanded)
+            items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     @router.get("/messages/{message_id}")
