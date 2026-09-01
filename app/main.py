@@ -23,7 +23,7 @@ from app.telegram.client import build_client, resolve_chat_names, validate_confi
 from app.telegram.copier import archive_message_by_db_id
 from app.web.server import start_server_task
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.main")
 
 
 async def _serve_web(web_server) -> None:
