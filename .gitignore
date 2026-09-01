@@ -53,3 +53,7 @@ docs/transfers/
 
 # Claude Code 本地运行配置（机器相关，不进 Git）
 .claude/launch.json
+
+# local handover notes
+task_plan.md
+progress.md

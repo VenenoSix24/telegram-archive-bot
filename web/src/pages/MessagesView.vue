@@ -126,9 +126,23 @@ async function loadMore() {
 
 async function rate(msg: Message, value: number) {
   try {
-    const updated = await patchMessage(msg.id, { rating: value })
-    const item = data.value?.items.find((m) => m.id === msg.id)
-    if (item) Object.assign(item, updated)
+    const updated = await patchMessage(msg.id, { target_id: msg.target_id ?? undefined, rating: value })
+    const item = data.value?.items.find((m) => m.material_id === msg.material_id)
+    if (item) Object.assign(item, {
+      ...updated,
+      id: item.id,
+      material_id: item.material_id,
+      target_id: item.target_id,
+      target_chat_id: item.target_chat_id,
+      target_message_id: item.target_message_id,
+      target_url: item.target_url,
+      original_text: item.target_id == null ? updated.original_text : updated.targets.find((target) => target.id === item.target_id)?.original_text ?? item.original_text,
+      original_html: item.target_id == null ? updated.original_html : updated.targets.find((target) => target.id === item.target_id)?.original_html ?? item.original_html,
+      rendered_text: item.target_id == null ? updated.rendered_text : updated.targets.find((target) => target.id === item.target_id)?.rendered_text ?? item.rendered_text,
+      rating: item.target_id == null ? updated.rating : updated.targets.find((target) => target.id === item.target_id)?.rating ?? value,
+      tags: item.target_id == null ? updated.tags : updated.targets.find((target) => target.id === item.target_id)?.tags ?? item.tags,
+      targets: item.targets,
+    })
     toastSuccess(value === 0 ? '已清除评级' : `评级设为 ${value} 星`)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
@@ -223,7 +237,7 @@ onMounted(() => {
     >
       <MessageCard
         v-for="m in data.items"
-        :key="m.id"
+        :key="m.material_id"
         :message="m"
         @rate="(n) => rate(m, n)"
         @open="selected = m"

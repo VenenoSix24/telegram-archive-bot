@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field
 
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
+from app.telegram.client import resolve_chat_name
 from app.web.config_editor import apply_editable_config, read_editable_config
+from app.web.backup import backup_config, backup_database, reset_database
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 class PatchBody(BaseModel):
     target_id: int | None = None
     body: str | None = None
+    body_html: str | None = None
     add_tags: list[str] | None = None
     remove_tag_names: list[str] | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -106,6 +109,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         }]
     return {
         "id": row["id"],
+        "material_id": row["id"],
         "source_chat_id": row["source_chat_id"],
         "source_message_id": row["source_message_id"],
         "target_chat_id": row["target_chat_id"],
@@ -141,7 +145,11 @@ def _sql_filters(query) -> tuple[str, list]:
     return where, params
 
 
-def _matches_message(message: dict, query) -> bool:
+def _matches_message(message: dict, query, status: str = "all") -> bool:
+    if status != "all":
+        expected = "archived" if status == "active" else "deleted"
+        if message["status"] != expected:
+            return False
     rating = query.get("rating")
     if rating not in (None, "") and message["rating"] != int(rating):
         return False
@@ -158,8 +166,15 @@ def _matches_message(message: dict, query) -> bool:
     return True
 
 
-def build_api_router(database_path: str, config_path: str | None = None, config=None) -> APIRouter:
+def build_api_router(
+    database_path: str,
+    config_path: str | None = None,
+    config=None,
+    client=None,
+    conn=None,
+) -> APIRouter:
     router = APIRouter(dependencies=[Depends(_require_auth)])
+    router._conn = conn
 
     @router.get("/health")
     def health() -> dict:
@@ -238,12 +253,6 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
         where, params = _sql_filters(request.query_params)
         if status not in {"active", "deleted", "all"}:
             raise HTTPException(status_code=400, detail="invalid status")
-        if status == "active":
-            where = f"{where} {'AND' if where else 'WHERE'} status='archived'"
-        elif status == "deleted":
-            where = f"{where} {'AND' if where else 'WHERE'} status='deleted'"
-        if status not in {"active", "deleted", "all"}:
-            raise HTTPException(status_code=400, detail="invalid status")
         with _connect(database_path) as conn:
             rows = conn.execute(
                 f"SELECT * FROM messages {where} ORDER BY id DESC", params
@@ -251,17 +260,20 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             expanded = []
             for row in rows:
                 message = _message_dict(conn, row)
-                if len(message["targets"]) <= 1:
-                    if _matches_message(message, request.query_params):
+                if not message["targets"] or message["targets"][0].get("id") is None:
+                    if _matches_message(message, request.query_params, status):
                         expanded.append(message)
                     continue
                 for target in message["targets"]:
                     item = {
                         **message,
+                        "id": message["id"],
+                        "material_id": target["id"],
                         "target_id": target["id"],
                         "target_chat_id": target["chat_id"],
                         "target_message_id": target["message_id"],
                         "target_url": target["url"],
+                        "status": target["status"],
                         "original_text": target["original_text"],
                         "original_html": target["original_html"],
                         "rendered_text": target["rendered_text"],
@@ -269,8 +281,9 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                         "tags": target["tags"],
                         "targets": [target],
                     }
-                    if _matches_message(item, request.query_params):
+                    if _matches_message(item, request.query_params, status):
                         expanded.append(item)
+            expanded.sort(key=lambda item: (item["material_id"], item["id"]), reverse=True)
             total = len(expanded)
             items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
@@ -373,6 +386,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             and body.remove_tag_names is None
             and body.rating is None
             and body.body is None
+            and body.body_html is None
         ):
             raise HTTPException(status_code=422, detail="nothing to change")
         client = request.app.state.client
@@ -386,6 +400,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             message_id,
             target_id=body.target_id,
             body=body.body,
+            body_html=body.body_html,
             add_tags=body.add_tags,
             remove_tag_names=body.remove_tag_names,
             rating=body.rating,
@@ -401,11 +416,42 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
 
     if config_path is not None:
         @router.get("/config")
-        def get_config() -> dict:
+        async def get_config() -> dict:
             try:
-                return read_editable_config(Path(config_path))
+                result = read_editable_config(Path(config_path))
+                if client is not None:
+                    for collection in (result["source_chats"], result["target_channels"]):
+                        for item in collection:
+                            if not item.get("name") and item.get("chat_id") is not None:
+                                try:
+                                    item["name"] = await resolve_chat_name(client, item["chat_id"])
+                                except Exception:
+                                    pass
+                return result
             except Exception as exc:
                 raise HTTPException(status_code=400, detail="config.yaml unreadable") from exc
+
+        @router.post("/ops/backup")
+        def backup_ops(body: dict) -> dict:
+            kind = body.get("kind")
+            path = Path(config_path)
+            if kind == "config":
+                result = backup_config(path)
+            elif kind == "database":
+                result = backup_database(Path(database_path))
+            else:
+                raise HTTPException(status_code=400, detail="invalid backup kind")
+            return {"path": result.name}
+
+        @router.post("/ops/reset-database")
+        def reset_database_ops(body: dict) -> dict:
+            if body.get("confirm") != "RESET DATABASE":
+                raise HTTPException(status_code=400, detail="confirmation required")
+            backup_database(Path(database_path))
+            if getattr(router, "_conn", None) is None:
+                raise HTTPException(status_code=503, detail="database connection unavailable")
+            reset_database(router._conn)
+            return {"ok": True}
 
         @router.put("/config")
         def put_config(body: dict) -> dict:

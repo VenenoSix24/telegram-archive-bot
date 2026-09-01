@@ -100,7 +100,7 @@ async def apply_message_edit(
         rating=next_rating,
         tags=tags,
         body=next_body,
-        body_html=body_html,
+        body_html=body_html if body_html is not None else target["original_html"],
         source_url=row["source_url"],
     )
     await _telegram_edit(client, target["target_chat_id"], target["target_message_id"], rendered)

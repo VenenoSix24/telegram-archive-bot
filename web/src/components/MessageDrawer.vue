@@ -190,7 +190,7 @@ async function mutate(
           >
             <header class="flex items-center justify-between border-b border-ink-line px-5 py-3">
               <div class="flex items-center gap-2 font-mono text-sm text-steam-dim">
-                消息 <span class="text-steam">#{{ message.id }}</span>
+                消息 <span class="text-steam">#{{ message.material_id }}</span>
               </div>
               <button
                 type="button"

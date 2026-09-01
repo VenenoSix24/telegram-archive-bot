@@ -29,7 +29,7 @@ const icons = {
           v-for="t in toasts"
           :key="t.id"
           :class="[
-            'pointer-events-auto flex items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur',
+            'pointer-events-auto flex items-center gap-2 rounded-full border px-4 py-2 text-sm backdrop-blur',
             t.kind === 'success' && 'border-gold/40 bg-ink-surface/95 text-steam',
             t.kind === 'error' && 'border-destructive/50 bg-ink-surface/95 text-destructive',
             t.kind === 'info' && 'border-ink-line bg-ink-surface/95 text-steam-dim',

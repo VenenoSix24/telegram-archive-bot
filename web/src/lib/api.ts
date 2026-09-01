@@ -90,6 +90,7 @@ export async function patchMessage(
   change: {
     target_id?: number
     body?: string
+    body_html?: string
     add_tags?: string[]
     remove_tag_names?: string[]
     rating?: number
