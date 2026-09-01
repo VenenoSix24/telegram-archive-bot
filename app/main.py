@@ -142,11 +142,16 @@ async def _run() -> int:
         await indexer.stop()
         await client.disconnect()
         conn.close()
+        logger.info("归档管道已停止")
     return 0
 
 
 def main() -> None:
-    raise SystemExit(asyncio.run(_run()))
+    try:
+        raise SystemExit(asyncio.run(_run()))
+    except KeyboardInterrupt:
+        # 清理已在 _run 的 finally 完成；吞掉 Ctrl+C 的堆栈换安静退出
+        pass
 
 
 if __name__ == "__main__":

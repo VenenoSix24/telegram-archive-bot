@@ -109,7 +109,16 @@ class QueueManager:
         self._conn.commit()
         try:
             await self._sender(message_id)
-        except BaseException as exc:
+        except asyncio.CancelledError:
+            # 关机取消：任务回退 pending 供下次启动重发，取消本身继续向上传播，
+            # 吞掉它会导致 worker 永远无法退出（进程关不掉）
+            self._conn.execute(
+                "UPDATE queue SET status=?, last_error='cancelled' WHERE id=?",
+                (STATUS_PENDING, queue_id),
+            )
+            self._conn.commit()
+            raise
+        except Exception as exc:
             if flood := is_flood_wait(exc):
                 self._conn.execute(
                     "UPDATE queue SET status=?, last_error=? WHERE id=?",
