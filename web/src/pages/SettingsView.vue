@@ -491,6 +491,11 @@ async function resetDb() {
       <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
         <h2 class="mb-1 text-sm font-medium text-steam">备份与数据库</h2>
         <p class="mb-3 text-xs leading-5 text-steam-dim">配置文件和数据库分开管理。数据库重置会清空归档记录，操作前自动创建备份，完成后需要重启进程。</p>
+        <div class="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="backupItem('config')">备份配置</Button>
+          <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="backupItem('database')">备份数据库</Button>
+          <Button type="button" variant="secondary" size="sm" :disabled="opsBusy" @click="resetDb">重置数据库</Button>
+        </div>
         <div class="mt-3 flex flex-wrap gap-2">
           <select v-model="selectedBackup" class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
             <option value="">选择备份以恢复</option>

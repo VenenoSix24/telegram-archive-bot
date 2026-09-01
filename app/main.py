@@ -41,6 +41,7 @@ async def _run() -> int:
         logger.error("%s", exc)
         return 2
 
+    logger.info("database: %s", config.database_path)
     conn = open_db(config.database_path)
     apply_migrations(conn)
 

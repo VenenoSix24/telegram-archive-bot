@@ -72,8 +72,10 @@ async function loadStats() {
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined
+let requestGeneration = 0
 watch([q, mediaType, rating, targetFilter, statusFilter], () => {
   clearTimeout(timer)
+  data.value = null
   timer = setTimeout(load, 300)
 })
 watch(tagFilter, () => {
@@ -83,10 +85,11 @@ watch(tagFilter, () => {
 })
 
 async function load() {
+  const generation = ++requestGeneration
   loading.value = true
   error.value = ''
   try {
-    data.value = await listMessages({
+    const result = await listMessages({
       q: q.value || undefined,
       media_type: mediaType.value || undefined,
       rating: rating.value === '' ? undefined : Number(rating.value),
@@ -95,10 +98,11 @@ async function load() {
       status: statusFilter.value,
       limit: PAGE,
     })
+    if (generation === requestGeneration) data.value = result
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+    if (generation === requestGeneration) error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 

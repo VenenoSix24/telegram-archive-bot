@@ -326,16 +326,16 @@ def test_messages_list_expands_target_copies_and_statuses(tmp_path):
         active = client.get("/api/v1/messages?status=active").json()
         assert active["total"] == 1
         assert active["items"][0]["id"] == 72
-        assert active["items"][0]["material_id"] == 101
+        assert active["items"][0]["material_id"] == "target:101"
         assert active["items"][0]["target_chat_id"] == -1005
 
         deleted = client.get("/api/v1/messages?status=deleted").json()
         assert deleted["total"] == 1
-        assert deleted["items"][0]["material_id"] == 102
+        assert deleted["items"][0]["material_id"] == "target:102"
 
         filtered = client.get("/api/v1/messages?status=all&target_chat_id=-1006").json()
         assert filtered["total"] == 1
-        assert filtered["items"][0]["material_id"] == 102
+        assert filtered["items"][0]["material_id"] == "target:102"
 
 
 def test_messages_thumb_without_client_404(tmp_path):
