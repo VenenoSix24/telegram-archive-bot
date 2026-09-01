@@ -71,7 +71,7 @@ class ThumbnailCache:
 
     def path_for(self, message_id: int, *, chat_id: int | None = None) -> Path:
         """Build a cache key that cannot collide after database reset."""
-        prefix = f"{chat_id}_" if chat_id is not None else "legacy_"
+        prefix = f"{chat_id}_" if chat_id is not None else ""
         safe_prefix = re.sub(r"[^0-9A-Za-z_-]", "_", prefix)
         return self._dir / f"{safe_prefix}{message_id}{_EXT}"
 

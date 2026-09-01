@@ -117,6 +117,7 @@ def test_thumb_cache_path_includes_chat_identity(tmp_path):
     assert cache.path_for(42, chat_id=-1005).name == "-1005_42.jpg"
 
 
+def test_thumb_cache_fetch_photo(tmp_path):
     cache = ThumbnailCache(Path(tmp_path))
     msg = _message(_photo_media())
     path = asyncio.run(cache.fetch(_FakeClient(), msg, 42))
@@ -146,6 +147,7 @@ def test_choose_thumbnail_message_falls_back_first_media_without_video():
     assert choose_thumbnail_message([first, second], "first_video") is first
 
 
+def test_pick_photo_thumb_prefers_medium_width():
     from telethon.tl.types import PhotoSize as RealPhotoSize
 
     sizes = [
