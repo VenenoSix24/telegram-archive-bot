@@ -64,6 +64,7 @@ async def _run() -> int:
         incoming,
         source_tags=source_tags,
         preserve_original=config.preserve_original,
+        template_layout=config.message_template,
     )
     if mid is None:
         print("该源消息已归档过，跳过。")

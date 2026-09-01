@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import html as html_lib
 import re
+from collections.abc import Sequence
 
 from app.tags.engine import render_tags
+
+_DEFAULT_LAYOUT = ("rating", "tags", "body", "source")
 
 _HASHTAG = re.compile(r"#[^\s#]+")
 
@@ -28,6 +31,32 @@ def _strip_echoed_tags(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
+def _strip_echoed_tags_html(value: str, tags: list[str]) -> str:
+    """Remove only tags present in the structured Tag section from HTML text."""
+    if not tags:
+        return value
+    pattern = re.compile(r"#(?:" + "|".join(re.escape(tag.lstrip("#")) for tag in tags) + r")\b")
+    parts = re.split(r"(<[^>]+>)", value)
+    return "".join(
+        part if part.startswith("<") else pattern.sub("", part)
+        for part in parts
+    )
+
+
+def normalize_template_layout(layout: Sequence[str] | None) -> tuple[str, ...]:
+    """Validate an archive layout snapshot, falling back to the legacy format."""
+    if not isinstance(layout, Sequence) or isinstance(layout, str):
+        return _DEFAULT_LAYOUT
+    normalized = tuple(str(block) for block in layout)
+    if (
+        "body" not in normalized
+        or len(normalized) != len(set(normalized))
+        or any(block not in _DEFAULT_LAYOUT for block in normalized)
+    ):
+        return _DEFAULT_LAYOUT
+    return normalized
+
+
 def render_message(
     *,
     rating: int,
@@ -35,29 +64,35 @@ def render_message(
     body: str,
     source_url: str | None,
     body_html: str | None = None,
+    template_layout: Sequence[str] | None = None,
 ) -> str:
-    """按固定顺序组装最终频道消息文本；空段落自动省略。"""
-    lines: list[str] = []
+    """Render enabled blocks in a persisted layout snapshot."""
+    blocks: dict[str, str] = {}
     stars = format_rating(rating)
-    tag_line = html_lib.escape(render_tags(tags))
     if stars:
-        lines.append(f"推荐指数：{stars}")
+        blocks["rating"] = f"推荐指数：{stars}"
+    tag_line = html_lib.escape(render_tags(tags))
     if tag_line:
-        lines.append(tag_line)
+        blocks["tags"] = tag_line
 
     cleaned = (
-        body_html
+        _strip_echoed_tags_html(body_html, tags)
         if body_html is not None
         else html_lib.escape(_strip_echoed_tags(body) if body else "")
     )
     if cleaned:
-        if lines:
-            lines.append("")
-        lines.append(cleaned)
+        blocks["body"] = cleaned
 
     if source_url:
-        if lines:
-            lines.append("")
-        lines.append("来自：")
-        lines.append(html_lib.escape(source_url, quote=True))
-    return "\n".join(lines)
+        blocks["source"] = "来自：\n" + html_lib.escape(source_url, quote=True)
+    layout = normalize_template_layout(template_layout)
+    if template_layout is None:
+        parts = [(block, blocks[block]) for block in layout if blocks.get(block)]
+        rendered = ""
+        for index, (block, content) in enumerate(parts):
+            if index:
+                previous = parts[index - 1][0]
+                rendered += "\n" if previous == "rating" and block == "tags" else "\n\n"
+            rendered += content
+        return rendered
+    return "\n\n".join(blocks[block] for block in layout if blocks.get(block))

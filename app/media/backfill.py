@@ -59,7 +59,9 @@ async def backfill_thumbs(
             selected = choose_thumbnail_message(
                 messages, getattr(config, "thumbnail_media", "first_video")
             )
-            path = await cache.fetch(client, selected, row["id"])
+            path = await cache.fetch(
+                client, selected, row["id"], chat_id=row["source_chat_id"]
+            )
             if path is None:
                 continue
             conn.execute(

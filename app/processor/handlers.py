@@ -63,6 +63,7 @@ def process_incoming(
         incoming,
         source_tags=source_tags,
         preserve_original=config.preserve_original,
+        template_layout=config.message_template,
     )
     if message_id is None:
         return False

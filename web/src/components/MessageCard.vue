@@ -52,6 +52,10 @@ const fileInfo = computed(() => {
 })
 const targetLabel = computed(() => props.message.targets[0]?.name || '')
 const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? ` · ${targetLabel.value}` : ''}`)
+const mediaLabel = computed(() => ({
+  photo: '图片', video: '视频', audio: '音频', voice: '语音',
+  sticker: '贴纸', document: '文件', text: '文本', other: '其他',
+}[props.message.media_type] || '素材'))
 </script>
 
 <template>
@@ -65,6 +69,9 @@ const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? 
       class="relative w-full overflow-hidden bg-ink-raised"
       :style="{ aspectRatio: ratio }"
     >
+      <span class="absolute left-2 top-2 max-w-[70%] truncate rounded bg-ink-bg/80 px-1.5 py-0.5 font-mono text-[11px] text-steam">
+        {{ materialLabel }}
+      </span>
       <img
         :src="thumbSrc"
         :alt="'消息 #' + message.id"
@@ -79,18 +86,20 @@ const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? 
       >
         {{ durationLabelText }}
       </span>
+      <span class="absolute bottom-2 left-2 rounded bg-ink-bg/75 px-1.5 py-0.5 font-mono text-[10px] text-steam-dim">{{ mediaLabel }}</span>
     </div>
-    <div
-      v-else
-      class="flex aspect-video w-full items-center justify-center bg-ink-raised text-steam-dim/45"
-    >
+    <div v-else class="relative flex aspect-[16/9] w-full items-center justify-center overflow-hidden bg-ink-raised text-steam-dim/45">
       <component :is="mediaIcon ?? Film" class="h-10 w-10" />
+      <span class="absolute left-2 top-2 max-w-[70%] truncate rounded bg-ink-bg/80 px-1.5 py-0.5 font-mono text-[11px] text-steam">
+        {{ materialLabel }}
+      </span>
+      <span class="absolute bottom-2 left-2 rounded bg-ink-bg/75 px-1.5 py-0.5 font-mono text-[10px] text-steam-dim">{{ mediaLabel }}</span>
     </div>
 
     <!-- 评分区：星级即控件，浏览时直接改 -->
-    <div class="flex items-center justify-between px-3 pt-2" @click.stop>
+    <div class="flex min-h-11 items-center justify-between gap-2 px-3 pt-2" @click.stop>
       <StarRating :value="message.rating" size="lg" interactive @change="(n) => emit('rate', n)" />
-      <span class="hidden text-xs text-steam-dim md:inline">{{ materialLabel }}</span>
+      <span class="sr-only">{{ materialLabel }}</span>
     </div>
 
     <!-- tags -->
@@ -100,11 +109,11 @@ const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? 
       </Badge>
     </div>
 
-    <!-- 正文 / 文件信息 -->
-    <p v-if="body" class="px-3 pb-1 pt-2 text-sm leading-relaxed text-steam/90">{{ body }}</p>
-    <p v-else-if="fileInfo" class="truncate px-3 pb-1 pt-2 font-mono text-xs text-steam-dim">
-      {{ fileInfo }}
-    </p>
+    <div class="min-h-[4.75rem] px-3 pt-2">
+      <p v-if="body" class="line-clamp-3 text-sm leading-relaxed text-steam/90">{{ body }}</p>
+      <p v-else-if="fileInfo" class="line-clamp-2 font-mono text-xs leading-relaxed text-steam-dim">{{ fileInfo }}</p>
+      <p v-else class="text-xs text-steam-dim/60">无正文</p>
+    </div>
 
     <!-- 底部：归档频道 + 源链接（双按钮） -->
     <div class="mt-auto flex items-center gap-2 border-t border-ink-line px-3 py-2" @click.stop>
@@ -133,9 +142,6 @@ const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? 
         class="inline-flex items-center gap-1 text-xs text-steam-dim/60"
       >
         无链接
-      </span>
-      <span class="ml-auto truncate text-[10px] text-steam-dim/50 md:hidden">
-        {{ materialLabel }}
       </span>
     </div>
   </article>

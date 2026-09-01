@@ -60,6 +60,13 @@ def test_load_minimal_config(env, tmp_path):
     assert cfg.admins == frozenset({111, 222})
 
 
+def test_load_template_layout(env, tmp_path):
+    cfg = load_config(_write_config(
+        tmp_path,
+        MINIMAL + "\nmessage_template: [body, tags]\n",
+    ))
+    assert cfg.message_template == ["body", "tags"]
+
 def test_legacy_relay_chat_merged_as_source(env, tmp_path):
     yaml_text = """
 telegram:

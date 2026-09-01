@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from app.renderer.render import render_message
@@ -32,10 +33,17 @@ def render_from_db(
     body_html = None
     if body_override is None and "original_html" in message_row.keys():
         body_html = message_row["original_html"] or None
+    template_layout = None
+    if "template_layout" in message_row.keys():
+        try:
+            template_layout = json.loads(message_row["template_layout"])
+        except (TypeError, json.JSONDecodeError):
+            template_layout = None
     return render_message(
         rating=message_row["rating"] if rating_override is None else rating_override,
         tags=tags,
         body=body,
         body_html=body_html,
         source_url=message_row["source_url"],
+        template_layout=template_layout,
     )

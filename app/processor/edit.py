@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from app.processor.ratings import update_rating
@@ -97,12 +98,17 @@ async def apply_message_edit(
     next_rating = rating if rating is not None else target["rating"]
     next_body = body if body is not None else target["original_text"]
     next_body_html = target["original_html"] if body is None else body_html
+    try:
+        template_layout = json.loads(target["template_layout"])
+    except (IndexError, KeyError, TypeError, json.JSONDecodeError):
+        template_layout = None
     rendered = render_message(
         rating=next_rating,
         tags=tags,
         body=next_body,
         body_html=next_body_html or None,
         source_url=row["source_url"],
+        template_layout=template_layout,
     )
     await _telegram_edit(client, target["target_chat_id"], target["target_message_id"], rendered)
     conn.execute(
