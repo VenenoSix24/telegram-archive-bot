@@ -62,3 +62,14 @@ def test_render_body_folds_extra_spaces():
 def test_render_all_hashtags_body_omitted():
     text = render_message(rating=0, tags=["游戏"], body="#游戏", source_url=None)
     assert text == "#游戏"
+
+
+def test_render_respects_saved_block_layout():
+    text = render_message(
+        rating=4,
+        tags=["游戏"],
+        body="正文",
+        source_url="https://t.me/example/1",
+        template_layout=["body", "rating"],
+    )
+    assert text == "正文\n\n推荐指数：⭐⭐⭐⭐"

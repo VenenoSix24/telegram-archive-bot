@@ -7,6 +7,7 @@ hashtag，受 preserve_original 控制）→ manual（人工指令），去重�
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from app.processor.adapter import IncomingMessage
@@ -29,6 +30,7 @@ def record_message(
     source_tags: list[str],
     preserve_original: bool,
     manual_tags: list[str] | None = None,
+    template_layout: list[str] | None = None,
     status: str = "new",
 ) -> int | None:
     """写入一条源消息记录并关联 tags；来源已存在（去重）时返回 None。"""
@@ -54,8 +56,8 @@ def record_message(
     conn.execute(
         "INSERT INTO messages (source_chat_id, source_message_id, media_type, "
         "media_group_id, original_text, original_html, source_url, status, "
-        "file_name, file_size, duration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" ,
+        "file_name, file_size, duration, template_layout) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" ,
         (
             incoming.source_chat_id,
             incoming.source_message_id,
@@ -68,6 +70,7 @@ def record_message(
             incoming.file_name or "",
             incoming.file_size,
             incoming.duration,
+            json.dumps(template_layout or ["rating", "tags", "body", "source"]),
         ),
     )
     message_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]

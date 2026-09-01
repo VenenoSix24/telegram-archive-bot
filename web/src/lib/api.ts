@@ -1,4 +1,5 @@
 import type {
+  BackupItem,
   EditableConfig,
   Message,
   MessagesResponse,
@@ -58,16 +59,38 @@ export async function putConfig(cfg: EditableConfig): Promise<EditableConfig> {
   return request('/config', { method: 'PUT', body: JSON.stringify(cfg) })
 }
 
-export async function backup(kind: 'config' | 'database'): Promise<{ path: string }> {
+export async function backup(kind: 'config' | 'database'): Promise<{ backup: BackupItem }> {
   return request('/ops/backup', { method: 'POST', body: JSON.stringify({ kind }) })
 }
 
-export async function listBackups(): Promise<{ items: string[] }> {
+export async function listBackups(): Promise<{ items: BackupItem[] }> {
   return request('/ops/backups')
 }
 
-export async function restoreBackup(name: string): Promise<{ ok: boolean; kind: string }> {
+export async function restoreBackup(name: string): Promise<{ ok: boolean; kind: string; restart_required: boolean }> {
   return request('/ops/restore', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export async function importBackup(
+  kind: 'config' | 'database',
+  file: File,
+): Promise<{ ok: boolean; kind: string; restart_required: boolean }> {
+  const response = await fetch(`/api/v1/ops/import?kind=${kind}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  })
+  if (response.status === 401) {
+    onUnauthorized()
+    throw new AuthError('session expired')
+  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+  return response.json() as Promise<{ ok: boolean; kind: string; restart_required: boolean }>
+}
+
+export function backupDownloadUrl(name: string): string {
+  return `/api/v1/ops/backups/${encodeURIComponent(name)}`
 }
 
 export async function resetDatabase(): Promise<{ ok: boolean }> {

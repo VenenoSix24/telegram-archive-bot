@@ -49,6 +49,10 @@ thumbnails:
 # Telegram 目标消息手动编辑时是否同步到同一源消息的其他目标
 sync_target_edits: false
 
+# 归档消息区块顺序；删除 rating/tags/source 可隐藏对应内容，body 必须保留。
+# 修改仅影响之后新归档的消息，历史消息保持原样。
+message_template: [rating, tags, body, source]
+
 search:
   # 私有频道时使用 url_template，{tag} 会被替换成对应 Tag；
   # 公开频道自动生成 https://t.me/channel_name/123

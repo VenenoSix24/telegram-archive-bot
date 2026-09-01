@@ -112,6 +112,11 @@ class _FakeClient:
         return file
 
 
+def test_thumb_cache_path_includes_chat_identity(tmp_path):
+    cache = ThumbnailCache(Path(tmp_path))
+    assert cache.path_for(42, chat_id=-1005).name == "-1005_42.jpg"
+
+
 def test_thumb_cache_fetch_photo(tmp_path):
     cache = ThumbnailCache(Path(tmp_path))
     msg = _message(_photo_media())
@@ -124,6 +129,22 @@ def test_thumb_cache_fetch_ignores_text(tmp_path):
     cache = ThumbnailCache(Path(tmp_path))
     msg = _message(None)
     assert asyncio.run(cache.fetch(_FakeClient(), msg, 7)) is None
+
+
+def test_choose_thumbnail_message_first_video_not_first_media():
+    from app.media.thumbnails import choose_thumbnail_message
+
+    first = _message(_doc_media([DocumentAttributeFilename("photo.jpg")]), mid=1)
+    video = _message(_doc_media([DocumentAttributeVideo(duration=2, w=10, h=10)]), mid=2)
+    assert choose_thumbnail_message([first, video], "first_video") is video
+
+
+def test_choose_thumbnail_message_falls_back_first_media_without_video():
+    from app.media.thumbnails import choose_thumbnail_message
+
+    first = _message(_doc_media([DocumentAttributeFilename("one.jpg")]), mid=1)
+    second = _message(_doc_media([DocumentAttributeFilename("two.jpg")]), mid=2)
+    assert choose_thumbnail_message([first, second], "first_video") is first
 
 
 def test_pick_photo_thumb_prefers_medium_width():

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from telethon.tl.types import (
@@ -49,7 +50,11 @@ def choose_thumbnail_message(messages: list, strategy: str = "first_video"):
         for message in messages:
             media = getattr(message, "media", None)
             document = getattr(media, "document", None)
-            if document and any(isinstance(a, DocumentAttributeVideo) for a in document.attributes):
+            attributes = getattr(document, "attributes", ()) if document else ()
+            if any(
+                isinstance(attribute, DocumentAttributeVideo)
+                for attribute in attributes
+            ):
                 return message
     return messages[0]
 
@@ -64,16 +69,21 @@ class ThumbnailCache:
     def directory(self) -> Path:
         return self._dir
 
-    def path_for(self, message_id: int) -> Path:
-        return self._dir / f"{message_id}{_EXT}"
+    def path_for(self, message_id: int, *, chat_id: int | None = None) -> Path:
+        """Build a cache key that cannot collide after database reset."""
+        prefix = f"{chat_id}_" if chat_id is not None else ""
+        safe_prefix = re.sub(r"[^0-9A-Za-z_-]", "_", prefix)
+        return self._dir / f"{safe_prefix}{message_id}{_EXT}"
 
-    async def fetch(self, client, message, message_id: int) -> Path | None:
+    async def fetch(
+        self, client, message, message_id: int, *, chat_id: int | None = None
+    ) -> Path | None:
         """下载并缓存消息缩略图，返回本地路径；无缩略图/失败返回 None。"""
         media = message.media
         cover = getattr(media, "video_cover", None)
         if cover is not None:
             self._dir.mkdir(parents=True, exist_ok=True)
-            dest = self.path_for(message_id)
+            dest = self.path_for(message_id, chat_id=chat_id)
             try:
                 await client.download_media(cover, file=dest, thumb=-1)
             except Exception:
@@ -91,7 +101,7 @@ class ThumbnailCache:
         if thumb is None:
             return None
         self._dir.mkdir(parents=True, exist_ok=True)
-        dest = self.path_for(message_id)
+        dest = self.path_for(message_id, chat_id=chat_id)
         try:
             await client.download_media(message, file=dest, thumb=thumb)
         except Exception:
