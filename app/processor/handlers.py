@@ -196,7 +196,7 @@ def attach_target_edit_handler(client, config: Config, conn: sqlite3.Connection,
     return on_target_edited
 
 
-
+def attach_target_delete_handler(client, config: Config, conn: sqlite3.Connection):
     """监听目标频道删除事件，只标记目标副本，不删除数据库记录。"""
     ids = list(config.all_target_channel_ids())
     if not ids:
