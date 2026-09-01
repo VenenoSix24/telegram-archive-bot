@@ -41,6 +41,7 @@ async def _run() -> int:
         logger.error("%s", exc)
         return 2
 
+    logger.info("database: %s", config.database_path)
     conn = open_db(config.database_path)
     apply_migrations(conn)
 
@@ -108,7 +109,7 @@ async def _run() -> int:
     web_server = None
     if config.web_enabled:
         web_server = start_server_task(
-            config, client=client, conn=conn, indexer=indexer
+            config, client=client, conn=conn, indexer=indexer, chat_names=chats
         )
         web_task = asyncio.create_task(_serve_web(web_server))
 

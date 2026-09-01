@@ -1,9 +1,12 @@
-/** 时长秒数 → mm:ss；null 返回空串。 */
+/** 时长秒数 → MM:SS；超过一小时显示 HH:MM:SS；null 返回空串。 */
 export function durationLabel(duration: number | null): string {
   if (duration === null) return ''
-  const m = Math.floor(duration / 60)
-  const s = duration % 60
-  return `${m}:${String(s).padStart(2, '0')}`
+  const total = Math.max(0, Math.floor(duration))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`
 }
 
 /** 人类可读文件大小；null 返回空串。 */

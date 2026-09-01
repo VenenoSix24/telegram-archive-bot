@@ -50,6 +50,8 @@ const fileInfo = computed(() => {
   if (name) return name
   return ''
 })
+const targetLabel = computed(() => props.message.targets[0]?.name || '')
+const materialLabel = computed(() => `#${props.message.id}${targetLabel.value ? ` · ${targetLabel.value}` : ''}`)
 </script>
 
 <template>
@@ -88,7 +90,7 @@ const fileInfo = computed(() => {
     <!-- 评分区：星级即控件，浏览时直接改 -->
     <div class="flex items-center justify-between px-3 pt-2" @click.stop>
       <StarRating :value="message.rating" size="lg" interactive @change="(n) => emit('rate', n)" />
-      <span class="hidden font-mono text-[11px] text-steam-dim md:inline">#{{ message.id }}</span>
+      <span class="hidden text-xs text-steam-dim md:inline">{{ materialLabel }}</span>
     </div>
 
     <!-- tags -->
@@ -132,8 +134,8 @@ const fileInfo = computed(() => {
       >
         无链接
       </span>
-      <span class="ml-auto font-mono text-[10px] text-steam-dim/50 md:hidden">
-        #{{ message.id }}
+      <span class="ml-auto truncate text-[10px] text-steam-dim/50 md:hidden">
+        {{ materialLabel }}
       </span>
     </div>
   </article>

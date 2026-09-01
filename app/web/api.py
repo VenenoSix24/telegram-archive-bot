@@ -9,6 +9,7 @@ Telethon client 与共享 conn，完成「写 DB → 重渲染 → edit 目标�
 from __future__ import annotations
 
 import logging
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from pydantic import BaseModel, Field
 
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
+from app.telegram.client import resolve_chat_name
+from app.web.backup import backup_config, backup_database, reset_database
 from app.web.config_editor import apply_editable_config, read_editable_config
 
 logger = logging.getLogger(__name__)
@@ -30,6 +33,7 @@ _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 class PatchBody(BaseModel):
     target_id: int | None = None
     body: str | None = None
+    body_html: str | None = None
     add_tags: list[str] | None = None
     remove_tag_names: list[str] | None = None
     rating: int | None = Field(default=None, ge=0, le=5)
@@ -106,6 +110,7 @@ def _message_dict(conn: sqlite3.Connection, row) -> dict:
         }]
     return {
         "id": row["id"],
+        "material_id": f"message:{row['id']}",
         "source_chat_id": row["source_chat_id"],
         "source_message_id": row["source_message_id"],
         "target_chat_id": row["target_chat_id"],
@@ -141,7 +146,11 @@ def _sql_filters(query) -> tuple[str, list]:
     return where, params
 
 
-def _matches_message(message: dict, query) -> bool:
+def _matches_message(message: dict, query, status: str = "all") -> bool:
+    if status != "all":
+        expected = "archived" if status == "active" else "deleted"
+        if message["status"] != expected:
+            return False
     rating = query.get("rating")
     if rating not in (None, "") and message["rating"] != int(rating):
         return False
@@ -158,8 +167,26 @@ def _matches_message(message: dict, query) -> bool:
     return True
 
 
-def build_api_router(database_path: str, config_path: str | None = None, config=None) -> APIRouter:
+def build_api_router(
+    database_path: str,
+    config_path: str | None = None,
+    config=None,
+    client=None,
+    conn=None,
+    chat_names: dict[int, str] | None = None,
+) -> APIRouter:
     router = APIRouter(dependencies=[Depends(_require_auth)])
+    target_names = {
+        target.chat_id: target.name
+        for target in getattr(config, "target_channels", [])
+        if target.name
+    }
+    target_names.update(chat_names or {})
+
+    def _with_target_names(message: dict) -> dict:
+        for target in message["targets"]:
+            target["name"] = target_names.get(target["chat_id"], "")
+        return message
 
     @router.get("/health")
     def health() -> dict:
@@ -185,6 +212,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                 "SELECT COUNT(DISTINCT tag_id) AS n FROM message_tags"
             ).fetchone()["n"]
             tags = conn.execute("SELECT COUNT(*) AS n FROM tags").fetchone()["n"]
+            has_target_table = True
             try:
                 target_rows = conn.execute(
                     "SELECT target_chat_id, COUNT(*) AS n FROM message_targets "
@@ -193,6 +221,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             except sqlite3.OperationalError as exc:
                 if "no such table: message_targets" not in str(exc):
                     raise
+                has_target_table = False
                 target_rows = conn.execute(
                     "SELECT target_chat_id, COUNT(*) AS n FROM messages "
                     "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
@@ -204,17 +233,26 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
         with _connect(database_path) as conn:
             for row in conn.execute(_QUEUE_COUNTS):
                 queue[row["status"]] = row["n"]
-        return {
-            "messages": {
-                "total": total,
-                "archived": archived,
-                "sources": sources,
-                "by_type": by_type,
-            },
-            "tags": {"total": tags, "with_messages": tag_rows},
-            "queue": queue,
-            "targets": targets,
-        }
+            return {
+                "messages": {
+                    "total": total,
+                    "archived": archived,
+                    "sources": sources,
+                    "by_type": by_type,
+                },
+                "tags": {"total": tags, "with_messages": tag_rows},
+                "queue": queue,
+                "targets": targets,
+                "runtime": {
+                    "database": Path(database_path).name,
+                    "latest_message_id": conn.execute(
+                        "SELECT COALESCE(MAX(id), 0) AS n FROM messages"
+                    ).fetchone()["n"],
+                    "latest_target_id": conn.execute(
+                        "SELECT COALESCE(MAX(id), 0) AS n FROM message_targets"
+                    ).fetchone()["n"] if has_target_table else 0,
+                },
+            }
 
     @router.get("/tags")
     def list_tags() -> dict:
@@ -238,30 +276,27 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
         where, params = _sql_filters(request.query_params)
         if status not in {"active", "deleted", "all"}:
             raise HTTPException(status_code=400, detail="invalid status")
-        if status == "active":
-            where = f"{where} {'AND' if where else 'WHERE'} status='archived'"
-        elif status == "deleted":
-            where = f"{where} {'AND' if where else 'WHERE'} status='deleted'"
-        if status not in {"active", "deleted", "all"}:
-            raise HTTPException(status_code=400, detail="invalid status")
         with _connect(database_path) as conn:
             rows = conn.execute(
                 f"SELECT * FROM messages {where} ORDER BY id DESC", params
             ).fetchall()
             expanded = []
             for row in rows:
-                message = _message_dict(conn, row)
-                if len(message["targets"]) <= 1:
-                    if _matches_message(message, request.query_params):
+                message = _with_target_names(_message_dict(conn, row))
+                if not message["targets"] or message["targets"][0].get("id") is None:
+                    if _matches_message(message, request.query_params, status):
                         expanded.append(message)
                     continue
                 for target in message["targets"]:
                     item = {
                         **message,
+                        "id": message["id"],
+                        "material_id": f"target:{target['id']}",
                         "target_id": target["id"],
                         "target_chat_id": target["chat_id"],
                         "target_message_id": target["message_id"],
                         "target_url": target["url"],
+                        "status": target["status"],
                         "original_text": target["original_text"],
                         "original_html": target["original_html"],
                         "rendered_text": target["rendered_text"],
@@ -269,8 +304,12 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                         "tags": target["tags"],
                         "targets": [target],
                     }
-                    if _matches_message(item, request.query_params):
+                    if _matches_message(item, request.query_params, status):
                         expanded.append(item)
+            expanded.sort(
+                key=lambda item: (item["created_at"], item.get("target_id") or 0),
+                reverse=True,
+            )
             total = len(expanded)
             items = expanded[offset:offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
@@ -283,7 +322,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="message not found")
-            return _message_dict(conn, row)
+            return _with_target_names(_message_dict(conn, row))
 
     @router.get("/messages/{message_id}/thumb")
     async def message_thumb(message_id: int, request: Request, target_id: int | None = None):
@@ -373,6 +412,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             and body.remove_tag_names is None
             and body.rating is None
             and body.body is None
+            and body.body_html is None
         ):
             raise HTTPException(status_code=422, detail="nothing to change")
         client = request.app.state.client
@@ -386,6 +426,7 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             message_id,
             target_id=body.target_id,
             body=body.body,
+            body_html=body.body_html,
             add_tags=body.add_tags,
             remove_tag_names=body.remove_tag_names,
             rating=body.rating,
@@ -397,15 +438,105 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
             row = db.execute(
                 "SELECT * FROM messages WHERE id=?", (message_id,)
             ).fetchone()
-            return _message_dict(db, row)
+            message = _with_target_names(_message_dict(db, row))
+            if body.target_id is None:
+                return message
+            target = next(
+                (item for item in message["targets"] if item["id"] == body.target_id),
+                None,
+            )
+            if target is None:
+                raise HTTPException(status_code=404, detail="target not found")
+            return {
+                **message,
+                "material_id": f"target:{target['id']}",
+                "target_id": target["id"],
+                "target_chat_id": target["chat_id"],
+                "target_message_id": target["message_id"],
+                "target_url": target["url"],
+                "status": target["status"],
+                "original_text": target["original_text"],
+                "original_html": target["original_html"],
+                "rendered_text": target["rendered_text"],
+                "rating": target["rating"],
+                "tags": target["tags"],
+                "targets": [target],
+            }
 
     if config_path is not None:
         @router.get("/config")
-        def get_config() -> dict:
+        async def get_config() -> dict:
             try:
-                return read_editable_config(Path(config_path))
+                result = read_editable_config(Path(config_path))
+                if client is not None:
+                    for collection in (result["source_chats"], result["target_channels"]):
+                        for item in collection:
+                            if not item.get("name") and item.get("chat_id") is not None:
+                                try:
+                                    item["name"] = await resolve_chat_name(client, item["chat_id"])
+                                except Exception:
+                                    pass
+                return result
             except Exception as exc:
                 raise HTTPException(status_code=400, detail="config.yaml unreadable") from exc
+
+        @router.get("/ops/backups")
+        def list_backups() -> dict:
+            base = Path(database_path).parent
+            return {"items": sorted(
+                [path.name for path in base.glob(f"{Path(database_path).name}.*.bak")]
+                + [path.name for path in base.glob(f"{Path(config_path).name}.*.bak")],
+                reverse=True,
+            )}
+
+        @router.post("/ops/restore")
+        def restore_ops(body: dict) -> dict:
+            name = body.get("name")
+            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".bak"):
+                raise HTTPException(status_code=400, detail="invalid backup name")
+            backup_path = Path(database_path).parent / name
+            if not backup_path.exists():
+                backup_path = Path(config_path).parent / name
+            if not backup_path.exists():
+                raise HTTPException(status_code=404, detail="backup not found")
+            if name.startswith(Path(database_path).name + "."):
+                backup_database(Path(database_path))
+                source = sqlite3.connect(backup_path)
+                target = sqlite3.connect(database_path)
+                try:
+                    source.backup(target)
+                finally:
+                    target.close()
+                    source.close()
+                return {"ok": True, "kind": "database"}
+            if name.startswith(Path(config_path).name + "."):
+                backup_config(Path(config_path))
+                shutil.copy2(backup_path, config_path)
+                return {"ok": True, "kind": "config"}
+            raise HTTPException(status_code=400, detail="unsupported backup")
+
+        @router.post("/ops/backup")
+        def backup_ops(body: dict) -> dict:
+            kind = body.get("kind")
+            path = Path(config_path)
+            if kind == "config":
+                result = backup_config(path)
+            elif kind == "database":
+                result = backup_database(Path(database_path))
+            else:
+                raise HTTPException(status_code=400, detail="invalid backup kind")
+            return {"path": result.name}
+
+        @router.post("/ops/reset-database")
+        def reset_database_ops(body: dict) -> dict:
+            if body.get("confirm") != "RESET DATABASE":
+                raise HTTPException(status_code=400, detail="confirmation required")
+            backup_database(Path(database_path))
+            try:
+                reset_database(Path(database_path))
+            except sqlite3.Error as exc:
+                raise HTTPException(status_code=500, detail="database reset failed") from exc
+            return {"ok": True, "restart_required": True}
 
         @router.put("/config")
         def put_config(body: dict) -> dict:

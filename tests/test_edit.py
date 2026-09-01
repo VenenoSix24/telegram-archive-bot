@@ -109,7 +109,34 @@ def test_apply_no_action_returns_false(tmp_path):
     assert client.edits == []
 
 
+
 def asyncio_run(coro):
     import asyncio
 
     return asyncio.run(coro)
+
+
+def _setup_target(tmp_path):
+    conn, mid = _setup(tmp_path)
+    conn.execute(
+        "INSERT INTO message_targets "
+        "(id, message_id, target_chat_id, target_message_id, status, original_text, "
+        "original_html, rendered_text, rating) "
+        "VALUES (1, ?, -1005, 99, 'archived', '正文', '<b>正文</b>', '<b>正文</b>', 0)",
+        (mid,),
+    )
+    conn.commit()
+    return conn, mid
+
+
+def test_target_rating_preserves_existing_html_body(tmp_path):
+    conn, mid = _setup_target(tmp_path)
+    client = _FakeClient()
+    assert asyncio_run(apply_message_edit(client, conn, mid, target_id=1, rating=4))
+    target = conn.execute(
+        "SELECT original_text, original_html, rendered_text FROM message_targets WHERE id=1"
+    ).fetchone()
+    assert target["original_text"] == "正文"
+    assert target["original_html"] == "<b>正文</b>"
+    assert "<b>正文</b>" in target["rendered_text"]
+    assert "<b>正文</b>" in client.edits[0][2]
