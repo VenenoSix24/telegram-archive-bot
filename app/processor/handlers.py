@@ -161,6 +161,25 @@ def attach_reply_command_handler(
     return on_reply_command
 
 
+def attach_target_delete_handler(client, config: Config, conn: sqlite3.Connection):
+    """监听目标频道删除事件，只标记目标副本，不删除数据库记录。"""
+    ids = list(config.all_target_channel_ids())
+    if not ids:
+        return None
+
+    @client.on(events.MessageDeleted(chats=ids))
+    async def on_target_deleted(event):
+        for telegram_message_id in event.deleted_ids:
+            conn.execute(
+                "UPDATE message_targets SET status='deleted' "
+                "WHERE target_chat_id=? AND target_message_id=?",
+                (event.chat_id, telegram_message_id),
+            )
+        conn.commit()
+
+    return on_target_deleted
+
+
 def attach_management_command_handler(
     client, config: Config, conn: sqlite3.Connection, queue: QueueManager
 ):

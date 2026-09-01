@@ -21,6 +21,7 @@ const mediaType = ref('')
 const rating = ref<number | ''>('')
 const tagFilter = ref('')
 const targetFilter = ref<number | ''>('')
+const statusFilter = ref<'active' | 'deleted' | 'all'>('active')
 const targets = ref<Target[]>([])
 const selected = ref<Message | null>(null)
 
@@ -67,7 +68,7 @@ async function loadStats() {
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined
-watch([q, mediaType, rating, targetFilter], () => {
+watch([q, mediaType, rating, targetFilter, statusFilter], () => {
   clearTimeout(timer)
   timer = setTimeout(load, 300)
 })
@@ -87,6 +88,7 @@ async function load() {
       rating: rating.value === '' ? undefined : Number(rating.value),
       tag: tagFilter.value || undefined,
       target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
+      status: statusFilter.value,
       limit: PAGE,
     })
   } catch (e) {
@@ -106,6 +108,7 @@ async function loadMore() {
       rating: rating.value === '' ? undefined : Number(rating.value),
       tag: tagFilter.value || undefined,
       target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
+      status: statusFilter.value,
       limit: PAGE,
       offset: shown.value,
     })
@@ -164,6 +167,13 @@ onMounted(() => {
           <option v-for="t in targets" :key="t.chat_id" :value="t.chat_id">
             频道 {{ t.chat_id }}（{{ t.count }}）
           </option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5 text-sm text-steam-dim">
+        <select v-model="statusFilter" class="h-9 rounded-md border border-ink-line bg-ink-raised px-2 text-sm text-steam focus:border-gold focus:outline-none" aria-label="消息状态">
+          <option value="active">活跃消息</option>
+          <option value="deleted">已删除消息</option>
+          <option value="all">全部消息</option>
         </select>
       </label>
       <label class="flex items-center gap-1.5 text-sm text-steam-dim">

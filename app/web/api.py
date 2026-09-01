@@ -241,9 +241,15 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
 
     @router.get("/messages")
     def list_messages(
-        request: Request, limit: int = 30, offset: int = 0
+        request: Request, limit: int = 30, offset: int = 0, status: str = "active"
     ) -> dict:
         where, params = _sql_filters(request.query_params)
+        if status not in {"active", "deleted", "all"}:
+            raise HTTPException(status_code=400, detail="invalid status")
+        if status == "active":
+            where = f"{where} {'AND' if where else 'WHERE'} status='archived'"
+        elif status == "deleted":
+            where = f"{where} {'AND' if where else 'WHERE'} status='deleted'"
         with _connect(database_path) as conn:
             rows = conn.execute(
                 f"SELECT * FROM messages {where} ORDER BY id DESC", params
