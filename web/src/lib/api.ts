@@ -67,6 +67,7 @@ export interface MessageQuery {
   target_chat_id?: number
   limit?: number
   offset?: number
+  status?: 'active' | 'deleted' | 'all'
 }
 
 export async function listMessages(query: MessageQuery = {}): Promise<MessagesResponse> {
@@ -87,6 +88,8 @@ export async function getMessage(id: number): Promise<Message> {
 export async function patchMessage(
   id: number,
   change: {
+    target_id?: number
+    body?: string
     add_tags?: string[]
     remove_tag_names?: string[]
     rating?: number

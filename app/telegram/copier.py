@@ -68,13 +68,58 @@ def _save_target(
     target_message_id: int,
     target_url: str | None,
     thumb_path: str | None,
+    original_text: str,
+    original_html: str,
+    rendered_text: str,
+    rating: int,
 ) -> None:
     conn.execute(
+        "INSERT INTO message_targets "
+        "(message_id, target_chat_id, target_message_id, target_url, "
+        "original_text, original_html, rendered_text, rating, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'archived') "
+        "ON CONFLICT(message_id, target_chat_id) DO UPDATE SET "
+        "target_message_id=excluded.target_message_id, "
+        "target_url=excluded.target_url, status='archived', "
+        "original_text=excluded.original_text, original_html=excluded.original_html, "
+        "rendered_text=excluded.rendered_text, rating=excluded.rating",
+        (
+            message_id,
+            target_chat_id,
+            target_message_id,
+            target_url,
+            original_text,
+            original_html,
+            rendered_text,
+            rating,
+        ),
+    )
+    target_row = conn.execute(
+        "SELECT id FROM message_targets WHERE message_id=? AND target_chat_id=?",
+        (message_id, target_chat_id),
+    ).fetchone()
+    conn.execute(
+        "INSERT OR IGNORE INTO target_tags (target_id, tag_id, type) "
+        "SELECT ?, tag_id, type FROM message_tags WHERE message_id=?",
+        (target_row["id"], message_id),
+    )
+    conn.execute(
         "UPDATE messages SET target_chat_id=?, target_message_id=?, target_url=?, "
-        "status='archived', thumb_path=? WHERE id=?",
+        "thumb_path=? WHERE id=? AND target_chat_id IS NULL",
         (target_chat_id, target_message_id, target_url, thumb_path, message_id),
     )
     conn.commit()
+
+
+def _successful_targets(conn: sqlite3.Connection, message_id: int) -> set[int]:
+    return {
+        row["target_chat_id"]
+        for row in conn.execute(
+            "SELECT target_chat_id FROM message_targets "
+            "WHERE message_id=? AND status='archived'",
+            (message_id,),
+        )
+    }
 
 
 async def archive_message_by_db_id(
@@ -98,41 +143,58 @@ async def archive_message_by_db_id(
             body_override = anchor_text
     rendered = render_from_db(conn, row, body_override=body_override)
     targets = config.targets_for(row["source_chat_id"])
-    target_id = targets[0]
-    target = await client.get_entity(target_id)
+    completed = _successful_targets(conn, message_id)
+    target_ids = [target_id for target_id in targets if target_id not in completed]
+    if not target_ids:
+        return row["target_message_id"]
 
-    medias = [m.media for m in msgs if m.media]
-    if medias:
-        media_inputs = [_input_media_with_cover(m) for m in msgs if m.media]
-        sent = await client.send_file(
-            target, file=media_inputs, caption=rendered, parse_mode="html"
+    first_target_message_id = row["target_message_id"]
+    for target_id in target_ids:
+        target = await client.get_entity(target_id)
+
+        medias = [m.media for m in msgs if m.media]
+        if medias:
+            media_inputs = [_input_media_with_cover(m) for m in msgs if m.media]
+            sent = await client.send_file(
+                target, file=media_inputs, caption=rendered, parse_mode="html"
+            )
+            sent_list = sent if isinstance(sent, list) else [sent]
+        else:
+            sent_msg = await client.send_message(target, rendered, parse_mode="html")
+            sent_list = [sent_msg]
+
+        first = sent_list[0]
+        target_url = build_source_url(target, first.id)
+        thumb_path = None
+        if first_target_message_id is None:
+            thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
+            if thumb_message:
+                thumb = await _THUMB_CACHE.fetch(client, thumb_message, message_id)
+                if thumb is not None:
+                    thumb_path = str(thumb)
+        _save_target(
+            conn,
+            message_id,
+            target_chat_id=target_id,
+            target_message_id=first.id,
+            target_url=target_url,
+            thumb_path=thumb_path,
+            original_text=row["original_text"],
+            original_html=row["original_html"] if "original_html" in row.keys() else "",
+            rendered_text=rendered,
+            rating=row["rating"],
         )
-        sent_list = sent if isinstance(sent, list) else [sent]
-    else:
-        sent_msg = await client.send_message(target, rendered, parse_mode="html")
-        sent_list = [sent_msg]
+        if first_target_message_id is None:
+            first_target_message_id = first.id
+        logger.info(
+            "archived messages#%s -> target %s msg %s (media=%s)",
+            message_id,
+            target_id,
+            first.id,
+            len(medias),
+        )
 
-    first = sent_list[0]
-    target_url = build_source_url(target, first.id)
-    # 归档成功后再抓缩略图（引用复制拿到的是原始 media，可正常下载小图）。
-    thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
-    thumb_path = None
-    if thumb_message:
-        thumb = await _THUMB_CACHE.fetch(client, thumb_message, message_id)
-        if thumb is not None:
-            thumb_path = str(thumb)
-    _save_target(
-        conn,
-        message_id,
-        target_chat_id=target_id,
-        target_message_id=first.id,
-        target_url=target_url,
-        thumb_path=thumb_path,
-    )
-    logger.info(
-        "archived messages#%s -> target msg %s (media=%s)",
-        message_id,
-        first.id,
-        len(medias),
-    )
-    return first.id
+    if _successful_targets(conn, message_id) >= set(targets):
+        conn.execute("UPDATE messages SET status='archived' WHERE id=?", (message_id,))
+        conn.commit()
+    return first_target_message_id

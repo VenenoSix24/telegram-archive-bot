@@ -93,7 +93,6 @@ def _chat_id(value, private: bool) -> int:
     return -int(f"100{number}") if number < 10**12 else number
 
 
-
 def _env_names(names: list[str]) -> dict[str, str]:
     """Return requested env vars, failing loudly with a fix hint when absent."""
     missing = [n for n in names if not os.getenv(n)]

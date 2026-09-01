@@ -15,12 +15,27 @@ export interface MessageTag {
   type: TagType
 }
 
+export interface MessageTarget {
+  id: number | null
+  chat_id: number
+  message_id: number | null
+  url: string | null
+  status: string
+  original_text: string
+  original_html: string
+  rendered_text: string
+  rating: number
+  tags: MessageTag[]
+}
+
 export interface Message {
   id: number
+  target_id?: number | null
   source_chat_id: number
   source_message_id: number
   target_chat_id: number | null
   target_message_id: number | null
+  targets: MessageTarget[]
   media_type: MediaType
   media_group_id: string | null
   original_text: string
