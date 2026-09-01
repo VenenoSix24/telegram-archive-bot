@@ -155,9 +155,9 @@ async function rate(msg: Message, value: number) {
 }
 
 function onDrawerUpdate(updated: Message) {
-  const idx = data.value?.items.findIndex((m) => m.id === updated.id)
-  if (data.value && idx != null && idx >= 0) data.value.items[idx] = updated
-  if (selected.value?.id === updated.id) selected.value = updated
+  const idx = data.value?.items.findIndex((m) => m.material_id === updated.material_id)
+  if (data.value && idx != null && idx >= 0) data.value.items[idx] = { ...data.value.items[idx], ...updated, material_id: data.value.items[idx].material_id }
+  if (selected.value?.material_id === updated.material_id) selected.value = { ...selected.value, ...updated, material_id: selected.value.material_id }
 }
 
 onMounted(() => {

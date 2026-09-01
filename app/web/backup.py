@@ -34,18 +34,31 @@ def backup_database(path: Path) -> Path:
     return destination
 
 
-def reset_database(conn: sqlite3.Connection) -> None:
-    tables = [
-        row[0]
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%' AND name <> 'schema_version'"
-        )
-    ]
-    conn.execute("PRAGMA foreign_keys=OFF")
+def reset_database(path: Path) -> None:
+    """Clear application data using a connection owned by the request thread.
+
+    The Telegram worker keeps its own connection on the event-loop thread. This
+    short-lived connection avoids crossing SQLite's thread boundary; callers
+    must restart the process before continuing archive work.
+    """
+    conn = sqlite3.connect(path)
     try:
-        for table in tables:
-            conn.execute(f'DELETE FROM "{table.replace(chr(34), chr(34) * 2)}"')
-    finally:
         conn.execute("PRAGMA foreign_keys=ON")
-    conn.commit()
+        tables = [
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%' AND name <> 'schema_version'"
+            )
+        ]
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            for table in tables:
+                escaped = table.replace('"', '""')
+                conn.execute(f'DELETE FROM "{escaped}"')
+        finally:
+            conn.execute("PRAGMA foreign_keys=ON")
+        conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        conn.close()

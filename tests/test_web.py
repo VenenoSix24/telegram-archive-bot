@@ -291,7 +291,28 @@ def test_messages_list_filter_and_tags(tmp_path):
 
 
 
-def test_messages_list_expands_target_copies_and_statuses(tmp_path):
+
+def test_reset_database_uses_request_owned_connection(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO schema_version VALUES ('0005_target_fields')")
+    conn.commit()
+    conn.close()
+
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+    with TestClient(create_app(cfg, conn=sqlite3.connect(db))) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        response = client.post(
+            "/api/v1/ops/reset-database", json={"confirm": "RESET DATABASE"}
+        )
+    assert response.status_code == 200
+    assert response.json()["restart_required"] is True
+    check = sqlite3.connect(db)
+    assert check.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
+    assert check.execute("SELECT version FROM schema_version").fetchone()[0] == "0005_target_fields"
+    check.close()
     db = _make_schema_db(tmp_path, name="targets.sqlite")
     conn = sqlite3.connect(db)
     conn.executescript(

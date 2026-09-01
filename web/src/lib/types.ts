@@ -26,6 +26,7 @@ export interface MessageTarget {
   rendered_text: string
   rating: number
   tags: MessageTag[]
+  name?: string
 }
 
 export interface Message {

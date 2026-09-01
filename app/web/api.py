@@ -173,9 +173,20 @@ def build_api_router(
     config=None,
     client=None,
     conn=None,
+    chat_names: dict[int, str] | None = None,
 ) -> APIRouter:
     router = APIRouter(dependencies=[Depends(_require_auth)])
-    router._conn = conn
+    target_names = {
+        target.chat_id: target.name
+        for target in getattr(config, "target_channels", [])
+        if target.name
+    }
+    target_names.update(chat_names or {})
+
+    def _with_target_names(message: dict) -> dict:
+        for target in message["targets"]:
+            target["name"] = target_names.get(target["chat_id"], "")
+        return message
 
     @router.get("/health")
     def health() -> dict:
@@ -201,6 +212,7 @@ def build_api_router(
                 "SELECT COUNT(DISTINCT tag_id) AS n FROM message_tags"
             ).fetchone()["n"]
             tags = conn.execute("SELECT COUNT(*) AS n FROM tags").fetchone()["n"]
+            has_target_table = True
             try:
                 target_rows = conn.execute(
                     "SELECT target_chat_id, COUNT(*) AS n FROM message_targets "
@@ -209,6 +221,7 @@ def build_api_router(
             except sqlite3.OperationalError as exc:
                 if "no such table: message_targets" not in str(exc):
                     raise
+                has_target_table = False
                 target_rows = conn.execute(
                     "SELECT target_chat_id, COUNT(*) AS n FROM messages "
                     "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
@@ -220,17 +233,26 @@ def build_api_router(
         with _connect(database_path) as conn:
             for row in conn.execute(_QUEUE_COUNTS):
                 queue[row["status"]] = row["n"]
-        return {
-            "messages": {
-                "total": total,
-                "archived": archived,
-                "sources": sources,
-                "by_type": by_type,
-            },
-            "tags": {"total": tags, "with_messages": tag_rows},
-            "queue": queue,
-            "targets": targets,
-        }
+            return {
+                "messages": {
+                    "total": total,
+                    "archived": archived,
+                    "sources": sources,
+                    "by_type": by_type,
+                },
+                "tags": {"total": tags, "with_messages": tag_rows},
+                "queue": queue,
+                "targets": targets,
+                "runtime": {
+                    "database": Path(database_path).name,
+                    "latest_message_id": conn.execute(
+                        "SELECT COALESCE(MAX(id), 0) AS n FROM messages"
+                    ).fetchone()["n"],
+                    "latest_target_id": conn.execute(
+                        "SELECT COALESCE(MAX(id), 0) AS n FROM message_targets"
+                    ).fetchone()["n"] if has_target_table else 0,
+                },
+            }
 
     @router.get("/tags")
     def list_tags() -> dict:
@@ -260,7 +282,7 @@ def build_api_router(
             ).fetchall()
             expanded = []
             for row in rows:
-                message = _message_dict(conn, row)
+                message = _with_target_names(_message_dict(conn, row))
                 if not message["targets"] or message["targets"][0].get("id") is None:
                     if _matches_message(message, request.query_params, status):
                         expanded.append(message)
@@ -300,7 +322,7 @@ def build_api_router(
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="message not found")
-            return _message_dict(conn, row)
+            return _with_target_names(_message_dict(conn, row))
 
     @router.get("/messages/{message_id}/thumb")
     async def message_thumb(message_id: int, request: Request, target_id: int | None = None):
@@ -416,7 +438,30 @@ def build_api_router(
             row = db.execute(
                 "SELECT * FROM messages WHERE id=?", (message_id,)
             ).fetchone()
-            return _message_dict(db, row)
+            message = _with_target_names(_message_dict(db, row))
+            if body.target_id is None:
+                return message
+            target = next(
+                (item for item in message["targets"] if item["id"] == body.target_id),
+                None,
+            )
+            if target is None:
+                raise HTTPException(status_code=404, detail="target not found")
+            return {
+                **message,
+                "material_id": f"target:{target['id']}",
+                "target_id": target["id"],
+                "target_chat_id": target["chat_id"],
+                "target_message_id": target["message_id"],
+                "target_url": target["url"],
+                "status": target["status"],
+                "original_text": target["original_text"],
+                "original_html": target["original_html"],
+                "rendered_text": target["rendered_text"],
+                "rating": target["rating"],
+                "tags": target["tags"],
+                "targets": [target],
+            }
 
     if config_path is not None:
         @router.get("/config")
@@ -487,10 +532,11 @@ def build_api_router(
             if body.get("confirm") != "RESET DATABASE":
                 raise HTTPException(status_code=400, detail="confirmation required")
             backup_database(Path(database_path))
-            if getattr(router, "_conn", None) is None:
-                raise HTTPException(status_code=503, detail="database connection unavailable")
-            reset_database(router._conn)
-            return {"ok": True}
+            try:
+                reset_database(Path(database_path))
+            except sqlite3.Error as exc:
+                raise HTTPException(status_code=500, detail="database reset failed") from exc
+            return {"ok": True, "restart_required": True}
 
         @router.put("/config")
         def put_config(body: dict) -> dict:
