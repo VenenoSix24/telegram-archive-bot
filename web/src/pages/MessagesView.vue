@@ -169,7 +169,7 @@ onMounted(() => {
         >
           <option value="">全部频道</option>
           <option v-for="t in targets" :key="t.chat_id" :value="t.chat_id">
-            频道 {{ t.chat_id }}（{{ t.count }}）
+            频道 {{ displayChatId(t.chat_id) }}（{{ t.count }}）
           </option>
         </select>
       </label>
