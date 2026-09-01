@@ -24,6 +24,10 @@ const targetFilter = ref<number | ''>('')
 const statusFilter = ref<'active' | 'deleted' | 'all'>('active')
 const targets = ref<Target[]>([])
 const selected = ref<Message | null>(null)
+const displayChatId = (value: number) => {
+  const digits = String(Math.abs(value))
+  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
+}
 
 const PAGE = 30
 const mediaOptions = [
