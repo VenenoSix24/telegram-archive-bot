@@ -68,7 +68,7 @@ def process_incoming(
     if message_id is None:
         return False
     queue.enqueue(message_id)
-    logger.info("enqueued messages#%s from %s", message_id, incoming.source_chat_id)
+    logger.info("收到新消息，已加入队列（素材 #%s）", message_id)
     return True
 
 
