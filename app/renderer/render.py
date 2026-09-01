@@ -87,4 +87,6 @@ def render_message(
         blocks["source"] = "来自：\n" + html_lib.escape(source_url, quote=True)
     layout = normalize_template_layout(template_layout)
     separator = "\n\n" if template_layout is not None else "\n"
+    if template_layout is None:
+        separator = "\n\n"
     return separator.join(blocks[block] for block in layout if blocks.get(block))
