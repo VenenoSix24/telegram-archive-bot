@@ -32,3 +32,9 @@ def test_parse_unknown_command():
 def test_parse_empty_and_none():
     assert parse_command("") is None
     assert parse_command(None) is None
+
+
+def test_skip_is_not_a_command():
+    """/skip 未在任务书中定义且无处理分支：必须视为普通消息正常归档，
+    而不是被静默吞掉（历史 bug：发 /skip 既不归档也无任何反馈）。"""
+    assert parse_command("/skip") is None
