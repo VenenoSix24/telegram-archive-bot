@@ -135,6 +135,7 @@ async def archive_message_by_db_id(
     config,
     conn: sqlite3.Connection,
     message_id: int,
+    chat_names: dict[int, str] | None = None,
 ) -> int:
     """按 messages 记录复制到所有目标频道并回填 DB。"""
     row = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
@@ -201,10 +202,10 @@ async def archive_message_by_db_id(
         )
         if first_target_message_id is None:
             first_target_message_id = first.id
+        target_name = (chat_names or {}).get(target_id, str(target_id))
         logger.info(
-            "archived messages#%s -> target %s msg %s (media=%s)",
-            message_id,
-            target_id,
+            "已归档到「%s」：消息 #%s（媒体 %s 个）",
+            target_name,
             first.id,
             len(medias),
         )

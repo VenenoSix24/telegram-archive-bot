@@ -41,7 +41,7 @@ async def _run() -> int:
         logger.error("%s", exc)
         return 2
 
-    logger.info("database: %s", config.database_path)
+    logger.info("数据库：%s", config.database_path)
     conn = open_db(config.database_path)
     apply_migrations(conn)
 
@@ -66,12 +66,10 @@ async def _run() -> int:
     for src in config.source_chats:
         target_ids = config.targets_for(src.chat_id)
         logger.info(
-            "source: %s (%s) -> targets %s",
+            "源群 %s → 目标：%s",
             chats[src.chat_id],
-            src.chat_id,
-            ", ".join(
-                f"{chats.get(target_id, target_id)} ({target_id})"
-                for target_id in target_ids
+            "、".join(
+                f"{chats.get(target_id, target_id)}" for target_id in target_ids
             ),
         )
 
@@ -90,7 +88,9 @@ async def _run() -> int:
 
     queue = QueueManager(
         conn,
-        sender=lambda mid: archive_message_by_db_id(client, config, conn, mid),
+        sender=lambda mid: archive_message_by_db_id(
+            client, config, conn, mid, chat_names=chats
+        ),
         interval=config.forward_interval,
         max_retries=config.retry_count,
     )
@@ -113,7 +113,7 @@ async def _run() -> int:
         )
         web_task = asyncio.create_task(_serve_web(web_server))
 
-    logger.info("connected，归档管道运行中——Ctrl+C 停止")
+    logger.info("已连接，归档管道运行中——Ctrl+C 停止")
     try:
         await client.run_until_disconnected()
     finally:
