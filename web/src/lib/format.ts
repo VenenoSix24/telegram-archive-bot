@@ -1,3 +1,10 @@
+/** -100123456789 → 123456789：Telegram 内部频道 id 去掉 -100 前缀便于阅读。 */
+export function displayChatId(value: number | null): string {
+  if (value == null) return ''
+  const digits = String(Math.abs(value))
+  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
+}
+
 /** 时长秒数 → MM:SS；超过一小时显示 HH:MM:SS；null 返回空串。 */
 export function durationLabel(duration: number | null): string {
   if (duration === null) return ''

@@ -6,7 +6,7 @@ import type { Message } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
 import Button from '@/components/ui/Button.vue'
 import StarRating from '@/components/ui/StarRating.vue'
-import { durationLabel, formatTime, sizeLabel } from '@/lib/format'
+import { durationLabel, displayChatId, formatTime, sizeLabel } from '@/lib/format'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
 
@@ -56,15 +56,17 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && props.message) emit('close')
 }
 
-function displayChatId(value: number | null) {
-  if (value == null) return ''
-  const digits = String(Math.abs(value))
-  return value < 0 && digits.startsWith('100') ? digits.slice(3) : digits
-}
+// 同一素材的字段回写（如评分后 PATCH 返回）不应重置编辑中的草稿，
+// 因此按素材身份（id + target）判断是否真的换了消息，而不是按对象引用。
+let lastIdentity: string | null = null
 
 watch(() => props.message, (message) => {
   if (message) lockBody()
   else unlockBody()
+
+  const identity = message ? `${message.id}:${message.target_id ?? ''}` : null
+  if (identity === lastIdentity) return
+  lastIdentity = identity
 
   newTag.value = ''
   error.value = ''
@@ -180,7 +182,7 @@ async function mutate(
       >
         <Transition
           appear
-          enter-active-class="transition-transform duration-250 ease-out"
+          enter-active-class="transition-transform duration-300 ease-out"
           leave-active-class="transition-transform duration-200 ease-in"
           enter-from-class="translate-x-8"
           leave-to-class="translate-x-8"
@@ -253,21 +255,21 @@ async function mutate(
 
               <!-- 正文 -->
               <!-- eslint-disable vue/no-v-html -->
-                <div
-                  v-if="activeBody || activeRendered"
-                  class="telegram-content text-sm leading-relaxed text-steam"
-                  v-html="sanitizeTelegramHtml(message.original_html, activeBody || activeRendered)"
-                />
-                <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">编辑正文</Button>
-                <div v-if="editingBody" class="mt-3 space-y-2">
-                  <textarea v-model="bodyHtmlDraft" rows="7" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 font-mono text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑 Telegram HTML 正文" />
-                  <p class="text-xs text-steam-dim">支持 Telegram HTML：&lt;b&gt;粗体&lt;/b&gt;、&lt;i&gt;斜体&lt;/i&gt;、&lt;a href=""&gt;链接&lt;/a&gt;、&lt;code&gt;代码&lt;/code&gt;。</p>
-                  <div v-if="bodyHtmlDraft" class="telegram-content rounded-md border border-ink-line bg-ink-raised/50 p-3 text-sm leading-relaxed text-steam" v-html="sanitizeTelegramHtml(bodyHtmlDraft, bodyDraft)" />
-                  <div class="flex gap-2">
-                    <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
-                    <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
-                  </div>
+              <div
+                v-if="activeBody || activeRendered"
+                class="telegram-content text-sm leading-relaxed text-steam"
+                v-html="sanitizeTelegramHtml(message.original_html, activeBody || activeRendered)"
+              />
+              <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">编辑正文</Button>
+              <div v-if="editingBody" class="mt-3 space-y-2">
+                <textarea v-model="bodyHtmlDraft" rows="7" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 font-mono text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑 Telegram HTML 正文" />
+                <p class="text-xs text-steam-dim">支持 Telegram HTML：&lt;b&gt;粗体&lt;/b&gt;、&lt;i&gt;斜体&lt;/i&gt;、&lt;a href=""&gt;链接&lt;/a&gt;、&lt;code&gt;代码&lt;/code&gt;。</p>
+                <div v-if="bodyHtmlDraft" class="telegram-content rounded-md border border-ink-line bg-ink-raised/50 p-3 text-sm leading-relaxed text-steam" v-html="sanitizeTelegramHtml(bodyHtmlDraft, bodyDraft)" />
+                <div class="flex gap-2">
+                  <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
+                  <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
                 </div>
+              </div>
               <!-- eslint-enable vue/no-v-html -->
 
               <!-- 时间与来源元数据 -->
