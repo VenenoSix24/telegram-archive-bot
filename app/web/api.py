@@ -9,6 +9,7 @@ Telethon client 与共享 conn，完成「写 DB → 重渲染 → edit 目标�
 from __future__ import annotations
 
 import logging
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -19,8 +20,8 @@ from pydantic import BaseModel, Field
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
 from app.telegram.client import resolve_chat_name
-from app.web.config_editor import apply_editable_config, read_editable_config
 from app.web.backup import backup_config, backup_database, reset_database
+from app.web.config_editor import apply_editable_config, read_editable_config
 
 logger = logging.getLogger(__name__)
 
@@ -430,6 +431,41 @@ def build_api_router(
                 return result
             except Exception as exc:
                 raise HTTPException(status_code=400, detail="config.yaml unreadable") from exc
+
+        @router.get("/ops/backups")
+        def list_backups() -> dict:
+            base = Path(database_path).parent
+            return {"items": sorted(
+                [path.name for path in base.glob(f"{Path(database_path).name}.*.bak")]
+                + [path.name for path in base.glob(f"{Path(config_path).name}.*.bak")],
+                reverse=True,
+            )}
+
+        @router.post("/ops/restore")
+        def restore_ops(body: dict) -> dict:
+            name = body.get("name")
+            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".bak"):
+                raise HTTPException(status_code=400, detail="invalid backup name")
+            backup_path = Path(database_path).parent / name
+            if not backup_path.exists():
+                backup_path = Path(config_path).parent / name
+            if not backup_path.exists():
+                raise HTTPException(status_code=404, detail="backup not found")
+            if name.startswith(Path(database_path).name + "."):
+                backup_database(Path(database_path))
+                source = sqlite3.connect(backup_path)
+                target = sqlite3.connect(database_path)
+                try:
+                    source.backup(target)
+                finally:
+                    target.close()
+                    source.close()
+                return {"ok": True, "kind": "database"}
+            if name.startswith(Path(config_path).name + "."):
+                backup_config(Path(config_path))
+                shutil.copy2(backup_path, config_path)
+                return {"ok": True, "kind": "config"}
+            raise HTTPException(status_code=400, detail="unsupported backup")
 
         @router.post("/ops/backup")
         def backup_ops(body: dict) -> dict:
