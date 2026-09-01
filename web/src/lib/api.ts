@@ -58,6 +58,25 @@ export async function putConfig(cfg: EditableConfig): Promise<EditableConfig> {
   return request('/config', { method: 'PUT', body: JSON.stringify(cfg) })
 }
 
+export async function backup(kind: 'config' | 'database'): Promise<{ path: string }> {
+  return request('/ops/backup', { method: 'POST', body: JSON.stringify({ kind }) })
+}
+
+export async function listBackups(): Promise<{ items: string[] }> {
+  return request('/ops/backups')
+}
+
+export async function restoreBackup(name: string): Promise<{ ok: boolean; kind: string }> {
+  return request('/ops/restore', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export async function resetDatabase(): Promise<{ ok: boolean }> {
+  return request('/ops/reset-database', {
+    method: 'POST',
+    body: JSON.stringify({ confirm: 'RESET DATABASE' }),
+  })
+}
+
 export interface MessageQuery {
   q?: string
   tag?: string

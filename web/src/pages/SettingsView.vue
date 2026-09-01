@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ChevronDown, Loader2, Plus, Trash2, Save, RotateCcw, Palette, X } from 'lucide-vue-next'
-import { getConfig, getStats, putConfig } from '@/lib/api'
+import { getConfig, getStats, putConfig, backup, resetDatabase, listBackups, restoreBackup } from '@/lib/api'
 import type { EditableConfig } from '@/lib/types'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
@@ -15,6 +15,9 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const openTargetMenu = ref<number | null>(null)
+const opsBusy = ref(false)
+const backups = ref<string[]>([])
+const selectedBackup = ref('')
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
   { key: 'projector', label: '放映室（琥珀）' },
@@ -65,6 +68,7 @@ onMounted(async () => {
     Object.assign(form, cfg)
     saved = _clone(cfg)
     await getStats() // 触发一次预热，顺带确认后端可用
+    await loadBackups()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '配置读取失败'
   } finally {
@@ -160,6 +164,55 @@ async function save() {
 
 function reset() {
   if (saved) Object.assign(form, _clone(saved))
+}
+
+async function loadBackups() {
+  try {
+    backups.value = (await listBackups()).items
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '无法读取备份')
+  }
+}
+
+async function restoreSelectedBackup() {
+  if (!selectedBackup.value) return
+  if (!window.confirm(`确认恢复 ${selectedBackup.value}？当前文件会先自动备份。`)) return
+  opsBusy.value = true
+  try {
+    const result = await restoreBackup(selectedBackup.value)
+    toastSuccess(`${result.kind === 'database' ? '数据库' : '配置'}已恢复，请重启进程`)
+    await loadBackups()
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '恢复失败')
+  } finally {
+    opsBusy.value = false
+  }
+}
+
+async function backupItem(kind: 'config' | 'database') {
+  opsBusy.value = true
+  try {
+    const result = await backup(kind)
+    toastSuccess(`备份已创建：${result.path}`)
+    await loadBackups()
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '备份失败')
+  } finally {
+    opsBusy.value = false
+  }
+}
+
+async function resetDb() {
+  if (!window.confirm('确认重置数据库？所有归档记录将被清空，且操作前会自动备份。')) return
+  opsBusy.value = true
+  try {
+    await resetDatabase()
+    toastSuccess('数据库已重置，请重启进程')
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '数据库重置失败')
+  } finally {
+    opsBusy.value = false
+  }
 }
 </script>
 
@@ -435,7 +488,18 @@ function reset() {
         </div>
       </section>
 
-      <!-- 搜索模板 + 管理员 -->
+      <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
+        <h2 class="mb-1 text-sm font-medium text-steam">备份与数据库</h2>
+        <p class="mb-3 text-xs leading-5 text-steam-dim">配置文件和数据库分开管理。数据库重置会清空归档记录，操作前自动创建备份，完成后需要重启进程。</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <select v-model="selectedBackup" class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none">
+            <option value="">选择备份以恢复</option>
+            <option v-for="item in backups" :key="item" :value="item">{{ item }}</option>
+          </select>
+          <Button type="button" variant="secondary" size="sm" :disabled="opsBusy || !selectedBackup" @click="restoreSelectedBackup">恢复备份</Button>
+        </div>
+      </section>
+
       <section class="mb-5 rounded-card border border-ink-line bg-ink-surface p-4">
         <label class="mb-1 block text-xs text-steam-dim" for="url-template">
           私密频道搜索模板（{tag} 占位）

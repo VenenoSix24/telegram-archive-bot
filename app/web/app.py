@@ -35,7 +35,13 @@ def create_app(
     app.state.indexer = indexer
     app.include_router(build_auth_router(config.web_token, sessions), prefix="/api/v1")
     app.include_router(
-        build_api_router(config.database_path, config.config_path, config=config, client=client, conn=conn),
+        build_api_router(
+            config.database_path,
+            config.config_path,
+            config=config,
+            client=client,
+            conn=conn,
+        ),
         prefix="/api/v1",
     )
     if _DIST.is_dir():
