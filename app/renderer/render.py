@@ -85,6 +85,6 @@ def render_message(
 
     if source_url:
         blocks["source"] = "来自：\n" + html_lib.escape(source_url, quote=True)
-    return "\n\n".join(
+    return "\n".join(
         blocks[block] for block in normalize_template_layout(template_layout) if blocks.get(block)
     )
