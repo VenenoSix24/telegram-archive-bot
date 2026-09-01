@@ -87,8 +87,12 @@ def render_message(
         blocks["source"] = "来自：\n" + html_lib.escape(source_url, quote=True)
     layout = normalize_template_layout(template_layout)
     if template_layout is None:
-        parts = [blocks[block] for block in layout if blocks.get(block)]
-        if len(parts) <= 1:
-            return "\n".join(parts)
-        return parts[0] + "\n" + "\n\n".join(parts[1:])
+        parts = [(block, blocks[block]) for block in layout if blocks.get(block)]
+        rendered = ""
+        for index, (block, content) in enumerate(parts):
+            if index:
+                previous = parts[index - 1][0]
+                rendered += "\n" if previous == "rating" and block == "tags" else "\n\n"
+            rendered += content
+        return rendered
     return "\n\n".join(blocks[block] for block in layout if blocks.get(block))
