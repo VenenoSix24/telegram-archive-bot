@@ -30,6 +30,7 @@ from app.web.backup import (
     backup_metadata,
     import_backup,
     reset_database,
+    validate_database_backup,
 )
 from app.web.config_editor import apply_editable_config, read_editable_config
 
@@ -522,10 +523,26 @@ def build_api_router(
                 str(path), filename=path.name, media_type="application/octet-stream"
             )
 
+        def _pause_queue_for_restart(request: Request) -> None:
+            """数据库即将被替换：暂停队列，避免旧内存状态继续写新库。"""
+            queue = getattr(request.app.state, "queue", None)
+            if queue is not None and not queue.is_paused():
+                queue.pause()
+                logger.warning(
+                    "数据库已被 Web 操作替换，队列已暂停；请尽快重启程序使各组件状态一致"
+                )
+
         @router.post("/ops/restore")
-        def restore_ops(body: dict) -> dict:
+        def restore_ops(body: dict, request: Request) -> dict:
             backup_path, kind = _find_backup(body.get("name"))
             if kind == "database":
+                try:
+                    validate_database_backup(backup_path)
+                except (ValueError, sqlite3.Error) as exc:
+                    raise HTTPException(
+                        status_code=400, detail=f"backup invalid: {exc}"
+                    ) from exc
+                _pause_queue_for_restart(request)
                 backup_database(Path(database_path))
                 source = sqlite3.connect(backup_path)
                 target = sqlite3.connect(database_path)
@@ -546,6 +563,8 @@ def build_api_router(
                 await import_backup(request.stream(), destination, kind)
             except (OSError, ValueError, sqlite3.Error) as exc:
                 raise HTTPException(status_code=400, detail=f"backup import failed: {exc}") from exc
+            if kind == "database":
+                _pause_queue_for_restart(request)
             return {"ok": True, "kind": kind, "restart_required": True}
 
         @router.post("/ops/backup")
@@ -561,10 +580,11 @@ def build_api_router(
             return {"backup": backup_metadata(result, kind)}
 
         @router.post("/ops/reset-database")
-        def reset_database_ops(body: dict) -> dict:
+        def reset_database_ops(body: dict, request: Request) -> dict:
             if body.get("confirm") != "RESET DATABASE":
                 raise HTTPException(status_code=400, detail="confirmation required")
             backup_database(Path(database_path))
+            _pause_queue_for_restart(request)
             try:
                 reset_database(Path(database_path))
             except sqlite3.Error as exc:
