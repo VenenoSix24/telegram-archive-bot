@@ -10,6 +10,7 @@ import logging
 import sqlite3
 
 from telethon import events
+from telethon.extensions import html as telegram_html
 
 from app.config import Config
 from app.media.backfill import backfill_thumbs
@@ -179,12 +180,16 @@ def attach_target_edit_handler(client, config: Config, conn: sqlite3.Connection,
         if row is None:
             return
         text = event.message.message or ""
+        html_text = telegram_html.unparse(
+            text, getattr(event.message, "entities", None) or []
+        )
         await apply_message_edit(
             client,
             conn,
             row["message_id"],
             target_id=row["id"],
             body=text,
+            body_html=html_text,
             indexer=indexer,
         )
 
