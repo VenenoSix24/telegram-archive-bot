@@ -25,6 +25,7 @@ def create_app(
     client=None,
     conn=None,
     indexer=None,
+    chat_names: dict[int, str] | None = None,
 ) -> FastAPI:
     sessions = Sessions()
     app = FastAPI(title="Telegram Archive Bot", version="0.2.0")
@@ -41,6 +42,7 @@ def create_app(
             config=config,
             client=client,
             conn=conn,
+            chat_names=chat_names,
         ),
         prefix="/api/v1",
     )
