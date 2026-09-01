@@ -67,6 +67,7 @@ export interface MessageQuery {
   target_chat_id?: number
   limit?: number
   offset?: number
+  status?: 'active' | 'deleted' | 'all'
 }
 
 export async function listMessages(query: MessageQuery = {}): Promise<MessagesResponse> {
