@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from pathlib import Path
 
 from app.config import ConfigError, config_dir, load_config
 from app.database.migrate import apply_migrations, open_db
@@ -31,6 +32,30 @@ async def _serve_web(web_server) -> None:
         await web_server.serve()
     except SystemExit as exc:
         logger.error("web server stopped during startup (exit code %s)", exc.code)
+
+
+def _startup_banner(config, chats: dict[int, str]) -> str:
+    """启动横幅：一次性集中展示使用者关心的全部运行信息。"""
+    lines = [
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "  Telegram Archive Bot",
+    ]
+    if config.web_enabled:
+        host = "127.0.0.1" if config.web_host in ("", "0.0.0.0") else config.web_host
+        lines.append(f"  Web 后台    http://{host}:{config.web_port}")
+    lines.append(f"  数据库      {Path(config.database_path).name}")
+    lines.append(f"  日志        {config_dir() / 'logs'}")
+    lines.append("  源群 → 目标")
+    for src in config.source_chats:
+        targets = "、".join(
+            chats.get(target_id, str(target_id))
+            for target_id in config.targets_for(src.chat_id)
+        )
+        lines.append(f"    {chats[src.chat_id]} → {targets}")
+    lines.append(f"  管理员      {len(config.admins)} 人")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    return "\n".join(lines)
 
 
 async def _run() -> int:
@@ -62,16 +87,6 @@ async def _run() -> int:
         await client.disconnect()
         conn.close()
         return 4
-
-    for src in config.source_chats:
-        target_ids = config.targets_for(src.chat_id)
-        logger.info(
-            "源群 %s → 目标：%s",
-            chats[src.chat_id],
-            "、".join(
-                f"{chats.get(target_id, target_id)}" for target_id in target_ids
-            ),
-        )
 
     for target_id in sorted(config.all_target_channel_ids()):
         target = await client.get_entity(target_id)
@@ -113,7 +128,7 @@ async def _run() -> int:
         )
         web_task = asyncio.create_task(_serve_web(web_server))
 
-    logger.info("已连接，归档管道运行中——Ctrl+C 停止")
+    logger.info("%s", _startup_banner(config, chats))
     try:
         await client.run_until_disconnected()
     finally:
