@@ -19,6 +19,9 @@ class ConfigError(Exception):
     pass
 
 
+DEFAULT_TEMPLATE_LAYOUT = ["rating", "tags", "body", "source"]
+
+
 @dataclass(frozen=True)
 class TargetChannel:
     chat_id: int
@@ -60,6 +63,7 @@ class Config:
     web_token: str = ""
     thumbnail_media: str = "first_video"
     thumbnail_source: str = "auto"
+    message_template: list[str] = field(default_factory=lambda: list(DEFAULT_TEMPLATE_LAYOUT))
 
     def targets_for(self, source_chat_id: int) -> list[int]:
         for source in self.source_chats:
@@ -109,6 +113,19 @@ def _env_bool(name: str, *, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def normalize_template_layout(value) -> list[str]:
+    """Return a valid ordered message-layout snapshot with body always present."""
+    if not isinstance(value, list):
+        return list(DEFAULT_TEMPLATE_LAYOUT)
+    allowed = set(DEFAULT_TEMPLATE_LAYOUT)
+    layout = [str(block) for block in value if str(block) in allowed]
+    if len(layout) != len(set(layout)):
+        return list(DEFAULT_TEMPLATE_LAYOUT)
+    if "body" not in layout:
+        return list(DEFAULT_TEMPLATE_LAYOUT)
+    return layout
 
 
 def load_config(config_path: str | Path = "config.yaml") -> Config:
@@ -236,5 +253,6 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         web_token=web_token,
         thumbnail_media=thumbs.get("media", "first_video"),
         thumbnail_source=thumbs.get("source", "auto"),
+        message_template=normalize_template_layout(raw.get("message_template")),
         sync_target_edits=sync_target_edits,
     )

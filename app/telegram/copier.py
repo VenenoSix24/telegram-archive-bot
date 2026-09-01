@@ -72,17 +72,19 @@ def _save_target(
     original_html: str,
     rendered_text: str,
     rating: int,
+    template_layout: str,
 ) -> None:
     conn.execute(
         "INSERT INTO message_targets "
         "(message_id, target_chat_id, target_message_id, target_url, "
-        "original_text, original_html, rendered_text, rating, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'archived') "
+        "original_text, original_html, rendered_text, rating, template_layout, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'archived') "
         "ON CONFLICT(message_id, target_chat_id) DO UPDATE SET "
         "target_message_id=excluded.target_message_id, "
         "target_url=excluded.target_url, status='archived', "
         "original_text=excluded.original_text, original_html=excluded.original_html, "
-        "rendered_text=excluded.rendered_text, rating=excluded.rating",
+        "rendered_text=excluded.rendered_text, rating=excluded.rating, "
+        "template_layout=excluded.template_layout",
         (
             message_id,
             target_chat_id,
@@ -92,6 +94,7 @@ def _save_target(
             original_html,
             rendered_text,
             rating,
+            template_layout,
         ),
     )
     target_row = conn.execute(
@@ -166,12 +169,13 @@ async def archive_message_by_db_id(
         first = sent_list[0]
         target_url = build_source_url(target, first.id)
         thumb_path = None
-        if first_target_message_id is None:
-            thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
-            if thumb_message:
-                thumb = await _THUMB_CACHE.fetch(client, thumb_message, message_id)
-                if thumb is not None:
-                    thumb_path = str(thumb)
+        thumb_message = choose_thumbnail_message(msgs, config.thumbnail_media)
+        if thumb_message:
+            thumb = await _THUMB_CACHE.fetch(
+                client, thumb_message, target_id, chat_id=target_id
+            )
+            if thumb is not None:
+                thumb_path = str(thumb)
         _save_target(
             conn,
             message_id,
@@ -183,6 +187,11 @@ async def archive_message_by_db_id(
             original_html=row["original_html"] if "original_html" in row.keys() else "",
             rendered_text=rendered,
             rating=row["rating"],
+            template_layout=(
+                row["template_layout"]
+                if "template_layout" in row.keys()
+                else '["rating","tags","body","source"]'
+            ),
         )
         if first_target_message_id is None:
             first_target_message_id = first.id

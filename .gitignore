@@ -6,6 +6,7 @@
 # 真实 config (only config.example.yaml is committed)
 config.yaml
 config.yaml.bak
+config.yaml.*.bak
 
 # telethon session (禁止提交 GitHub)
 *.session
@@ -17,6 +18,7 @@ config.yaml.bak
 *.sqlite3
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite.*.bak
 
 # logs
 logs/
@@ -54,6 +56,5 @@ docs/transfers/
 # Claude Code 本地运行配置（机器相关，不进 Git）
 .claude/launch.json
 
-# local handover notes
-task_plan.md
-progress.md
+# changelog (maintained outside repository for now)
+CHANGELOG.md

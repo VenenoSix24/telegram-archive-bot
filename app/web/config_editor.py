@@ -14,6 +14,8 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
+from app.config import normalize_template_layout
+
 # round-trip：加载与转储都能保住注释/键序
 _yaml = YAML()
 _yaml.preserve_quotes = True
@@ -110,6 +112,7 @@ def read_editable_config(path: Path) -> dict:
         "thumbnail_media": thumbs.get("media", "first_video"),
         "thumbnail_source": thumbs.get("source", "auto"),
         "sync_target_edits": sync_target_edits,
+        "message_template": normalize_template_layout(raw.get("message_template")),
     }
 
 
@@ -168,6 +171,7 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
     raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
     raw["sync_target_edits"] = merged["sync_target_edits"]
+    raw["message_template"] = normalize_template_layout(merged["message_template"])
 
     buf = StringIO()
     _yaml.dump(raw, buf)

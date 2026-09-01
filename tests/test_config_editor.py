@@ -67,6 +67,12 @@ def test_apply_multiple_targets(tmp_path):
     assert p.with_suffix(".yaml.bak").exists()
 
 
+def test_apply_template_layout(tmp_path):
+    p = _write(tmp_path)
+    new = apply_editable_config(p, {"message_template": ["body", "tags"]})
+    assert new["message_template"] == ["body", "tags"]
+    assert "message_template:" in p.read_text(encoding="utf-8")
+
 def test_apply_ignores_unknown_keys(tmp_path):
     p = _write(tmp_path)
     new = apply_editable_config(p, {"not_a_field": 1})

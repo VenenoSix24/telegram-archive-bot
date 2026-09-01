@@ -20,7 +20,13 @@ from pydantic import BaseModel, Field
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
 from app.processor.edit import apply_message_edit
 from app.telegram.client import resolve_chat_name
-from app.web.backup import backup_config, backup_database, reset_database
+from app.web.backup import (
+    backup_config,
+    backup_database,
+    backup_metadata,
+    import_backup,
+    reset_database,
+)
 from app.web.config_editor import apply_editable_config, read_editable_config
 
 logger = logging.getLogger(__name__)
@@ -372,7 +378,9 @@ def build_api_router(
                     ]
                     group.sort(key=lambda item: item.id)
                     message = choose_thumbnail_message(group, config.thumbnail_media)
-                return await cache.fetch(client, message, target_id or message_id)
+                return await cache.fetch(
+                    client, message, target_id or message_id, chat_id=chat_id
+                )
 
             fetched = None
             if target_row:
@@ -480,26 +488,40 @@ def build_api_router(
             except Exception as exc:
                 raise HTTPException(status_code=400, detail="config.yaml unreadable") from exc
 
+        def _backup_paths() -> list[tuple[Path, str]]:
+            database = Path(database_path)
+            configuration = Path(config_path)
+            return [
+                *((path, "database") for path in database.parent.glob(f"{database.name}.*.bak")),
+                *((path, "config") for path in configuration.parent.glob(
+                    f"{configuration.name}.*.bak"
+                )),
+            ]
+
+        def _find_backup(name: str) -> tuple[Path, str]:
+            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".bak"):
+                raise HTTPException(status_code=400, detail="invalid backup name")
+            for path, kind in _backup_paths():
+                if path.name == name:
+                    return path, kind
+            raise HTTPException(status_code=404, detail="backup not found")
+
         @router.get("/ops/backups")
         def list_backups() -> dict:
-            base = Path(database_path).parent
-            return {"items": sorted(
-                [path.name for path in base.glob(f"{Path(database_path).name}.*.bak")]
-                + [path.name for path in base.glob(f"{Path(config_path).name}.*.bak")],
-                reverse=True,
-            )}
+            items = [backup_metadata(path, kind) for path, kind in _backup_paths()]
+            return {"items": sorted(items, key=lambda item: item["name"], reverse=True)}
+
+        @router.get("/ops/backups/{name}")
+        def download_backup(name: str):
+            path, _ = _find_backup(name)
+            return FileResponse(
+                str(path), filename=path.name, media_type="application/octet-stream"
+            )
 
         @router.post("/ops/restore")
         def restore_ops(body: dict) -> dict:
-            name = body.get("name")
-            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".bak"):
-                raise HTTPException(status_code=400, detail="invalid backup name")
-            backup_path = Path(database_path).parent / name
-            if not backup_path.exists():
-                backup_path = Path(config_path).parent / name
-            if not backup_path.exists():
-                raise HTTPException(status_code=404, detail="backup not found")
-            if name.startswith(Path(database_path).name + "."):
+            backup_path, kind = _find_backup(body.get("name"))
+            if kind == "database":
                 backup_database(Path(database_path))
                 source = sqlite3.connect(backup_path)
                 target = sqlite3.connect(database_path)
@@ -508,12 +530,19 @@ def build_api_router(
                 finally:
                     target.close()
                     source.close()
-                return {"ok": True, "kind": "database"}
-            if name.startswith(Path(config_path).name + "."):
+            else:
                 backup_config(Path(config_path))
                 shutil.copy2(backup_path, config_path)
-                return {"ok": True, "kind": "config"}
-            raise HTTPException(status_code=400, detail="unsupported backup")
+            return {"ok": True, "kind": kind, "restart_required": True}
+
+        @router.post("/ops/import")
+        async def import_ops(request: Request, kind: str) -> dict:
+            destination = Path(config_path) if kind == "config" else Path(database_path)
+            try:
+                await import_backup(request.stream(), destination, kind)
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                raise HTTPException(status_code=400, detail=f"backup import failed: {exc}") from exc
+            return {"ok": True, "kind": kind, "restart_required": True}
 
         @router.post("/ops/backup")
         def backup_ops(body: dict) -> dict:
@@ -525,7 +554,7 @@ def build_api_router(
                 result = backup_database(Path(database_path))
             else:
                 raise HTTPException(status_code=400, detail="invalid backup kind")
-            return {"path": result.name}
+            return {"backup": backup_metadata(result, kind)}
 
         @router.post("/ops/reset-database")
         def reset_database_ops(body: dict) -> dict:

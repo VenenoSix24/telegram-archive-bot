@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -357,6 +358,15 @@ def test_reset_database_uses_request_owned_connection(tmp_path):
         filtered = client.get("/api/v1/messages?status=all&target_chat_id=-1006").json()
         assert filtered["total"] == 1
         assert filtered["items"][0]["material_id"] == "target:102"
+def test_reset_clears_thumbnail_cache(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    thumbs = tmp_path / "thumbs"
+    thumbs.mkdir()
+    (thumbs / "-1005_1.jpg").write_bytes(b"old")
+    from app.web.backup import reset_database
+
+    reset_database(Path(db))
+    assert not (thumbs / "-1005_1.jpg").exists()
 
 
 def test_messages_thumb_without_client_404(tmp_path):
