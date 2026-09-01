@@ -253,7 +253,26 @@ def build_api_router(database_path: str, config_path: str | None = None, config=
                 "LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             ).fetchall()
-            items = [_message_dict(conn, r) for r in rows]
+            items = []
+            for row in rows:
+                message = _message_dict(conn, row)
+                if len(message["targets"]) <= 1:
+                    items.append(message)
+                    continue
+                for target in message["targets"]:
+                    items.append({
+                        **message,
+                        "target_id": target["id"],
+                        "target_chat_id": target["chat_id"],
+                        "target_message_id": target["message_id"],
+                        "target_url": target["url"],
+                        "original_text": target["original_text"],
+                        "original_html": target["original_html"],
+                        "rendered_text": target["rendered_text"],
+                        "rating": target["rating"],
+                        "tags": target["tags"],
+                        "targets": [target],
+                    })
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     @router.get("/messages/{message_id}")
