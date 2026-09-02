@@ -160,3 +160,86 @@ async def test_archive_retry_keeps_existing_thumb_path(conn, tmp_path):
         "SELECT thumb_path FROM message_targets WHERE target_chat_id=-1003"
     ).fetchone()
     assert Path(row["thumb_path"]).name == "-1001_7.jpg"
+
+
+class AlbumClient(ThumbClient):
+    """相册场景假客户端：按 ids 批量返回组员，记录每次 send_file 的媒体数。"""
+
+    def __init__(self):
+        super().__init__()
+        self.album_sizes: list[int] = []
+        self.scanned = False
+
+    async def get_messages(self, chat, ids=None, limit=None):
+        if ids is not None:
+            if isinstance(ids, int):
+                return SimpleNamespace(
+                    id=ids, message="图", media=_photo_media(), grouped_id="grp1"
+                )
+            return [
+                SimpleNamespace(id=i, message="图", media=_photo_media(), grouped_id="grp1")
+                for i in sorted(ids)
+            ]
+        self.scanned = True
+        return []
+
+    async def send_file(self, target, file, caption, parse_mode):
+        self.album_sizes.append(len(file))
+        return await super().send_file(target, file, caption, parse_mode)
+
+
+@pytest.mark.asyncio
+async def test_album_collected_from_db_members(conn, tmp_path, monkeypatch):
+    """相册按落库成员精确取组：队列积压/窗口外不再依赖扫描。"""
+    from app.telegram import copier
+
+    monkeypatch.setattr(copier, "_SETTLE_QUIET", 0)
+    monkeypatch.setattr(copier, "_SETTLE_MAX", 0)
+
+    conn.execute("UPDATE messages SET media_group_id='grp1' WHERE id=1")
+    conn.executemany(
+        "INSERT INTO media_group_members (source_chat_id, grouped_id, source_message_id) "
+        "VALUES (-1001, 'grp1', ?)",
+        [(5,), (6,), (7,)],
+    )
+    conn.commit()
+    config = Config()
+    config.database_path = str(tmp_path / "copier.sqlite")
+    client = AlbumClient()
+
+    await archive_message_by_db_id(client, config, conn, 1)
+
+    assert client.album_sizes == [3, 3]  # 每个目标频道都是整组 3 条
+    assert not client.scanned
+
+
+@pytest.mark.asyncio
+async def test_album_falls_back_to_scan_without_members(conn, tmp_path, monkeypatch):
+    """旧数据无成员记录时回退扫描最近消息（v1 行为）。"""
+    from app.telegram import copier
+
+    monkeypatch.setattr(copier, "_SETTLE_QUIET", 0)
+    monkeypatch.setattr(copier, "_SETTLE_MAX", 0)
+
+    conn.execute("UPDATE messages SET media_group_id='grp1' WHERE id=1")
+    conn.commit()
+    config = Config()
+    config.database_path = str(tmp_path / "copier.sqlite")
+
+    class ScanClient(AlbumClient):
+        async def get_messages(self, chat, ids=None, limit=None):
+            if ids is not None:
+                return SimpleNamespace(
+                    id=ids, message="图", media=_photo_media(), grouped_id="grp1"
+                )
+            self.scanned = True
+            return [
+                SimpleNamespace(id=i, message="图", media=_photo_media(), grouped_id="grp1")
+                for i in (5, 6, 7)
+            ]
+
+    client = ScanClient()
+    await archive_message_by_db_id(client, config, conn, 1)
+
+    assert client.scanned
+    assert client.album_sizes == [3, 3]
