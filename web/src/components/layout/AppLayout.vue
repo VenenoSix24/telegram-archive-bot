@@ -63,7 +63,7 @@ const shouldShowNav = computed(() => !!route.name)
 <template>
   <div class="min-h-screen">
     <!-- 顶部导航条：素材页目录成为唯一左栏，内容独占整宽 -->
-    <header class="top-rules sticky top-0 z-30 border-b border-transparent bg-ink-bg/95 backdrop-blur">
+    <header class="top-rules sticky top-0 z-30 border-b border-ink-line bg-ink-bg/95 backdrop-blur">
       <div class="relative mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 min-[820px]:px-8">
         <RouterLink :to="{ name: 'dashboard' }" class="mr-2 flex shrink-0 items-center gap-2.5">
           <svg class="mast-seal hidden h-8 w-8 text-gold min-[400px]:block" viewBox="0 0 52 52" aria-hidden="true">
@@ -171,7 +171,7 @@ const shouldShowNav = computed(() => !!route.name)
     <nav
       v-if="shouldShowNav"
       aria-label="移动端导航"
-      class="fixed bottom-4 left-1/2 z-40 flex w-[min(calc(100vw-2rem),18rem)] -translate-x-1/2 items-center justify-between gap-0 rounded-2xl border border-ink-line/70 bg-ink-surface/90 px-1.5 py-1.5 shadow-lg backdrop-blur-md md:hidden"
+      class="fixed bottom-4 left-1/2 z-40 flex w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 items-center justify-between gap-0 rounded-full border border-ink-line/70 bg-ink-surface/75 px-2.5 py-2 shadow-lg backdrop-blur-xl md:hidden"
     >
       <RouterLink
         v-for="item in nav"
@@ -180,7 +180,7 @@ const shouldShowNav = computed(() => !!route.name)
         :aria-current="isActive(item.name) ? 'page' : undefined"
         :aria-label="item.label"
         :class="cn(
-          'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] transition-colors',
+          'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1 text-[10px] transition-colors',
           isActive(item.name) ? 'text-gold' : 'text-steam-dim hover:text-steam',
         )"
       >

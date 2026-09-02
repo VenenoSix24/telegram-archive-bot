@@ -200,7 +200,7 @@ onMounted(load)
       </section>
 
       <!-- 本期封面 + 卷首语 -->
-      <section class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <section class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <figure v-if="cover" class="min-w-0 cursor-pointer" @click="selected = cover">
           <div class="relative border border-ink-line bg-ink-surface p-2.5 transition-[border-color,box-shadow] duration-200 hover:border-steam-dim">
             <div class="relative overflow-hidden" :style="{ aspectRatio: coverImg ? coverRatio : '16 / 10' }">
@@ -254,7 +254,7 @@ onMounted(load)
         </p>
       </section>
 
-      <div class="mt-8 grid gap-8 lg:grid-cols-2">
+      <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
         <!-- 类目分布：点线 + 细条，点击直达筛选 -->
         <section aria-label="类目分布">
           <div class="flex items-baseline justify-between">
