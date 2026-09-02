@@ -30,7 +30,9 @@ export default {
         destructive: 'rgb(var(--destructive) / <alpha-value>)',
       },
       fontFamily: {
-        display: ['"Sora Variable"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
+        /* 标题字体按主题切换：素材志定义 --font-display 为宋体，
+           未定义的主题回退 Sora Variable（var() fallback）。 */
+        display: ['var(--font-display, "Sora Variable")', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
         mono: ['"SF Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {

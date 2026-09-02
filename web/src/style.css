@@ -2,8 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 默认 token = 放映室 · 深色，保证 JS 注入属性前的首屏不闪 */
-:root,
+/* 默认 token = 素材志 · 浅色（与 themes/collection.css 一致），
+   保证 JS 注入属性 / 主题 CSS 按需加载前的首屏不闪。 */
+:root {
+  --ink-bg: 246 242 233;
+  --ink-surface: 253 251 245;
+  --ink-raised: 240 234 219;
+  --ink-line: 221 213 196;
+  --steam: 33 29 22;
+  --steam-dim: 109 102 90;
+  --gold: 188 58 38;
+  --gold-soft: 208 84 62;
+  --gold-muted: 168 106 94;
+  --destructive: 161 51 36;
+  color-scheme: light;
+}
+
+[data-theme='collection'][data-mode='dark'] {
+  --ink-bg: 26 22 18;
+  --ink-surface: 34 29 24;
+  --ink-raised: 45 39 32;
+  --ink-line: 62 54 44;
+  --steam: 233 226 212;
+  --steam-dim: 168 159 142;
+  --gold: 214 90 66;
+  --gold-soft: 228 120 94;
+  --gold-muted: 142 92 76;
+  --destructive: 224 106 85;
+  color-scheme: dark;
+}
+
+/* 放映室 · 深色 */
 [data-theme='projector'][data-mode='dark'] {
   --ink-bg: 18 20 27;
   --ink-surface: 21 24 32;

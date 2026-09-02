@@ -26,6 +26,7 @@ const nav = [
 ]
 
 const themeLabels: Record<ThemeKey, string> = {
+  collection: '素材志',
   projector: '放映室',
   midnight: '深海',
   moss: '苔原',
