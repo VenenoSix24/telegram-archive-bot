@@ -46,7 +46,7 @@ def _startup_banner(config, chats: dict[int, str]) -> str:
         lines.append(f"  Web 后台    http://{host}:{config.web_port}")
     lines.append(f"  数据库      {Path(config.database_path).name}")
     lines.append(f"  日志        {config_dir() / 'logs'}")
-    lines.append("  源群 → 目标")
+    lines.append("  来源 → 目标")
     for src in config.source_chats:
         targets = "、".join(
             chats.get(target_id, str(target_id))
@@ -95,7 +95,7 @@ async def _run() -> int:
         )
         if not is_admin:
             logger.warning(
-                "目标频道 %s (%s)：当前账号不是管理员，将无法发消息/编辑。"
+                "目标 %s (%s)：当前账号不是管理员，将无法发消息/编辑。"
                 "请把小号设为该频道管理员。",
                 chats[target_id],
                 target_id,

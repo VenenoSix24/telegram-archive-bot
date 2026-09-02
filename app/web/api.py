@@ -237,8 +237,26 @@ def build_api_router(
                     "SELECT target_chat_id, COUNT(*) AS n FROM messages "
                     "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
                 ).fetchall()
+            # 目标名与卡片同源：配置备注名 + 运行时解析的会话名，缺失回退前端拼 ID
+            target_names: dict[int, str] = {}
+            if config_path:
+                try:
+                    editable = read_editable_config(Path(config_path))
+                    target_names = {
+                        t["chat_id"]: t["name"]
+                        for t in editable["target_channels"]
+                        if t.get("chat_id") is not None
+                    }
+                except (OSError, ValueError, TypeError):
+                    target_names = {}
+            target_names.update(chat_names or {})
             targets = [
-                {"chat_id": r["target_chat_id"], "count": r["n"]} for r in target_rows
+                {
+                    "chat_id": r["target_chat_id"],
+                    "count": r["n"],
+                    "name": target_names.get(r["target_chat_id"]) or "",
+                }
+                for r in target_rows
             ]
         queue = {"pending": 0, "processing": 0, "success": 0, "failed": 0}
         with _connect(database_path) as conn:
@@ -522,6 +540,13 @@ def build_api_router(
             return FileResponse(
                 str(path), filename=path.name, media_type="application/octet-stream"
             )
+
+        @router.delete("/ops/backups/{name}")
+        def delete_backup(name: str) -> dict:
+            path, kind = _find_backup(name)
+            path.unlink()
+            logger.info("backup %s deleted via web", name)
+            return {"ok": True, "kind": kind}
 
         def _pause_queue_for_restart(request: Request) -> None:
             """数据库即将被替换：暂停队列，避免旧内存状态继续写新库。"""
