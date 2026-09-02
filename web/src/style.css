@@ -267,12 +267,33 @@ html.theme-fading *::after {
     box-shadow 300ms ease !important;
 }
 
+/* C3 音频绘制封面 hover 波形律动：卡片（.group/.card-root）或波形区自身
+   悬停时轻舞，条与条 45ms 错峰；默认静止 */
+.v-wave-bar {
+  transform-origin: bottom;
+}
+.group:hover .v-wave-bar,
+.card-root:hover .v-wave-bar,
+.v-wave:hover .v-wave-bar {
+  animation: v-wave 900ms ease-in-out infinite;
+}
+@keyframes v-wave {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.45);
+  }
+}
+
 /* 减少动效偏好：遵守 prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     animation-delay: 0s !important;
     transition-delay: 0s !important;
