@@ -87,7 +87,6 @@ export interface EditableConfig {
   show_link: boolean
   preserve_original: boolean
   rating_enabled: boolean
-  url_template: string | null
   admins: number[]
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'
