@@ -113,7 +113,8 @@ export async function resetDatabase(): Promise<{ ok: boolean }> {
 
 export interface MessageQuery {
   q?: string
-  tag?: string
+  /** 多标签交集：每个值单独一个 tag 参数（?tag=A&tag=B） */
+  tag?: string | string[]
   media_type?: string
   rating?: number
   source_chat_id?: number
@@ -126,7 +127,12 @@ export interface MessageQuery {
 export async function listMessages(query: MessageQuery = {}): Promise<MessagesResponse> {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value === undefined || value === null || value === '') continue
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item !== '' && item != null) params.append(key, String(item))
+      }
+    } else {
       params.set(key, String(value))
     }
   }
