@@ -523,6 +523,13 @@ def build_api_router(
                 str(path), filename=path.name, media_type="application/octet-stream"
             )
 
+        @router.delete("/ops/backups/{name}")
+        def delete_backup(name: str) -> dict:
+            path, kind = _find_backup(name)
+            path.unlink()
+            logger.info("backup %s deleted via web", name)
+            return {"ok": True, "kind": kind}
+
         def _pause_queue_for_restart(request: Request) -> None:
             """数据库即将被替换：暂停队列，避免旧内存状态继续写新库。"""
             queue = getattr(request.app.state, "queue", None)

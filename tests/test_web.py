@@ -429,3 +429,48 @@ def test_restore_valid_backup_pauses_queue(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["restart_required"] is True
     assert queue.paused is True
+
+
+def test_delete_backup_removes_file(tmp_path):
+    """备份可单个删除：文件消失、列表同步减少。"""
+    from app.web.backup import backup_database
+
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+    backup_path = backup_database(Path(db))
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        listed = client.get("/api/v1/ops/backups").json()["items"]
+        assert [item["name"] for item in listed] == [backup_path.name]
+
+        resp = client.delete(f"/api/v1/ops/backups/{backup_path.name}")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        remaining = client.get("/api/v1/ops/backups").json()["items"]
+        assert remaining == []
+
+    assert not backup_path.exists()
+
+
+def test_delete_backup_rejects_bad_name(tmp_path):
+    """非法名与不存在的备份分别 400 / 404，不动其他文件。"""
+    db = _seeded_messages_db(tmp_path)
+    from app.web.backup import backup_database
+
+    backup_path = backup_database(Path(db))
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        assert client.delete("/api/v1/ops/backups/not-a-bak").status_code == 400
+        assert client.delete("/api/v1/ops/backups/missing.bak").status_code == 404
+
+    assert backup_path.exists()
