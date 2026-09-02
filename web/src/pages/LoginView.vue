@@ -33,10 +33,10 @@ async function submit() {
 </script>
 
 <template>
-  <!-- 标准后台：居中登录卡 -->
+  <!-- 标准后台：居中登录卡（首屏 fade-up 仪式感，B7） -->
   <div v-if="isVault" class="grid min-h-screen place-items-center bg-ink-bg px-4">
     <form
-      class="w-full max-w-sm rounded-xl border border-ink-line bg-ink-surface p-8 shadow-sm"
+      class="anim-fade-up-slow w-full max-w-sm rounded-xl border border-ink-line bg-ink-surface p-8 shadow-sm"
       @submit.prevent="submit"
     >
       <div class="flex items-center gap-3">
@@ -56,7 +56,9 @@ async function submit() {
         autocomplete="current-password"
       />
 
-      <p v-if="error" role="alert" class="mt-3 text-sm text-destructive">{{ error }}</p>
+      <Transition name="v-dialog">
+        <p v-if="error" key="error" role="alert" class="mt-3 text-sm text-destructive">{{ error }}</p>
+      </Transition>
 
       <Button type="submit" class="mt-6 w-full" :disabled="busy || !token">
         {{ busy ? '验证中…' : '登录' }}
@@ -68,14 +70,19 @@ async function submit() {
     </form>
   </div>
 
-  <!-- 素材志：扉页登录 -->
+  <!-- 素材志：扉页登录（卡 fade-up 慢一档，朱印延迟轻按浮现，B7） -->
   <div v-else class="grid min-h-screen place-items-center bg-ink-bg px-4">
     <form
-      class="w-full max-w-sm border border-ink-line bg-ink-surface p-8"
+      class="anim-fade-up-slow w-full max-w-sm border border-ink-line bg-ink-surface p-8"
       @submit.prevent="submit"
     >
       <div class="flex items-center gap-3.5">
-        <svg class="mast-seal hidden h-11 w-11 shrink-0 text-gold" viewBox="0 0 52 52" aria-hidden="true">
+        <svg
+          class="mast-seal anim-scale-in hidden h-11 w-11 shrink-0 text-gold"
+          style="animation-delay: 180ms"
+          viewBox="0 0 52 52"
+          aria-hidden="true"
+        >
           <rect x="2" y="2" width="48" height="48" rx="5" fill="none" stroke="currentColor" stroke-width="3.5" />
           <text x="26" y="37" text-anchor="middle" font-size="27" font-weight="700" fill="currentColor">档</text>
         </svg>
@@ -95,7 +102,9 @@ async function submit() {
         autocomplete="current-password"
       />
 
-      <p v-if="error" role="alert" class="mt-3 text-sm text-destructive">{{ error }}</p>
+      <Transition name="v-dialog">
+        <p v-if="error" key="error" role="alert" class="mt-3 text-sm text-destructive">{{ error }}</p>
+      </Transition>
 
       <Button type="submit" class="mt-6 w-full" :disabled="busy || !token">
         {{ busy ? '验证中…' : '进入归档库' }}

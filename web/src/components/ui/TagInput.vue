@@ -38,7 +38,8 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <!-- flex-wrap：tag 多时换行而不是把 chips 挤进横向滚动条，输入框始终可见 -->
   <div class="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1 rounded-md border border-ink-line bg-ink-raised px-2 py-1 focus-within:border-gold">
-    <template v-if="model.length">
+    <!-- chips 增删过渡（B5） -->
+    <TransitionGroup v-if="model.length" name="v-list">
       <!-- 每个 tag 独立描边 chip，× 收进 chip 内部，边界一目了然 -->
       <span
         v-for="tag in model"
@@ -55,7 +56,7 @@ function onKeydown(event: KeyboardEvent) {
           <X class="h-3 w-3" />
         </button>
       </span>
-    </template>
+    </TransitionGroup>
     <input
       v-model="draft"
       type="text"

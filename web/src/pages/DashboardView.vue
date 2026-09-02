@@ -196,7 +196,7 @@ onMounted(load)
 
     <template v-else-if="stats">
       <!-- KPI 行 -->
-      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div class="anim-fade-up grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
           <p class="text-xs text-steam-dim">{{ ledger[0].label }}</p>
           <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[0].value }}</p>
@@ -219,7 +219,7 @@ onMounted(load)
         </div>
       </div>
 
-      <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div class="anim-fade-up mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2" :style="{ animationDelay: '90ms' }">
         <!-- 队列 -->
         <section class="rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="队列状态">
           <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
@@ -279,7 +279,7 @@ onMounted(load)
       </div>
 
       <!-- 最近添加 -->
-      <section class="mt-3 overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="最近添加">
+      <section class="anim-fade-up mt-3 overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="最近添加" :style="{ animationDelay: '150ms' }">
         <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
           最近添加
           <RouterLink
@@ -344,7 +344,7 @@ onMounted(load)
 
     <template v-else-if="stats">
       <!-- 卷首台账：hairline 网格，不是卡片堆 -->
-      <section aria-label="卷首台账">
+      <section aria-label="卷首台账" class="anim-fade-up">
         <div class="grid grid-cols-2 gap-px border border-ink-line bg-ink-line sm:grid-cols-4">
           <div v-for="cell in ledger" :key="cell.label" class="bg-ink-surface p-4 min-[480px]:p-5">
             <p class="font-mono text-[10px] tracking-[0.24em] text-steam-dim">{{ cell.label }}</p>
@@ -359,12 +359,13 @@ onMounted(load)
       </section>
 
       <!-- 本期封面 + 卷首语 -->
-      <section class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <section class="anim-fade-up mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" :style="{ animationDelay: '90ms' }">
         <figure v-if="cover" class="min-w-0 cursor-pointer" @click="selected = cover">
           <div class="relative border border-ink-line bg-ink-surface p-2.5 transition-[border-color,box-shadow] duration-200 hover:border-steam-dim">
             <div class="relative overflow-hidden" :style="{ aspectRatio: coverImg ? coverRatio : '16 / 10' }">
               <img
                 v-if="coverImg"
+                v-img-fade
                 :src="coverImg"
                 :alt="'本期封面 · 素材 #' + cover.id"
                 class="h-full w-full object-cover"
@@ -392,7 +393,7 @@ onMounted(load)
       </section>
 
       <!-- 印制 · 队列状态：失败必须被看见 -->
-      <section class="mt-8" aria-label="队列状态">
+      <section class="anim-fade-up mt-8" aria-label="队列状态" :style="{ animationDelay: '150ms' }">
         <h2 class="font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">印制 · QUEUE</h2>
         <p v-if="queueIdle" class="mt-3 text-sm text-steam-dim">队列空闲，全部素材均已处理。</p>
         <div v-else class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
@@ -413,7 +414,7 @@ onMounted(load)
         </p>
       </section>
 
-      <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div class="anim-fade-up mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2" :style="{ animationDelay: '210ms' }">
         <!-- 类目分布：点线 + 细条，点击直达筛选 -->
         <section aria-label="类目分布">
           <div class="flex items-baseline justify-between">
