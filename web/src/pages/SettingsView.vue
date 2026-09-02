@@ -413,7 +413,6 @@ async function resetDb() {
                 {{ t.label }}
               </button>
             </div>
-            <p class="mt-2 text-xs text-steam-dim/70">暗房印样已定稿待实现。</p>
           </div>
           <div>
             <p class="mb-2 text-xs text-steam-dim">明暗模式</p>
@@ -498,91 +497,97 @@ async function resetDb() {
             </button>
 
             <!-- 展开态：编辑表单，字段配常驻说明 -->
-            <div v-if="expandedSource === i" class="border-t border-ink-line px-4 py-4">
-              <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                <div class="min-w-0">
-                  <label class="mb-1 block text-xs text-steam-dim" :for="`src-chat-${i}`">会话 ID（必填）</label>
-                  <input
-                    :id="`src-chat-${i}`"
-                    v-model.number="s.chat_id"
-                    type="number"
-                    placeholder="例如 123456789"
-                    class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                    :aria-label="`来源 ${i + 1} 会话 ID`"
-                  />
-                  <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，群组或频道均可；在会话里发送 /id 即可查询。</p>
-                  <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
-                    <input v-model="s.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密频道
-                  </label>
-                </div>
-                <div class="min-w-0">
-                  <label class="mb-1 block text-xs text-steam-dim" :for="`src-name-${i}`">名称</label>
-                  <div class="flex gap-1.5">
-                    <input
-                      :id="`src-name-${i}`"
-                      v-model="s.name"
-                      type="text"
-                      placeholder="留空自动获取"
-                      class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                      :aria-label="`来源 ${i + 1} 名称`"
-                    />
-                    <button
-                      v-if="s.name"
-                      type="button"
-                      class="cursor-pointer rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam"
-                      :aria-label="`重置来源 ${i + 1} 名称`"
-                      title="恢复自动名称"
-                      @click="resetName(s)"
-                    >
-                      <X class="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p class="mt-1 text-xs text-steam-dim/70">留空则自动获取 Telegram 会话名，也可自定义备注名。</p>
-                </div>
-                <div class="min-w-0">
-                  <span class="mb-1 block text-xs text-steam-dim">默认 Tag</span>
-                  <TagInput v-model="s.default_tags" />
-                  <p class="mt-1 text-xs text-steam-dim/70">来自此来源的素材尚未打标时，自动加注这些标签。</p>
-                </div>
-                <div class="min-w-0">
-                  <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
-                  <div class="relative" data-target-menu>
-                    <button
-                      type="button"
-                      class="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-ink-line bg-ink-raised px-3 text-left text-sm text-steam focus:border-gold focus:outline-none"
-                      :aria-expanded="openTargetMenu === i"
-                      :aria-label="`来源 ${i + 1} 目标`"
-                      @click="openTargetMenu = openTargetMenu === i ? null : i"
-                    >
-                      <span class="truncate">
-                        {{ s.target_channel_ids.length ? `${s.target_channel_ids.length} 个目标` : '全部目标' }}
-                      </span>
-                      <ChevronDown class="h-4 w-4 shrink-0 text-steam-dim" />
-                    </button>
-                    <div v-if="openTargetMenu === i" class="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-auto rounded-md border border-ink-line bg-ink-surface p-1 shadow-lg">
-                      <button
-                        v-for="target in form.target_channels"
-                        :key="String(target.chat_id)"
-                        type="button"
-                        class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-ink-raised"
-                        @click="toggleTarget(s, target.chat_id)"
-                      >
-                        <span class="flex h-4 w-4 items-center justify-center rounded border border-ink-line text-xs" :class="s.target_channel_ids.includes(target.chat_id as number) ? 'border-gold bg-gold text-ink' : ''">{{ s.target_channel_ids.includes(target.chat_id as number) ? '✓' : '' }}</span>
-                        <span class="truncate">{{ targetLabel(target) }}</span>
-                      </button>
-                      <p v-if="!form.target_channels.length" class="px-2 py-2 text-xs text-steam-dim">请先在「输出」章节添加目标</p>
+            <div class="anim-collapse" :class="expandedSource === i && 'anim-collapse--open'">
+              <div>
+                <div class="border-t border-ink-line px-4 py-4">
+                  <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs text-steam-dim" :for="`src-chat-${i}`">会话 ID（必填）</label>
+                      <input
+                        :id="`src-chat-${i}`"
+                        v-model.number="s.chat_id"
+                        type="number"
+                        placeholder="例如 123456789"
+                        class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+                        :aria-label="`来源 ${i + 1} 会话 ID`"
+                      />
+                      <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，群组或频道均可；在会话里发送 /id 即可查询。</p>
+                      <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
+                        <input v-model="s.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密频道
+                      </label>
+                    </div>
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs text-steam-dim" :for="`src-name-${i}`">名称</label>
+                      <div class="flex gap-1.5">
+                        <input
+                          :id="`src-name-${i}`"
+                          v-model="s.name"
+                          type="text"
+                          placeholder="留空自动获取"
+                          class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+                          :aria-label="`来源 ${i + 1} 名称`"
+                        />
+                        <button
+                          v-if="s.name"
+                          type="button"
+                          class="cursor-pointer rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam"
+                          :aria-label="`重置来源 ${i + 1} 名称`"
+                          title="恢复自动名称"
+                          @click="resetName(s)"
+                        >
+                          <X class="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p class="mt-1 text-xs text-steam-dim/70">留空则自动获取 Telegram 会话名，也可自定义备注名。</p>
+                    </div>
+                    <div class="min-w-0">
+                      <span class="mb-1 block text-xs text-steam-dim">默认 Tag</span>
+                      <TagInput v-model="s.default_tags" />
+                      <p class="mt-1 text-xs text-steam-dim/70">来自此来源的素材尚未打标时，自动加注这些标签。</p>
+                    </div>
+                    <div class="min-w-0">
+                      <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
+                      <div class="relative" data-target-menu>
+                        <button
+                          type="button"
+                          class="flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-ink-line bg-ink-raised px-3 text-left text-sm text-steam focus:border-gold focus:outline-none"
+                          :aria-expanded="openTargetMenu === i"
+                          :aria-label="`来源 ${i + 1} 目标`"
+                          @click="openTargetMenu = openTargetMenu === i ? null : i"
+                        >
+                          <span class="truncate">
+                            {{ s.target_channel_ids.length ? `${s.target_channel_ids.length} 个目标` : '全部目标' }}
+                          </span>
+                          <ChevronDown class="h-4 w-4 shrink-0 text-steam-dim" />
+                        </button>
+                        <Transition name="v-pop">
+                          <div v-if="openTargetMenu === i" class="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-auto rounded-md border border-ink-line bg-ink-surface p-1 shadow-lg [--pop-origin:top_left]">
+                            <button
+                              v-for="target in form.target_channels"
+                              :key="String(target.chat_id)"
+                              type="button"
+                              class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-ink-raised"
+                              @click="toggleTarget(s, target.chat_id)"
+                            >
+                              <span class="flex h-4 w-4 items-center justify-center rounded border border-ink-line text-xs" :class="s.target_channel_ids.includes(target.chat_id as number) ? 'border-gold bg-gold text-ink' : ''">{{ s.target_channel_ids.includes(target.chat_id as number) ? '✓' : '' }}</span>
+                              <span class="truncate">{{ targetLabel(target) }}</span>
+                            </button>
+                            <p v-if="!form.target_channels.length" class="px-2 py-2 text-xs text-steam-dim">请先在「输出」章节添加目标</p>
+                          </div>
+                        </Transition>
+                      </div>
+                      <p class="mt-1 text-xs text-steam-dim/70">不选则归档到全部目标频道。</p>
                     </div>
                   </div>
-                  <p class="mt-1 text-xs text-steam-dim/70">不选则归档到全部目标频道。</p>
+                  <button
+                    type="button"
+                    class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
+                    @click="expandedSource = null; removeSource(i)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" /> 删除此来源
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
-                @click="expandedSource = null; removeSource(i)"
-              >
-                <Trash2 class="h-3.5 w-3.5" /> 删除此来源
-              </button>
             </div>
           </div>
           <p v-if="!form.source_chats.length" class="text-xs text-steam-dim">还没有来源，点击右上「新增」接入（群组或频道均可）。</p>
@@ -618,55 +623,59 @@ async function resetDb() {
               </span>
             </button>
 
-            <div v-if="expandedTarget === i" class="border-t border-ink-line px-4 py-4">
-              <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                <div class="min-w-0">
-                  <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-chat-${i}`">会话 ID（必填）</label>
-                  <input
-                    :id="`tgt-chat-${i}`"
-                    v-model.number="target.chat_id"
-                    type="number"
-                    placeholder="例如 -100111222333"
-                    class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                    :aria-label="`目标 ${i + 1} 会话 ID`"
-                  />
-                  <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，频道或群组均可；发送 /id 即可查询。</p>
-                  <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
-                    <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密会话
-                  </label>
-                </div>
-                <div class="min-w-0">
-                  <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-name-${i}`">名称</label>
-                  <div class="flex gap-1.5">
-                    <input
-                      :id="`tgt-name-${i}`"
-                      v-model="target.name"
-                      type="text"
-                      placeholder="留空自动获取"
-                      class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                      :aria-label="`目标 ${i + 1} 名称`"
-                    />
-                    <button
-                      v-if="target.name"
-                      type="button"
-                      class="cursor-pointer rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam"
-                      :aria-label="`重置目标 ${i + 1} 名称`"
-                      title="恢复自动名称"
-                      @click="resetName(target)"
-                    >
-                      <X class="h-4 w-4" />
-                    </button>
+            <div class="anim-collapse" :class="expandedTarget === i && 'anim-collapse--open'">
+              <div>
+                <div class="border-t border-ink-line px-4 py-4">
+                  <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-chat-${i}`">会话 ID（必填）</label>
+                      <input
+                        :id="`tgt-chat-${i}`"
+                        v-model.number="target.chat_id"
+                        type="number"
+                        placeholder="例如 -100111222333"
+                        class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+                        :aria-label="`目标 ${i + 1} 会话 ID`"
+                      />
+                      <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，频道或群组均可；发送 /id 即可查询。</p>
+                      <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
+                        <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密会话
+                      </label>
+                    </div>
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-name-${i}`">名称</label>
+                      <div class="flex gap-1.5">
+                        <input
+                          :id="`tgt-name-${i}`"
+                          v-model="target.name"
+                          type="text"
+                          placeholder="留空自动获取"
+                          class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+                          :aria-label="`目标 ${i + 1} 名称`"
+                        />
+                        <button
+                          v-if="target.name"
+                          type="button"
+                          class="cursor-pointer rounded-md border border-ink-line px-2 text-steam-dim hover:text-steam"
+                          :aria-label="`重置目标 ${i + 1} 名称`"
+                          title="恢复自动名称"
+                          @click="resetName(target)"
+                        >
+                          <X class="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p class="mt-1 text-xs text-steam-dim/70">留空则自动获取 Telegram 会话名，也可自定义备注名。</p>
+                    </div>
                   </div>
-                  <p class="mt-1 text-xs text-steam-dim/70">留空则自动获取 Telegram 会话名，也可自定义备注名。</p>
+                  <button
+                    type="button"
+                    class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
+                    @click="expandedTarget = null; removeTarget(i)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" /> 删除此目标
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
-                @click="expandedTarget = null; removeTarget(i)"
-              >
-                <Trash2 class="h-3.5 w-3.5" /> 删除此目标
-              </button>
             </div>
           </div>
           <p v-if="!form.target_channels.length" class="text-xs text-steam-dim">还没有目标，点击右上「新增」接入（频道或群组均可）。</p>
@@ -687,16 +696,19 @@ async function resetDb() {
             <h3 class="mb-1 text-sm font-medium text-steam">归档消息模板</h3>
             <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
-              <div class="space-y-1.5">
-                <div v-for="(key, index) in form.message_template" :key="key" class="flex items-center gap-2 rounded-md border border-ink-line bg-ink-raised px-2 py-1.5">
-                  <span class="min-w-0 flex-1 text-sm text-steam">{{ templateBlocks.find((block) => block.key === key)?.label }}</span>
-                  <button type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === 0" :aria-label="`上移 ${key}`" @click="moveTemplateBlock(index, -1)"><MoveUp class="h-4 w-4" /></button>
-                  <button type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === form.message_template.length - 1" :aria-label="`下移 ${key}`" @click="moveTemplateBlock(index, 1)"><MoveDown class="h-4 w-4" /></button>
-                  <button v-if="key !== 'body'" type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-destructive/20 hover:text-destructive" :aria-label="`隐藏 ${key}`" @click="toggleTemplateBlock(key)"><X class="h-4 w-4" /></button>
-                </div>
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                  <button v-for="block in templateBlocks.filter((block) => !form.message_template.includes(block.key))" :key="block.key" type="button" class="cursor-pointer rounded-md border border-dashed border-ink-line px-2 py-1 text-xs text-steam-dim hover:border-gold hover:text-gold" @click="toggleTemplateBlock(block.key)">显示 {{ block.label }}</button>
-                </div>
+              <div>
+                <!-- 模板区块增删/排序走 TransitionGroup：上下移与隐藏/显示带 FLIP 过渡（B5） -->
+                <TransitionGroup tag="div" name="v-list" move-class="v-list-move" class="space-y-1.5">
+                  <div v-for="(key, index) in form.message_template" :key="key" class="flex items-center gap-2 rounded-md border border-ink-line bg-ink-raised px-2 py-1.5">
+                    <span class="min-w-0 flex-1 text-sm text-steam">{{ templateBlocks.find((block) => block.key === key)?.label }}</span>
+                    <button type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === 0" :aria-label="`上移 ${key}`" @click="moveTemplateBlock(index, -1)"><MoveUp class="h-4 w-4" /></button>
+                    <button type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-ink-line hover:text-steam disabled:opacity-40" :disabled="index === form.message_template.length - 1" :aria-label="`下移 ${key}`" @click="moveTemplateBlock(index, 1)"><MoveDown class="h-4 w-4" /></button>
+                    <button v-if="key !== 'body'" type="button" class="cursor-pointer rounded p-1 text-steam-dim hover:bg-destructive/20 hover:text-destructive" :aria-label="`隐藏 ${key}`" @click="toggleTemplateBlock(key)"><X class="h-4 w-4" /></button>
+                  </div>
+                  <div key="add-row" class="flex flex-wrap gap-1.5 pt-1">
+                    <button v-for="block in templateBlocks.filter((block) => !form.message_template.includes(block.key))" :key="block.key" type="button" class="cursor-pointer rounded-md border border-dashed border-ink-line px-2 py-1 text-xs text-steam-dim hover:border-gold hover:text-gold" @click="toggleTemplateBlock(block.key)">显示 {{ block.label }}</button>
+                  </div>
+                </TransitionGroup>
               </div>
               <div class="rounded-md border border-ink-line bg-ink-raised/50 p-3">
                 <p class="mb-2 text-xs text-steam-dim">新消息预览</p>
@@ -837,24 +849,28 @@ async function resetDb() {
                 配置备份
                 <span class="font-mono text-xs text-steam-dim">{{ configBackups.length }}</span>
               </button>
-              <ul v-if="openGroups.config && configBackups.length" class="divide-y divide-ink-line pb-2">
-                <li v-for="item in configBackups" :key="item.name" class="flex items-center gap-2 py-2">
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate font-mono text-[11px] text-steam">{{ item.name }}</p>
-                    <p class="font-mono text-[9px] text-steam-dim">{{ backupDate(item) }} · {{ sizeLabel(item.size) }}</p>
-                  </div>
-                  <a :href="backupDownloadUrl(item.name)" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`下载 ${item.name}`" title="下载">
-                    <Download class="h-4 w-4" />
-                  </a>
-                  <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`恢复 ${item.name}`" title="恢复" @click="restoreItem(item)">
-                    <RotateCcw class="h-4 w-4" />
-                  </button>
-                  <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-destructive" :aria-label="`删除 ${item.name}`" title="删除" @click="deleteItem(item)">
-                    <Trash2 class="h-4 w-4" />
-                  </button>
-                </li>
-              </ul>
-              <p v-else-if="openGroups.config" class="pb-2 text-xs text-steam-dim">暂无配置备份</p>
+              <div class="anim-collapse" :class="openGroups.config && 'anim-collapse--open'">
+                <div>
+                  <ul v-if="configBackups.length" class="divide-y divide-ink-line pb-2">
+                    <li v-for="item in configBackups" :key="item.name" class="flex items-center gap-2 py-2">
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate font-mono text-[11px] text-steam">{{ item.name }}</p>
+                        <p class="font-mono text-[9px] text-steam-dim">{{ backupDate(item) }} · {{ sizeLabel(item.size) }}</p>
+                      </div>
+                      <a :href="backupDownloadUrl(item.name)" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`下载 ${item.name}`" title="下载">
+                        <Download class="h-4 w-4" />
+                      </a>
+                      <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`恢复 ${item.name}`" title="恢复" @click="restoreItem(item)">
+                        <RotateCcw class="h-4 w-4" />
+                      </button>
+                      <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-destructive" :aria-label="`删除 ${item.name}`" title="删除" @click="deleteItem(item)">
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="pb-2 text-xs text-steam-dim">暂无配置备份</p>
+                </div>
+              </div>
             </div>
 
             <!-- 数据库备份折叠组 -->
@@ -869,24 +885,28 @@ async function resetDb() {
                 数据库备份
                 <span class="font-mono text-xs text-steam-dim">{{ databaseBackups.length }}</span>
               </button>
-              <ul v-if="openGroups.database && databaseBackups.length" class="divide-y divide-ink-line pb-2">
-                <li v-for="item in databaseBackups" :key="item.name" class="flex items-center gap-2 py-2">
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate font-mono text-[11px] text-steam">{{ item.name }}</p>
-                    <p class="font-mono text-[9px] text-steam-dim">{{ backupDate(item) }} · {{ sizeLabel(item.size) }}</p>
-                  </div>
-                  <a :href="backupDownloadUrl(item.name)" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`下载 ${item.name}`" title="下载">
-                    <Download class="h-4 w-4" />
-                  </a>
-                  <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`恢复 ${item.name}`" title="恢复" @click="restoreItem(item)">
-                    <RotateCcw class="h-4 w-4" />
-                  </button>
-                  <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-destructive" :aria-label="`删除 ${item.name}`" title="删除" @click="deleteItem(item)">
-                    <Trash2 class="h-4 w-4" />
-                  </button>
-                </li>
-              </ul>
-              <p v-else-if="openGroups.database" class="pb-2 text-xs text-steam-dim">暂无数据库备份</p>
+              <div class="anim-collapse" :class="openGroups.database && 'anim-collapse--open'">
+                <div>
+                  <ul v-if="databaseBackups.length" class="divide-y divide-ink-line pb-2">
+                    <li v-for="item in databaseBackups" :key="item.name" class="flex items-center gap-2 py-2">
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate font-mono text-[11px] text-steam">{{ item.name }}</p>
+                        <p class="font-mono text-[9px] text-steam-dim">{{ backupDate(item) }} · {{ sizeLabel(item.size) }}</p>
+                      </div>
+                      <a :href="backupDownloadUrl(item.name)" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`下载 ${item.name}`" title="下载">
+                        <Download class="h-4 w-4" />
+                      </a>
+                      <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-gold" :aria-label="`恢复 ${item.name}`" title="恢复" @click="restoreItem(item)">
+                        <RotateCcw class="h-4 w-4" />
+                      </button>
+                      <button type="button" class="shrink-0 cursor-pointer p-1.5 text-steam-dim transition-colors hover:text-destructive" :aria-label="`删除 ${item.name}`" title="删除" @click="deleteItem(item)">
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="pb-2 text-xs text-steam-dim">暂无数据库备份</p>
+                </div>
+              </div>
             </div>
 
             <!-- 从本地导入 -->
@@ -916,23 +936,25 @@ async function resetDb() {
 
         <p v-if="error && form.target_channels" role="alert" class="mb-4 break-words text-sm leading-5 text-destructive">{{ error }}</p>
 
-        <!-- 吸底保存栏：有改动才出现；移动端抬高避开底部 tab 栏 -->
-        <div v-if="dirty" class="sticky z-30" :class="isVault ? 'bottom-4' : 'bottom-20 md:bottom-4'">
-          <div class="flex flex-wrap items-center gap-3 rounded-xl border border-gold/50 bg-ink-surface/95 px-4 py-3 shadow-lg backdrop-blur">
-            <span class="text-xs text-steam-dim">有未保存的修改</span>
-            <div class="ml-auto flex gap-2">
-              <Button type="button" variant="secondary" size="sm" :disabled="saving" @click="reset">
-                <RotateCcw class="h-3.5 w-3.5" /> 撤销
-              </Button>
-              <Button type="submit" size="sm" :disabled="saving">
-                <Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin" />
-                <Save v-else class="h-3.5 w-3.5" />
-                {{ saving ? '保存中…' : '保存配置' }}
-              </Button>
+        <!-- 吸底保存栏：有改动才浮出（fade-up），长表单不用滚到底找按钮；移动端抬高避开底部 tab 栏 -->
+        <Transition name="v-rise">
+          <div v-if="dirty" class="sticky z-30" :class="isVault ? 'bottom-4' : 'bottom-20 md:bottom-4'">
+            <div class="flex flex-wrap items-center gap-3 rounded-xl border border-gold/50 bg-ink-surface/95 px-4 py-3 shadow-lg backdrop-blur">
+              <span class="text-xs text-steam-dim">有未保存的修改</span>
+              <div class="ml-auto flex gap-2">
+                <Button type="button" variant="secondary" size="sm" :disabled="saving" @click="reset">
+                  <RotateCcw class="h-3.5 w-3.5" /> 撤销
+                </Button>
+                <Button type="submit" size="sm" :disabled="saving">
+                  <Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin" />
+                  <Save v-else class="h-3.5 w-3.5" />
+                  {{ saving ? '保存中…' : '保存配置' }}
+                </Button>
+              </div>
+              <span class="w-full text-[11px] leading-4 text-steam-dim/70 sm:w-auto">保存后需重启进程生效（已自动备份 config.yaml.bak）</span>
             </div>
-            <span class="w-full text-[11px] leading-4 text-steam-dim/70 sm:w-auto">保存后需重启进程生效（已自动备份 config.yaml.bak）</span>
           </div>
-        </div>
+        </Transition>
       </form>
     </template>
   </div>

@@ -22,6 +22,7 @@ import { toastError, toastSuccess } from '@/composables/useToast'
 import { useCatalogFilters } from '@/composables/useCatalogFilters'
 import { useThumbMode } from '@/composables/useDisplayPrefs'
 import { displayChatId } from '@/lib/format'
+import { STAGGER_CAP, STAGGER_STEP, staggerDelay } from '@/lib/motion'
 import { isVault, useVocab } from '@/lib/vocab'
 
 const route = useRoute()
@@ -57,6 +58,30 @@ const error = ref('')
 const selected = ref<Message | null>(null)
 const tocOpen = ref(false)
 const searchInput = ref<HTMLInputElement | null>(null)
+
+/* B2 首屏 stagger：仅页面首次载入的进场逐项延迟（筛选变更不 stagger） */
+const revealStagger = ref(false)
+let firstLoad = true
+function itemStyle(index: number) {
+  // 瀑布流是 CSS columns：按列填充，索引序 = 纵列序，逐项 stagger 会呈现
+  // 「从左往右」的扫掠（用户实测困惑）——瀑布流降级为整波 fade-up，不逐项延迟
+  if (thumbMode.value === 'masonry') return undefined
+  return revealStagger.value ? { transitionDelay: staggerDelay(index) } : undefined
+}
+
+/* 骨架延迟显示：本地接口很快，骨架（假卡片块）挂载一帧就被替换，
+   看起来像「卡片闪一下」（用户实测反馈）；慢网 200ms 后才兜底出现 */
+const skeletonReady = ref(false)
+let skeletonTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  loading,
+  (busy) => {
+    clearTimeout(skeletonTimer)
+    if (busy) skeletonTimer = setTimeout(() => (skeletonReady.value = true), 200)
+    else skeletonReady.value = false
+  },
+  { immediate: true },
+)
 
 /* 标准后台：视图切换与常驻详情栏 */
 const viewMode = ref<'grid' | 'list'>(
@@ -177,9 +202,10 @@ onBeforeUnmount(() => {
 
 let timer: ReturnType<typeof setTimeout> | undefined
 let requestGeneration = 0
+// 筛选变更不清空旧数据：旧列表原地保留到新数据到达，由 TransitionGroup
+// 做离场/进场/FLIP 衔接（清空会强制路过骨架，快加载下像卡片闪现）
 watch([q, mediaType, rating, targetFilter, statusFilter], () => {
   clearTimeout(timer)
-  data.value = null
   timer = setTimeout(load, 300)
 })
 watch(tagFilter, () => {
@@ -202,7 +228,15 @@ async function load() {
       status: statusFilter.value,
       limit: PAGE,
     })
-    if (generation === requestGeneration) data.value = result
+    if (generation === requestGeneration) {
+      data.value = result
+      if (firstLoad && result.items.length) {
+        firstLoad = false
+        revealStagger.value = true
+        // 收尾波次入场完毕（cap*step 延迟 + 一段动画时长）后再摘除内联延迟
+        setTimeout(() => (revealStagger.value = false), STAGGER_CAP * STAGGER_STEP + 400)
+      }
+    }
   } catch (e) {
     if (generation === requestGeneration) error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -328,7 +362,10 @@ onMounted(() => {
   load()
   window.addEventListener('keydown', onGlobalKey)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKey)
+  clearTimeout(skeletonTimer)
+})
 </script>
 
 <template>
@@ -402,21 +439,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
             </button>
             <template v-if="tagFilter.length">
               <span class="mx-1 hidden h-4 w-px bg-ink-line min-[480px]:block" aria-hidden="true"></span>
-              <span
-                v-for="t in tagFilter"
-                :key="t"
-                class="inline-flex h-7 items-center gap-1.5 rounded-full border border-gold bg-gold/10 px-2.5 text-xs text-gold"
-              >
-                #{{ t }}
-                <button
-                  type="button"
-                  class="cursor-pointer transition-opacity hover:opacity-60"
-                  :aria-label="`移除标签 ${t}`"
-                  @click="removeTag(t)"
+              <TransitionGroup name="v-list">
+                <span
+                  v-for="t in tagFilter"
+                  :key="t"
+                  class="inline-flex h-7 items-center gap-1.5 rounded-full border border-gold bg-gold/10 px-2.5 text-xs text-gold"
                 >
-                  <X class="h-3 w-3" />
-                </button>
-              </span>
+                  #{{ t }}
+                  <button
+                    type="button"
+                    class="cursor-pointer transition-opacity hover:opacity-60"
+                    :aria-label="`移除标签 ${t}`"
+                    @click="removeTag(t)"
+                  >
+                    <X class="h-3 w-3" />
+                  </button>
+                </span>
+              </TransitionGroup>
               <RouterLink :to="{ name: 'tags' }" class="text-[11px] text-gold underline underline-offset-4">
                 全部{{ L.tag }}
               </RouterLink>
@@ -424,90 +463,123 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </div>
         </div>
 
-        <!-- 内容区（工具条吸顶，独立滚动） -->
+        <!-- 内容区（工具条吸顶，独立滚动）。
+             分支链 out-in 淡切（B4）；网格/列表 TransitionGroup：进场 fade-up、离场 fade，
+             非瀑布流才启用 FLIP move（columns 布局量测不准，降级只做进出，B1）；
+             grid↔list 走交叉淡切（B3）；首屏进场逐项延迟（B2） -->
         <div class="px-4 pb-24 pt-4 lg:pb-6">
-          <!-- 骨架屏 -->
-          <div v-if="loading && !shown" :class="gridClass" aria-hidden="true">
-            <div
-              v-for="i in 8"
-              :key="i"
-              class="animate-pulse overflow-hidden rounded-xl border border-ink-line bg-ink-surface"
-              :class="thumbMode === 'masonry' && 'mb-3.5 break-inside-avoid'"
-            >
-              <div class="aspect-video border-b border-ink-line bg-ink-raised" />
-              <div class="space-y-2 p-3">
-                <div class="h-2.5 w-16 rounded bg-ink-raised" />
-                <div class="h-3.5 w-3/4 rounded bg-ink-raised" />
-                <div class="h-2.5 w-1/2 rounded bg-ink-raised" />
+          <Transition name="v-dialog" mode="out-in">
+            <!-- 骨架屏（延迟 200ms 才出现：快加载不闪骨架） -->
+            <div v-if="loading && !shown && skeletonReady" key="skeleton" :class="gridClass" aria-hidden="true">
+              <div
+                v-for="i in 8"
+                :key="i"
+                class="animate-pulse overflow-hidden rounded-xl border border-ink-line bg-ink-surface"
+                :class="thumbMode === 'masonry' && 'mb-3.5 break-inside-avoid'"
+              >
+                <div class="aspect-video border-b border-ink-line bg-ink-raised" />
+                <div class="space-y-2 p-3">
+                  <div class="h-2.5 w-16 rounded bg-ink-raised" />
+                  <div class="h-3.5 w-3/4 rounded bg-ink-raised" />
+                  <div class="h-2.5 w-1/2 rounded bg-ink-raised" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 首载失败 -->
-          <div v-else-if="error" class="flex flex-col items-center gap-3 rounded-xl border border-ink-line bg-ink-surface py-16 text-steam-dim">
-            <AlertTriangle class="h-8 w-8" />
-            <p class="text-sm">{{ error }}</p>
-            <Button variant="secondary" size="sm" @click="load">重试</Button>
-          </div>
-
-          <template v-else-if="data && data.items.length">
-            <div v-if="viewMode === 'grid'" :class="gridClass">
-              <MessageCardVault
-                v-for="m in data.items"
-                :key="m.material_id"
-                :message="m"
-                :selected="selected?.material_id === m.material_id"
-                @rate="(n) => rate(m, n)"
-                @open="openCard(m)"
-              />
-            </div>
-            <div v-else class="overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm">
-              <MessageRow
-                v-for="m in data.items"
-                :key="m.material_id"
-                :message="m"
-                :selected="selected?.material_id === m.material_id"
-                @rate="(n) => rate(m, n)"
-                @open="openCard(m)"
-              />
+            <!-- 首载失败 -->
+            <div
+              v-else-if="error"
+              key="error"
+              class="flex flex-col items-center gap-3 rounded-xl border border-ink-line bg-ink-surface py-16 text-steam-dim"
+            >
+              <AlertTriangle class="h-8 w-8" />
+              <p class="text-sm">{{ error }}</p>
+              <Button variant="secondary" size="sm" @click="load">重试</Button>
             </div>
 
-            <!-- 加载更多 -->
-            <div v-if="hasMore" class="mt-4 flex justify-center">
-              <Button variant="secondary" size="sm" :disabled="loading" @click="loadMore">
-                <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-                {{ loading ? L.loading : `加载更多（${shown} / ${data.total}）` }}
-              </Button>
-            </div>
-          </template>
+            <div v-else-if="data && data.items.length" key="content">
+              <Transition name="v-dialog" mode="out-in">
+                <TransitionGroup
+                  v-if="viewMode === 'grid'"
+                  key="grid"
+                  tag="div"
+                  name="v-list"
+                  appear
+                  :move-class="thumbMode === 'masonry' ? '' : 'v-list-move'"
+                  :class="gridClass"
+                >
+                  <MessageCardVault
+                    v-for="(m, i) in data.items"
+                    :key="m.material_id"
+                    :message="m"
+                    :style="itemStyle(i)"
+                    :selected="selected?.material_id === m.material_id"
+                    @rate="(n) => rate(m, n)"
+                    @open="openCard(m)"
+                  />
+                </TransitionGroup>
+                <TransitionGroup
+                  v-else
+                  key="list"
+                  tag="div"
+                  name="v-list"
+                  appear
+                  class="overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm"
+                >
+                  <MessageRow
+                    v-for="(m, i) in data.items"
+                    :key="m.material_id"
+                    :message="m"
+                    :style="itemStyle(i)"
+                    :selected="selected?.material_id === m.material_id"
+                    @rate="(n) => rate(m, n)"
+                    @open="openCard(m)"
+                  />
+                </TransitionGroup>
+              </Transition>
 
-          <!-- 空态 -->
-          <div v-else-if="data" class="py-16 text-center">
-            <p class="text-[15px] font-semibold text-steam">{{ L.noMatch }}</p>
-            <p class="mt-2 text-[13px] text-steam-dim">
-              {{ L.noMatchHint }}
-              <button type="button" class="cursor-pointer text-gold underline underline-offset-4" @click="resetAll">
-                {{ L.reset }}
-              </button>
-            </p>
-          </div>
+              <!-- 加载更多 -->
+              <div v-if="hasMore" class="mt-4 flex justify-center">
+                <Button variant="secondary" size="sm" :disabled="loading" @click="loadMore">
+                  <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
+                  {{ loading ? L.loading : `加载更多（${shown} / ${data.total}）` }}
+                </Button>
+              </div>
+            </div>
+
+            <!-- 空态 -->
+            <div v-else-if="data" key="empty" class="py-16 text-center">
+              <p class="text-[15px] font-semibold text-steam">{{ L.noMatch }}</p>
+              <p class="mt-2 text-[13px] text-steam-dim">
+                {{ L.noMatchHint }}
+                <button type="button" class="cursor-pointer text-gold underline underline-offset-4" @click="resetAll">
+                  {{ L.reset }}
+                </button>
+              </p>
+            </div>
+          </Transition>
         </div>
       </div>
     </div>
 
     <!-- 窄屏详情遮罩 -->
+    <Transition name="v-dialog">
+      <div
+        v-if="paneOpen && isNarrow"
+        class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px]"
+        aria-hidden="true"
+        @click="paneOpen = false"
+      />
+    </Transition>
+    <!-- 详情栏：≥1280 常驻右栏（内衬圆角面板，宽度+透明度过渡）；窄屏覆盖层（点卡片滑出） -->
     <div
-      v-if="paneOpen && isNarrow"
-      class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px]"
-      aria-hidden="true"
-      @click="paneOpen = false"
-    />
-    <!-- 详情栏：≥1280 常驻右栏（内衬圆角面板）；窄屏覆盖层（点卡片滑出） -->
-    <div
-      class="max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-50 max-xl:w-[min(94vw,380px)] max-xl:shadow-2xl max-xl:transition-transform xl:relative xl:h-full"
-      :class="paneOpen ? 'max-xl:translate-x-0 xl:w-[360px] xl:shrink-0 xl:py-2.5 xl:pr-2.5' : 'max-xl:translate-x-full xl:hidden'"
+      class="anim-pane max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-50 max-xl:w-[min(94vw,380px)] max-xl:shadow-2xl max-xl:transition-transform xl:relative xl:h-full xl:shrink-0 xl:overflow-hidden"
+      :class="paneOpen ? 'anim-pane--open max-xl:translate-x-0 xl:w-[360px]' : 'max-xl:translate-x-full xl:w-0'"
     >
-      <MessageDrawer pane :message="selected" @close="paneOpen = false" @update="onDrawerUpdate" />
+      <!-- 内层定宽：收起动画期间内容不被压缩重排，由外层裁切 -->
+      <div class="h-full w-full xl:w-[360px] xl:py-2.5 xl:pr-2.5">
+        <MessageDrawer pane :message="selected" @close="paneOpen = false" @update="onDrawerUpdate" />
+      </div>
     </div>
   </div>
 
@@ -527,16 +599,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
     <div class="mt-7 flex items-start">
       <!-- 移动端目录遮罩 -->
-      <div
-        v-if="tocOpen"
-        class="fixed inset-0 z-40 bg-ink-bg/70 backdrop-blur-sm lg:hidden"
-        aria-hidden="true"
-        @click="tocOpen = false"
-      />
+      <Transition name="v-dialog">
+        <div
+          v-if="tocOpen"
+          class="fixed inset-0 z-40 bg-ink-bg/70 backdrop-blur-sm lg:hidden"
+          aria-hidden="true"
+          @click="tocOpen = false"
+        />
+      </Transition>
 
       <!-- 目录页：桌面常驻左栏，移动端全屏抽屉 -->
       <aside
-        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto overscroll-contain border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-14 lg:z-auto lg:max-h-[calc(100vh-3.5rem)] lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
+        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto overscroll-contain [scrollbar-gutter:stable] border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-14 lg:z-auto lg:max-h-[calc(100vh-3.5rem)] lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
         :class="tocOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
         aria-label="目录与筛选"
       >
@@ -700,27 +774,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </button>
         </div>
 
-        <!-- 类目快捷切换条：出现于带类目筛选时，点其他类目加入/移除多选 -->
+        <!-- 类目快捷切换条：出现于带类目筛选时，点其他类目加入/移除多选（chips 增删过渡 B5） -->
         <div v-if="tagFilter.length && stripTags.length" class="mb-5 flex flex-wrap items-center gap-2">
           <span class="font-mono text-[10px] tracking-[0.22em] text-steam-dim">{{ L.tag }}</span>
-          <button
-            v-for="t in stripTags"
-            :key="t.name"
-            type="button"
-            class="inline-flex cursor-pointer items-baseline gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors"
-            :class="tagFilter.includes(t.name) ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
-            :aria-pressed="tagFilter.includes(t.name)"
-            @click="toggleTag(t.name)"
-          >
-            #{{ t.name }}
-            <span v-if="t.count > 0" class="font-mono text-[10px] opacity-70">{{ t.count }}</span>
-            <X
-              v-if="tagFilter.includes(t.name)"
-              class="h-3 w-3 cursor-pointer self-center transition-opacity hover:opacity-60"
-              aria-label="移除该类目"
-              @click.stop="removeTag(t.name)"
-            />
-          </button>
+          <TransitionGroup name="v-list">
+            <button
+              v-for="t in stripTags"
+              :key="t.name"
+              type="button"
+              class="inline-flex cursor-pointer items-baseline gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors"
+              :class="tagFilter.includes(t.name) ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
+              :aria-pressed="tagFilter.includes(t.name)"
+              @click="toggleTag(t.name)"
+            >
+              #{{ t.name }}
+              <span v-if="t.count > 0" class="font-mono text-[10px] opacity-70">{{ t.count }}</span>
+              <X
+                v-if="tagFilter.includes(t.name)"
+                class="h-3 w-3 cursor-pointer self-center transition-opacity hover:opacity-60"
+                aria-label="移除该类目"
+                @click.stop="removeTag(t.name)"
+              />
+            </button>
+          </TransitionGroup>
           <RouterLink
             :to="{ name: 'tags' }"
             class="font-mono text-[10px] text-gold underline underline-offset-4"
@@ -729,59 +805,67 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </RouterLink>
         </div>
 
-        <!-- 骨架屏：与图版同构的占位 -->
-        <div
-          v-if="loading && !shown"
-          :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
-          aria-hidden="true"
-        >
-          <div v-for="i in 8" :key="i" class="mb-6 break-inside-avoid animate-pulse">
-            <div class="border border-ink-line bg-ink-surface p-2.5">
-              <div class="h-44 bg-ink-raised" />
-            </div>
-            <div class="px-1 pt-3">
-              <div class="h-2.5 w-24 bg-ink-raised" />
-              <div class="mt-2.5 h-4 w-3/4 bg-ink-raised" />
-              <div class="mt-2 h-2.5 w-1/2 bg-ink-raised" />
+        <!-- 分支链 out-in 淡切（B4）；图录 TransitionGroup 进出场（B1，瀑布流降级只做进出）+ 首屏 stagger（B2） -->
+        <Transition name="v-dialog" mode="out-in">
+          <!-- 骨架屏：与图版同构的占位（延迟 200ms 才出现：快加载不闪骨架） -->
+          <div
+            v-if="loading && !shown && skeletonReady"
+            :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
+            aria-hidden="true"
+          >
+            <div v-for="i in 8" :key="i" class="mb-6 break-inside-avoid animate-pulse">
+              <div class="border border-ink-line bg-ink-surface p-2.5">
+                <div class="h-44 bg-ink-raised" />
+              </div>
+              <div class="px-1 pt-3">
+                <div class="h-2.5 w-24 bg-ink-raised" />
+                <div class="mt-2.5 h-4 w-3/4 bg-ink-raised" />
+                <div class="mt-2 h-2.5 w-1/2 bg-ink-raised" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 图录：瀑布流（原生装裱）或统一画布（跟随显示偏好） -->
-        <div
-          v-else-if="data && data.items.length"
-          :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
-        >
-          <MessageCard
-            v-for="m in data.items"
-            :key="m.material_id"
-            :message="m"
-            @rate="(n) => rate(m, n)"
-            @open="selected = m"
-          />
-        </div>
+          <!-- 图录：瀑布流（原生装裱）或统一画布（跟随显示偏好） -->
+          <TransitionGroup
+            v-else-if="data && data.items.length"
+            tag="div"
+            name="v-list"
+            appear
+            :move-class="thumbMode === 'masonry' ? '' : 'v-list-move'"
+            :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
+          >
+            <MessageCard
+              v-for="(m, i) in data.items"
+              :key="m.material_id"
+              :message="m"
+              :style="itemStyle(i)"
+              @rate="(n) => rate(m, n)"
+              @open="selected = m"
+            />
+          </TransitionGroup>
 
-        <!-- 首载失败：整块错误态 + 重试 -->
-        <div v-else-if="error" class="flex flex-col items-center gap-3 border-t border-ink-line py-16 text-steam-dim">
-          <AlertTriangle class="h-8 w-8" />
-          <p class="text-sm">{{ error }}</p>
-          <Button variant="secondary" size="sm" @click="load">重试</Button>
-        </div>
+          <!-- 首载失败：整块错误态 + 重试 -->
+          <div v-else-if="error" class="flex flex-col items-center gap-3 border-t border-ink-line py-16 text-steam-dim">
+            <AlertTriangle class="h-8 w-8" />
+            <p class="text-sm">{{ error }}</p>
+            <Button variant="secondary" size="sm" @click="load">重试</Button>
+          </div>
 
-        <!-- 空态 -->
-        <div v-else-if="data" class="border-t border-ink-line py-16 text-center">
-          <p class="empty-title font-display text-xl text-steam">{{ L.noMatch }}</p>
-          <p class="mt-2 text-[13px] text-steam-dim">
-            目录下没有匹配的条目，
-            <button
-              type="button"
-              class="cursor-pointer text-gold underline underline-offset-4"
-              @click="resetAll"
-            >
-              {{ L.reset }}
-            </button>
-          </p>
-        </div>
+          <!-- 空态 -->
+          <div v-else-if="data" class="border-t border-ink-line py-16 text-center">
+            <p class="empty-title font-display text-xl text-steam">{{ L.noMatch }}</p>
+            <p class="mt-2 text-[13px] text-steam-dim">
+              目录下没有匹配的条目，
+              <button
+                type="button"
+                class="cursor-pointer text-gold underline underline-offset-4"
+                @click="resetAll"
+              >
+                {{ L.reset }}
+              </button>
+            </p>
+          </div>
+        </Transition>
 
         <!-- 加载更多 -->
         <div v-if="hasMore && data?.items.length" class="mt-2 flex justify-center">

@@ -99,6 +99,7 @@ watch(
     >
       <img
         v-if="showThumb && !thumbFailed"
+        v-img-fade
         :src="thumbSrc"
         :alt="'素材 #' + message.id"
         loading="lazy"
