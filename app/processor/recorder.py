@@ -40,13 +40,21 @@ def record_message(
     ).fetchone()
     if row is not None:
         return None
-    # 相册组级去重：同组已有记录则跳过，避免整组媒体重复归档（ADR 0002）。
+    # 相组成员逐条落库（含非锚点）：归档时按 id 精确取组，不再依赖
+    # 事后扫描最近消息（积压或相册变旧后会找不到组）。
     if incoming.media_group_id:
+        conn.execute(
+            "INSERT OR IGNORE INTO media_group_members "
+            "(source_chat_id, grouped_id, source_message_id) VALUES (?, ?, ?)",
+            (incoming.source_chat_id, str(incoming.media_group_id), incoming.source_message_id),
+        )
+        # 相册组级去重：同组已有记录则跳过，避免整组媒体重复归档（ADR 0002）。
         group_row = conn.execute(
             "SELECT id FROM messages WHERE source_chat_id=? AND media_group_id=?",
             (incoming.source_chat_id, incoming.media_group_id),
         ).fetchone()
         if group_row is not None:
+            conn.commit()
             return None
 
     manual = manual_tags or []

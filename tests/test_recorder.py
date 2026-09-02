@@ -111,6 +111,20 @@ def test_record_album_group_dedupes(conn):
     assert second is None
 
 
+def test_record_album_members_recorded_for_every_arrival(conn):
+    """相组成员逐条落库（含非锚点）：归档时按 id 精确取组，不靠事后扫描。"""
+    _record(conn, _msg(text="相册文字", grouped_id="grp1"))
+    _record(conn, _msg(text="同组其他", grouped_id="grp1", mid=8))
+    _record(conn, _msg(text="第三张", grouped_id="grp1", mid=9))
+
+    members = conn.execute(
+        "SELECT source_message_id FROM media_group_members "
+        "WHERE source_chat_id=-1001 AND grouped_id='grp1' "
+        "ORDER BY source_message_id"
+    ).fetchall()
+    assert [m["source_message_id"] for m in members] == [7, 8, 9]
+
+
 def test_add_manual_tags_merges_and_keeps_types(conn):
     mid = _record(conn, _msg(text="#GTA5 教程"))
     rendered = add_manual_tags(conn, mid, ["MOD", "游戏"])

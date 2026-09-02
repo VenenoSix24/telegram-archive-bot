@@ -13,6 +13,7 @@ InputMediaDocument 也没有 thumb 字段——因此引用复制的视频无法
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 
@@ -29,6 +30,9 @@ from app.renderer.db import render_from_db
 logger = logging.getLogger(__name__)
 
 _ALBUM_SCAN_LIMIT = 200
+# 相册成员"到齐"判定：计数静默 quiet 秒视为到齐，最长等 max_wait 秒
+_SETTLE_QUIET = 0.8
+_SETTLE_MAX = 4.0
 
 
 def _input_media_with_cover(message):
@@ -42,25 +46,76 @@ def _input_media_with_cover(message):
     return converted
 
 
-async def collect_album(client, chat, first_message) -> list:
+def _group_member_ids(
+    conn: sqlite3.Connection, source_chat_id: int, grouped_id
+) -> list[int] | None:
+    """落库的相组成员 id 列表（升序）；无记录（旧数据）返回 None。"""
+    rows = conn.execute(
+        "SELECT source_message_id FROM media_group_members "
+        "WHERE source_chat_id=? AND grouped_id=? ORDER BY source_message_id",
+        (source_chat_id, str(grouped_id)),
+    ).fetchall()
+    return [row["source_message_id"] for row in rows] if rows else None
+
+
+async def _wait_group_settled(
+    conn: sqlite3.Connection, source_chat_id: int, grouped_id
+) -> None:
+    """等相组成员到齐：组员先后到达，锚点刚入队就被归档会拆散相册。
+
+    成员计数在 quiet 秒内无新增即认为到齐；总时长不超过 max_wait。
+    """
+    deadline = asyncio.get_running_loop().time() + _SETTLE_MAX
+    last = len(_group_member_ids(conn, source_chat_id, grouped_id) or [])
+    while True:
+        await asyncio.sleep(_SETTLE_QUIET)
+        current = len(_group_member_ids(conn, source_chat_id, grouped_id) or [])
+        if current == last or asyncio.get_running_loop().time() >= deadline:
+            return
+        last = current
+
+
+async def collect_album(
+    client,
+    chat,
+    first_message,
+    *,
+    conn: sqlite3.Connection | None = None,
+    source_chat_id: int | None = None,
+) -> list:
     """收集同一相册的全部消息（按 id 升序，首条为锚）；非相册返回 [first_message]。
 
-    v1 用扫描最近消息的方式实现分组（相册通常刚发生，limit 内即可覆盖）。
+    组成员优先取落库记录（到达时逐条记录，不受队列积压影响）；旧数据
+    无记录时回退扫描最近消息（v1 行为，窗口外会拆散）。取成员前等计数
+    稳定，避免锚点刚入队、组员还没到齐就被归档。
     """
     if not first_message.grouped_id:
         return [first_message]
+    if conn is not None and source_chat_id is not None:
+        await _wait_group_settled(conn, source_chat_id, first_message.grouped_id)
+        member_ids = _group_member_ids(conn, source_chat_id, first_message.grouped_id)
+        if member_ids:
+            fetched = await client.get_messages(chat, ids=member_ids)
+            grouped = sorted(
+                (m for m in fetched if m is not None), key=lambda m: m.id
+            )
+            if grouped:
+                return grouped
+        # 旧数据无成员记录 → 回退扫描
     recent = await client.get_messages(chat, limit=_ALBUM_SCAN_LIMIT)
     grouped = [m for m in recent if m.grouped_id == first_message.grouped_id]
     return sorted(grouped, key=lambda m: m.id) or [first_message]
 
 
-async def _fetch_source_messages(client, chat, row: sqlite3.Row) -> list:
+async def _fetch_source_messages(client, chat, row: sqlite3.Row, conn: sqlite3.Connection) -> list:
     first = await client.get_messages(chat, ids=row["source_message_id"])
     if first is None:
         raise FileNotFoundError(
             f"源消息已删除或不可访问: chat={row['source_chat_id']} msg={row['source_message_id']}"
         )
-    return await collect_album(client, chat, first)
+    return await collect_album(
+        client, chat, first, conn=conn, source_chat_id=row["source_chat_id"]
+    )
 
 
 def _save_target(
@@ -143,7 +198,7 @@ async def archive_message_by_db_id(
         raise KeyError(f"messages id={message_id} not found")
 
     chat = await client.get_entity(row["source_chat_id"])
-    msgs = await _fetch_source_messages(client, chat, row)
+    msgs = await _fetch_source_messages(client, chat, row, conn)
     # 相册组文字挂在组内最早消息上：本条正文为空时用锚消息文字渲染（避免缺 caption）。
     body_override = None
     if row["media_group_id"] and msgs:
