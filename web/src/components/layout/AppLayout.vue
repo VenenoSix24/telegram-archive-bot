@@ -28,10 +28,9 @@ const nav = [
 
 const themeLabels: Record<ThemeKey, string> = {
   collection: '素材志',
-  projector: '放映室',
-  midnight: '深海',
-  moss: '苔原',
 }
+/* 已定稿待实现的方向：菜单里以禁用项示知路线，不做假开关 */
+const upcomingThemes = ['暗房印样 · 制作中', '标准后台 · 制作中']
 
 const isActive = (name: string) => route.name === name
 
@@ -122,6 +121,13 @@ const shouldShowNav = computed(() => !!route.name)
               {{ label }}
               <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
             </button>
+            <p
+              v-for="label in upcomingThemes"
+              :key="label"
+              class="cursor-default rounded px-2.5 py-2 text-left text-sm text-steam-dim/40"
+            >
+              {{ label }}
+            </p>
           </div>
         </div>
 

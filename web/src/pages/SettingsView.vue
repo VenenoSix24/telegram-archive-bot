@@ -47,9 +47,6 @@ const templateBlocks = [
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
   { key: 'collection', label: '素材志（朱砂）' },
-  { key: 'projector', label: '放映室（琥珀）' },
-  { key: 'midnight', label: '深海（冰青）' },
-  { key: 'moss', label: '苔原（苔绿）' },
 ]
 const modeOptions: { key: Mode; label: string }[] = [
   { key: 'system', label: '跟随系统' },
@@ -366,6 +363,7 @@ async function resetDb() {
                 {{ t.label }}
               </button>
             </div>
+            <p class="mt-2 text-xs text-steam-dim/70">暗房印样、标准后台两套主题已定稿待实现。</p>
           </div>
           <div>
             <p class="mb-2 text-xs text-steam-dim">明暗模式</p>
