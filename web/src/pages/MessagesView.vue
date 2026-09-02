@@ -91,6 +91,17 @@ function typeCount(value: string): number | null {
   return stats.value.messages.by_type[value] ?? 0
 }
 
+/** 类目快捷切换条：热度前 12 + 当前类目（不在前 12 则补进来） */
+const stripTags = computed<TagCount[]>(() => {
+  const top = tagIndex.value.slice(0, 12)
+  const current = tagFilter.value
+  if (current && !top.some((t) => t.name === current)) {
+    const found = tagIndex.value.find((t) => t.name === current)
+    top.unshift(found ?? { name: current, count: 0 })
+  }
+  return top
+})
+
 // URL ?tag=（从标签页点来）作为标签筛选的初始值
 function syncFromQuery() {
   const t = route.query.tag
@@ -387,9 +398,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </ul>
         </nav>
 
-        <!-- 归档频道 -->
-        <nav v-if="targets.length" class="mt-7" aria-label="频道索引">
-          <h3 class="mb-1.5 font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">归档 · CHANNELS</h3>
+        <!-- 目标：显示配置里的人读名称，缺失回退拼 ID -->
+        <nav v-if="targets.length" class="mt-7" aria-label="目标索引">
+          <h3 class="mb-1.5 font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">目标 · TARGETS</h3>
           <ul>
             <li v-for="t in targets" :key="t.chat_id">
               <button
@@ -399,7 +410,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
                 :aria-pressed="targetFilter === t.chat_id"
                 @click="setTarget(t.chat_id)"
               >
-                <span class="shrink-0">频道 {{ displayChatId(t.chat_id) }}</span>
+                <span class="min-w-0 shrink truncate">{{ t.name || `目标 ${displayChatId(t.chat_id)}` }}</span>
                 <span class="toc-lead hidden" aria-hidden="true"></span>
                 <span
                   class="ml-auto shrink-0 font-mono text-xs"
@@ -451,6 +462,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           >
             <RotateCcw class="h-3 w-3" /> 重置目录
           </button>
+        </div>
+
+        <!-- 类目快捷切换条：带类目筛选时出现，点其他类目直接换，× 清除 -->
+        <div v-if="tagFilter && stripTags.length" class="mb-5 flex flex-wrap items-center gap-2">
+          <span class="font-mono text-[10px] tracking-[0.22em] text-steam-dim">类目</span>
+          <button
+            v-for="t in stripTags"
+            :key="t.name"
+            type="button"
+            class="inline-flex cursor-pointer items-baseline gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors"
+            :class="t.name === tagFilter ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
+            :aria-pressed="t.name === tagFilter"
+            @click="tagFilter = t.name"
+          >
+            #{{ t.name }}
+            <span v-if="t.count > 0" class="font-mono text-[10px] opacity-70">{{ t.count }}</span>
+            <X
+              v-if="t.name === tagFilter"
+              class="h-3 w-3 cursor-pointer self-center transition-opacity hover:opacity-60"
+              aria-label="清除类目筛选"
+              @click.stop="tagFilter = ''"
+            />
+          </button>
+          <RouterLink
+            :to="{ name: 'tags' }"
+            class="font-mono text-[10px] text-gold underline underline-offset-4"
+          >
+            全部类目
+          </RouterLink>
         </div>
 
         <!-- 骨架屏：与图版同构的占位 -->

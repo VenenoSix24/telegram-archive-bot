@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { sanitizeTelegramHtml } from '@/lib/telegramHtml'
 import {
   FileText,
@@ -7,6 +8,7 @@ import {
   Headphones,
   Link2,
   Music,
+  Pencil,
   Plus,
   Send,
   Sticker,
@@ -25,9 +27,11 @@ import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
 const props = defineProps<{ message: Message | null }>()
 const emit = defineEmits<{ close: []; update: [Message] }>()
 
+const router = useRouter()
 const newTag = ref('')
 const busy = ref(false)
 const error = ref('')
+const tagEditing = ref(false)
 const drawerThumbFailed = ref(false)
 const bodyDraft = ref('')
 const bodyHtmlDraft = ref('')
@@ -83,6 +87,7 @@ watch(() => props.message, (message) => {
   newTag.value = ''
   error.value = ''
   drawerThumbFailed.value = false
+  tagEditing.value = false
   bodyDraft.value = message?.original_text ?? ''
   bodyHtmlDraft.value = message?.original_html ?? ''
   editingBody.value = false
@@ -177,7 +182,7 @@ const metaRows = computed(() => {
   if (!m) return []
   const rows: { label: string; value: string; href?: string }[] = []
   const chan = m.targets[0]?.name || displayChatId(m.target_chat_id)
-  if (chan) rows.push({ label: '归档频道', value: chan })
+  if (chan) rows.push({ label: '归档位置', value: chan })
   if (m.target_message_id != null) rows.push({ label: '归档消息', value: `#${m.target_message_id}` })
   rows.push({ label: '来源频道', value: displayChatId(m.source_chat_id) })
   rows.push({ label: '来源消息', value: `#${m.source_message_id}` })
@@ -226,6 +231,12 @@ async function addTag() {
 async function removeTag(tagName: string) {
   if (!props.message) return
   await mutate({ remove_tag_names: [tagName] }, `已移除标签「${tagName}」`)
+}
+
+/* 点类目跳到该类目的图录筛选；抽屉先收起避免盖住结果 */
+function jumpToTag(tagName: string) {
+  emit('close')
+  void router.push({ name: 'messages', query: { tag: tagName } })
 }
 
 async function mutate(
@@ -381,25 +392,43 @@ async function mutate(
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
 
-                <!-- 类目：点击移除 -->
+                <!-- 类目：点按跳筛选；铅笔进编辑态后点按移除 -->
                 <div class="mt-6">
                   <div class="mb-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">
-                    <TagIcon class="h-3.5 w-3.5" /> 类目 · TAGS（点击移除）
+                    <TagIcon class="h-3.5 w-3.5" /> 类目 · TAGS
+                    <button
+                      type="button"
+                      class="ml-auto cursor-pointer rounded p-1 transition-colors"
+                      :class="tagEditing ? 'bg-gold/15 text-gold' : 'text-steam-dim hover:text-steam'"
+                      :aria-pressed="tagEditing"
+                      :title="tagEditing ? '完成编辑' : '编辑类目'"
+                      :aria-label="tagEditing ? '完成编辑' : '编辑类目'"
+                      @click="tagEditing = !tagEditing"
+                    >
+                      <Pencil class="h-3.5 w-3.5" />
+                    </button>
                   </div>
                   <div class="flex flex-wrap gap-2">
                     <button
                       v-for="tag in activeTags"
                       :key="tag.name + tag.type"
                       type="button"
-                      :disabled="busy"
-                      class="cursor-pointer rounded-sm border border-ink-line bg-ink-surface px-2.5 py-1 font-mono text-[11px] text-steam-dim transition-colors hover:border-destructive/50 hover:text-destructive disabled:cursor-default"
-                      :title="`移除「${tag.name}」`"
-                      @click="removeTag(tag.name)"
+                      :disabled="busy && tagEditing"
+                      class="inline-flex cursor-pointer items-center gap-1 rounded-sm border border-ink-line bg-ink-surface px-2.5 py-1 font-mono text-[11px] transition-colors disabled:cursor-default"
+                      :class="tagEditing
+                        ? 'text-steam hover:border-destructive/50 hover:text-destructive'
+                        : 'text-steam-dim hover:border-gold hover:text-gold'"
+                      :title="tagEditing ? `移除「${tag.name}」` : `查看「${tag.name}」类目`"
+                      @click="tagEditing ? removeTag(tag.name) : jumpToTag(tag.name)"
                     >
                       #{{ tag.name }}
+                      <X v-if="tagEditing" class="h-3 w-3" />
                     </button>
                     <span v-if="!activeTags.length" class="text-xs text-steam-dim/60">暂无类目</span>
                   </div>
+                  <p class="mt-1.5 text-xs text-steam-dim/70">
+                    {{ tagEditing ? '正在编辑：点类目即移除，再点铅笔完成。' : '点类目查看对应素材；误触删除用右上铅笔进入编辑态。' }}
+                  </p>
 
                   <div class="mt-3 flex gap-2">
                     <input

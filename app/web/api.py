@@ -237,8 +237,25 @@ def build_api_router(
                     "SELECT target_chat_id, COUNT(*) AS n FROM messages "
                     "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
                 ).fetchall()
+            # 目标名来自配置：目录筛选直接显示人读名称，缺失回退前端拼 ID
+            target_names: dict[int, str] = {}
+            if config_path:
+                try:
+                    editable = read_editable_config(Path(config_path))
+                    target_names = {
+                        t["chat_id"]: t["name"]
+                        for t in editable["target_channels"]
+                        if t.get("chat_id") is not None
+                    }
+                except (OSError, ValueError, TypeError):
+                    target_names = {}
             targets = [
-                {"chat_id": r["target_chat_id"], "count": r["n"]} for r in target_rows
+                {
+                    "chat_id": r["target_chat_id"],
+                    "count": r["n"],
+                    "name": target_names.get(r["target_chat_id"]) or "",
+                }
+                for r in target_rows
             ]
         queue = {"pending": 0, "processing": 0, "success": 0, "failed": 0}
         with _connect(database_path) as conn:

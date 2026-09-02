@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { FileText, Film, Headphones, Image as ImageIcon, Music, Sticker } from 'lucide-vue-next'
 import { getStats, getTags, listMessages } from '@/lib/api'
 import type { Message, Stats, TagCount } from '@/lib/types'
 import MessageDrawer from '@/components/MessageDrawer.vue'
 import Button from '@/components/ui/Button.vue'
-import { displayChatId, shortDate, splitBodyTitleDesc } from '@/lib/format'
+import { displayChatId, durationLabel, shortDate, splitBodyTitleDesc } from '@/lib/format'
+import { useAspectRatio } from '@/composables/useAspectRatio'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<Message[]>([])
@@ -12,6 +14,10 @@ const tagDist = ref<TagCount[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const selected = ref<Message | null>(null)
+const coverFailed = ref(false)
+
+/* 本期封面图版：随图片真实比例 */
+const { ratio: coverRatio, onLoad: onCoverLoad } = useAspectRatio()
 
 /* 体例沿用素材志词汇，与卡片图签一致 */
 const TYPE_LABEL: Record<string, string> = {
@@ -25,17 +31,68 @@ const TYPE_LABEL: Record<string, string> = {
   other: '其他',
 }
 
+function iconOf(m: Message) {
+  switch (m.media_type) {
+    case 'video': return Film
+    case 'audio': return Music
+    case 'voice': return Headphones
+    case 'sticker': return Sticker
+    case 'photo': return ImageIcon
+    default: return FileText
+  }
+}
+
+/** 本期封面 = 最新一条未注销素材；列表里去掉封面避免重复 */
+const cover = computed(() => recent.value.find((m) => m.status !== 'deleted') ?? null)
+const recentList = computed(() =>
+  cover.value ? recent.value.filter((m) => m.material_id !== cover.value?.material_id) : recent.value,
+)
+const coverImg = computed(() => {
+  const m = cover.value
+  if (!m || coverFailed.value) return null
+  if (m.media_type !== 'photo' && m.media_type !== 'video') return null
+  const target = m.target_id
+  return `/api/v1/messages/${m.id}/thumb${target == null ? '' : `?target_id=${target}`}`
+})
+const coverIcon = computed(() => (cover.value ? iconOf(cover.value) : FileText))
+const coverFigMeta = computed(() => {
+  const m = cover.value
+  if (!m) return ''
+  const parts = [TYPE_LABEL[m.media_type] ?? '素材']
+  const d = durationLabel(m.duration)
+  if (d) parts.push(d)
+  return parts.join(' · ')
+})
+
 const ledger = computed(() => {
   if (!stats.value) return []
   return [
     { label: '总件数', value: String(stats.value.messages.total) },
     { label: '已归档', value: String(stats.value.messages.archived) },
-    { label: '来源群', value: String(stats.value.messages.sources) },
+    { label: '来源', value: String(stats.value.messages.sources) },
     {
       label: '类目',
       value: `${stats.value.tags.with_messages}/${stats.value.tags.total}`,
     },
   ]
+})
+
+/** 卷首语：由统计自动生成的一句话编辑摘要 */
+const intro = computed(() => {
+  if (!stats.value) return ''
+  const m = stats.value.messages
+  const parts: string[] = [`本卷共编目 ${m.total} 件`]
+  const topTypes = Object.entries(m.by_type)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([type, n]) => `${TYPE_LABEL[type] ?? type} ${n}`)
+  if (topTypes.length) parts.push(`以${topTypes.join('、')}为主`)
+  const q = stats.value.queue
+  if (q && q.failed > 0) parts.push(`尚有 ${q.failed} 件印制失败待查`)
+  else if (q && q.pending + q.processing > 0) parts.push(`${q.pending + q.processing} 件正在路上`)
+  else parts.push('全部归档完毕')
+  return `${parts.join('，')}。`
 })
 
 const mediaLine = computed(() => {
@@ -84,6 +141,7 @@ function onDrawerUpdate(updated: Message) {
 
 async function load() {
   loadError.value = ''
+  coverFailed.value = false
   try {
     const [s, t, r] = await Promise.all([getStats(), getTags(), listMessages({ limit: 8 })])
     stats.value = s
@@ -139,6 +197,39 @@ onMounted(load)
         <p v-if="mediaLine" class="mt-2.5 font-mono text-[10px] tracking-[0.1em] text-steam-dim">
           {{ mediaLine }}
         </p>
+      </section>
+
+      <!-- 本期封面 + 卷首语 -->
+      <section class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <figure v-if="cover" class="min-w-0 cursor-pointer" @click="selected = cover">
+          <div class="relative border border-ink-line bg-ink-surface p-2.5 transition-[border-color,box-shadow] duration-200 hover:border-steam-dim">
+            <div class="relative overflow-hidden" :style="{ aspectRatio: coverImg ? coverRatio : '16 / 10' }">
+              <img
+                v-if="coverImg"
+                :src="coverImg"
+                :alt="'本期封面 · 素材 #' + cover.id"
+                class="h-full w-full object-cover"
+                @load="onCoverLoad"
+                @error="coverFailed = true"
+              />
+              <div v-else class="flex h-full w-full items-center justify-center bg-ink-raised text-steam-dim/60">
+                <component :is="coverIcon" class="h-10 w-10" />
+              </div>
+            </div>
+          </div>
+          <figcaption class="px-1 pt-3">
+            <div class="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-steam-dim">
+              <span class="shrink-0 font-semibold text-gold">本期封面</span>
+              <span class="min-w-0 shrink truncate">{{ coverFigMeta }}</span>
+              <span class="flex-1 border-b border-ink-line" aria-hidden="true"></span>
+            </div>
+            <p class="mt-2 truncate font-display text-lg font-bold text-steam">{{ rowTitle(cover) }}</p>
+          </figcaption>
+        </figure>
+        <div class="min-w-0 self-center">
+          <p class="font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">卷首语 · EDITOR'S NOTE</p>
+          <p class="mt-4 font-display text-lg leading-[2.1] text-steam min-[480px]:text-xl">{{ intro }}</p>
+        </div>
       </section>
 
       <!-- 印制 · 队列状态：失败必须被看见 -->
@@ -201,15 +292,15 @@ onMounted(load)
           <div class="flex items-baseline justify-between">
             <h2 class="font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">近期编目 · RECENT</h2>
             <RouterLink
-              v-if="recent.length"
+              v-if="recentList.length"
               :to="{ name: 'messages' }"
               class="font-mono text-[10px] text-gold underline underline-offset-4"
             >
               翻阅全部
             </RouterLink>
           </div>
-          <ul v-if="recent.length" class="mt-2 divide-y divide-ink-line">
-            <li v-for="m in recent" :key="m.material_id">
+          <ul v-if="recentList.length" class="mt-2 divide-y divide-ink-line">
+            <li v-for="m in recentList" :key="m.material_id">
               <button
                 type="button"
                 class="flex w-full cursor-pointer items-baseline gap-3 py-2.5 text-left transition-colors hover:text-gold"
@@ -223,7 +314,7 @@ onMounted(load)
               </button>
             </li>
           </ul>
-          <div v-else class="mt-3 border border-dashed border-ink-line p-6 text-center text-sm text-steam-dim">
+          <div v-else-if="!recent.length" class="mt-3 border border-dashed border-ink-line p-6 text-center text-sm text-steam-dim">
             还没有归档素材，去源群发一条消息试试
           </div>
         </section>

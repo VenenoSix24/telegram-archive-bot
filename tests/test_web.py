@@ -114,7 +114,30 @@ def test_login_ok_and_stats(tmp_path, seeded_db):
         assert body["messages"]["by_type"] == {"photo": 1, "video": 1, "text": 2}
         assert body["tags"] == {"total": 2, "with_messages": 2}
         assert body["queue"] == {"pending": 1, "processing": 0, "success": 1, "failed": 1}
-        assert body["targets"] == [{"chat_id": -1005, "count": 2}, {"chat_id": -1006, "count": 1}]
+        assert body["targets"] == [
+            {"chat_id": -1005, "count": 2, "name": ""},
+            {"chat_id": -1006, "count": 1, "name": ""},
+        ]
+
+
+def test_stats_targets_carry_config_names(tmp_path, seeded_db):
+    """目录筛选要显示人读名称：stats 把配置里的目标名一并返回，缺失为空串。"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "telegram:\n"
+        "  target_channels:\n"
+        "    - chat_id: -1005\n"
+        "      name: 日常归档\n",
+        encoding="utf-8",
+    )
+    cfg = _config(database_path=seeded_db, config_path=str(config_file), web_token="secret-token")
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        body = client.get("/api/v1/stats").json()
+
+    names = {t["chat_id"]: t["name"] for t in body["targets"]}
+    assert names[-1005] == "日常归档"
+    assert names[-1006] == ""
 
 
 def test_logout_invalidates_session(tmp_path):
