@@ -24,6 +24,7 @@ from app.processor.commands import parse_command
 from app.processor.edit import apply_message_edit, extract_edited_body
 from app.processor.recorder import record_message
 from app.processor.reports import (
+    format_help_report,
     format_queue_report,
     format_status_report,
     format_tag_report,
@@ -324,7 +325,9 @@ def attach_management_command_handler(
         cmd, args = parsed
         if event.sender_id not in config.admins:
             return
-        if cmd == "status":
+        if cmd in ("start", "help"):
+            text = format_help_report()
+        elif cmd == "status":
             text = format_status_report(config, queue)
         elif cmd == "queue":
             text = format_queue_report(queue.stats())
