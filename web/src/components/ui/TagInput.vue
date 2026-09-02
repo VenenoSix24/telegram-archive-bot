@@ -37,8 +37,9 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex min-h-9 w-full min-w-0 items-center gap-1 overflow-hidden rounded-md border border-ink-line bg-ink-raised px-2 focus-within:border-gold">
-    <div v-if="model.length" class="flex min-w-0 shrink items-center gap-1 overflow-x-auto py-1">
+  <!-- flex-wrap：tag 多时换行而不是把 chips 挤进横向滚动条，输入框始终可见 -->
+  <div class="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1 rounded-md border border-ink-line bg-ink-raised px-2 py-1 focus-within:border-gold">
+    <template v-if="model.length">
       <span v-for="tag in model" :key="tag" class="inline-flex shrink-0 items-center gap-0.5">
         <Badge tone="source">{{ tag }}</Badge>
         <button
@@ -50,12 +51,12 @@ function onKeydown(event: KeyboardEvent) {
           <X class="h-3 w-3" />
         </button>
       </span>
-    </div>
+    </template>
     <input
       v-model="draft"
       type="text"
-      class="h-7 min-w-[9rem] flex-1 bg-transparent px-1 text-sm text-steam placeholder:text-steam-dim/60 focus:outline-none"
-      placeholder="输入后按回车或逗号添加，可粘贴多个"
+      class="h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-steam placeholder:text-steam-dim/60 focus:outline-none"
+      :placeholder="model.length ? '添加…' : '输入后按回车或逗号添加，可粘贴多个'"
       @keydown="onKeydown"
       @blur="commit"
     />
