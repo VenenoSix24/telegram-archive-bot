@@ -78,6 +78,15 @@ def test_command_message_skipped(ctx):
     assert _pending(conn) == 0
 
 
+def test_start_help_rethumb_recognized_and_skipped(ctx):
+    """指令必须进命令表：归档入口按 parse_command 跳过，漏登记会被当文本归档转发。"""
+    conn, queue, config = ctx
+    for text in ("/start", "/help", "/rethumb", "/rethumb 30", "/RATING@helpbot 5"):
+        assert not process_incoming(config, conn, queue, _incoming(text=text)), text
+        assert _pending(conn) == 0
+        assert conn.execute("SELECT count(*) AS n FROM messages").fetchone()["n"] == 0
+
+
 def test_duplicate_source_skipped(ctx):
     conn, queue, config = ctx
     assert process_incoming(config, conn, queue, _incoming(mid=7))
