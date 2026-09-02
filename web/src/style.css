@@ -32,35 +32,6 @@
   color-scheme: dark;
 }
 
-/* 放映室 · 深色 */
-[data-theme='projector'][data-mode='dark'] {
-  --ink-bg: 18 20 27;
-  --ink-surface: 21 24 32;
-  --ink-raised: 27 31 41;
-  --ink-line: 38 43 56;
-  --steam: 226 223 216;
-  --steam-dim: 162 154 141;
-  --gold: 232 166 45;
-  --gold-soft: 245 187 72;
-  --gold-muted: 118 89 35;
-  --destructive: 220 60 46;
-  color-scheme: dark;
-}
-
-[data-theme='projector'][data-mode='light'] {
-  --ink-bg: 248 246 241;
-  --ink-surface: 255 254 251;
-  --ink-raised: 241 238 230;
-  --ink-line: 225 219 206;
-  --steam: 43 39 34;
-  --steam-dim: 128 119 106;
-  --gold: 183 128 16;
-  --gold-soft: 203 150 38;
-  --gold-muted: 216 182 112;
-  --destructive: 214 52 43;
-  color-scheme: light;
-}
-
 /* 局部滚动条太刺眼，弱化 */
 * {
   scrollbar-width: thin;
