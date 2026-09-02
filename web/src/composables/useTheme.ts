@@ -1,27 +1,29 @@
 import { computed, ref } from 'vue'
 
-export type ThemeKey = 'collection' | 'projector' | 'midnight' | 'moss'
+/*
+ * 主题 = 设计 demo 定稿的三方向：素材志（默认）→ 暗房印样 → 标准后台。
+ * 旧版三主题（放映室/深海/苔原）随重构移除，不迁移。
+ * 每个主题 = 一份 token 文件 + [data-theme] 作用域母题层；结构层共享。
+ * mode：dark/light 为显式，system 跟随系统 prefers-color-scheme
+ */
+export type ThemeKey = 'collection'
 /** mode：dark/light 为显式，system 跟随系统 prefers-color-scheme */
 export type Mode = 'dark' | 'light' | 'system'
 
-/* v2：默认主题换为素材志。换存储 key 让旧默认值（projector）一次性失效，
-   否则老用户 localStorage 里的旧默认会一直压住新默认。 */
 const THEME_KEY = 'archive:theme:v2'
 const MODE_KEY = 'archive:mode'
 
 /** 主题名 → 模块路径；动态 import 让 Vite 按主题 code-split，切到才加载对应 CSS。 */
 const THEME_LOADERS: Record<ThemeKey, () => Promise<unknown>> = {
   collection: () => import('@/themes/collection.css'),
-  projector: () => import('@/themes/projector.css'),
-  midnight: () => import('@/themes/midnight.css'),
-  moss: () => import('@/themes/moss.css'),
 }
+
+/** 上线中的主题才可被选中；旧主题存值一律回落默认 */
+const AVAILABLE: ThemeKey[] = ['collection']
 
 function initialTheme(): ThemeKey {
   const stored = localStorage.getItem(THEME_KEY)
-  return stored === 'collection' || stored === 'projector' || stored === 'midnight' || stored === 'moss'
-    ? stored
-    : 'collection'
+  return AVAILABLE.includes(stored as ThemeKey) ? (stored as ThemeKey) : 'collection'
 }
 
 function initialMode(): Mode {
@@ -58,11 +60,6 @@ export function setMode(m: Mode) {
   if (m === mode.value) return
   mode.value = m
   applyTheme()
-}
-
-export function cycleTheme() {
-  const order: ThemeKey[] = ['collection', 'projector', 'midnight', 'moss']
-  setTheme(order[(order.indexOf(theme.value) + 1) % order.length])
 }
 
 /** 跟随系统时监听系统偏好变化，无需刷新即换肤 */
