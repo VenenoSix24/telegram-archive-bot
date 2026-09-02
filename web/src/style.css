@@ -38,6 +38,13 @@
   scrollbar-color: rgb(var(--ink-line)) transparent;
 }
 
+/* 移动端防横溢兜底：个别长内容把页面撑宽时，禁止整页横滚；
+   clip 不产生滚动容器，sticky 顶栏与 fixed 底栏不受影响 */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   font-feature-settings: 'tnum' 1; /* 数据字面量等宽数字，时长/时间戳对齐 */
 }
