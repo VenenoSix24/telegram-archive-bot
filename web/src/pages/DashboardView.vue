@@ -7,6 +7,7 @@ import MessageDrawer from '@/components/MessageDrawer.vue'
 import Button from '@/components/ui/Button.vue'
 import { displayChatId, durationLabel, shortDate, splitBodyTitleDesc } from '@/lib/format'
 import { useAspectRatio } from '@/composables/useAspectRatio'
+import { useCountUp } from '@/composables/useCountUp'
 import { isVault, typeLabel as vocabTypeLabel, useVocab } from '@/lib/vocab'
 
 const stats = ref<Stats | null>(null)
@@ -78,6 +79,13 @@ const ledger = computed(() => {
     },
   ]
 })
+
+/* C2 KPI 数字滚动：数据到位后 400ms 缓出滚到目标值（素材志卷首台账保持静态） */
+const kpiTotal = useCountUp(() => stats.value?.messages.total ?? 0)
+const kpiArchived = useCountUp(() => stats.value?.messages.archived ?? 0)
+const kpiSources = useCountUp(() => stats.value?.messages.sources ?? 0)
+const kpiTags = useCountUp(() => stats.value?.tags.with_messages ?? 0)
+const kpiTagsTotal = useCountUp(() => stats.value?.tags.total ?? 0)
 
 /** 归档率（标准后台 KPI 副行用） */
 const archivePct = computed(() => {
@@ -199,22 +207,22 @@ onMounted(load)
       <div class="anim-fade-up grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
           <p class="text-xs text-steam-dim">{{ ledger[0].label }}</p>
-          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[0].value }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ kpiTotal }}</p>
           <p class="mt-0.5 truncate font-mono text-[10px] text-steam-dim/70">{{ mediaLine }}</p>
         </div>
         <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
           <p class="text-xs text-steam-dim">{{ ledger[1].label }}</p>
-          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[1].value }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ kpiArchived }}</p>
           <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">{{ archivePct }}</p>
         </div>
         <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
           <p class="text-xs text-steam-dim">{{ ledger[2].label }}</p>
-          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[2].value }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ kpiSources }}</p>
           <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">{{ targetsCount }} 个目标</p>
         </div>
         <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
           <p class="text-xs text-steam-dim">{{ ledger[3].label }}</p>
-          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[3].value }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ kpiTags }}/{{ kpiTagsTotal }}</p>
           <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">使用中 / 全部</p>
         </div>
       </div>

@@ -44,15 +44,15 @@ const bars = computed(() => {
 
 <template>
   <div class="flex h-full w-full flex-col items-center justify-center gap-2 text-steam-dim/55">
-    <!-- 音频：波形 -->
+    <!-- 音频：波形（C3：卡片/封面 hover 时轻舞，条目间错峰） -->
     <template v-if="isAudio">
       <component :is="icon" class="text-gold/75" :class="mini ? 'h-3 w-3' : 'h-4 w-4'" />
-      <div class="flex items-center gap-[2.5px]" aria-hidden="true">
+      <div class="v-wave flex items-center gap-[2.5px]" aria-hidden="true">
         <span
           v-for="(h, i) in bars"
           :key="i"
-          class="w-[3px] shrink-0 rounded-full bg-gold/45"
-          :style="{ height: mini ? `${3 + (h % 8)}px` : `${5 + h * 0.3}px` }"
+          class="v-wave-bar w-[3px] shrink-0 rounded-full bg-gold/45"
+          :style="{ height: mini ? `${3 + (h % 8)}px` : `${5 + h * 0.3}px`, animationDelay: `${i * 45}ms` }"
         />
       </div>
     </template>
