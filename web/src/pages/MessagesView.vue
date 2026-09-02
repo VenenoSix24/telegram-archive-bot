@@ -501,7 +501,7 @@ onBeforeUnmount(() => {
               <Transition name="v-dialog" mode="out-in">
                 <TransitionGroup
                   v-if="viewMode === 'grid'"
-                  key="grid"
+                  :key="`grid-${thumbMode}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -520,7 +520,7 @@ onBeforeUnmount(() => {
                 </TransitionGroup>
                 <TransitionGroup
                   v-else
-                  key="list"
+                  :key="`list-${thumbMode}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -885,8 +885,13 @@ onBeforeUnmount(() => {
       :aria-expanded="tocOpen"
       @click="tocOpen = !tocOpen"
     >
-      <X v-if="tocOpen" class="h-4 w-4" />
-      <SlidersHorizontal v-else class="h-4 w-4" />
+      <Transition name="v-dialog" mode="out-in">
+        <component
+          :is="tocOpen ? X : SlidersHorizontal"
+          :key="tocOpen ? 'close' : 'open'"
+          class="h-4 w-4"
+        />
+      </Transition>
     </button>
 
     <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
