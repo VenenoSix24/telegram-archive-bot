@@ -182,7 +182,7 @@ onMounted(load)
                 :to="{ name: 'messages', query: { tag: tag.name } }"
                 class="group flex cursor-pointer items-baseline gap-2"
               >
-                <span class="min-w-0 shrink-0 truncate text-[13.5px] text-steam-dim transition-colors group-hover:text-steam">
+                <span class="min-w-0 shrink truncate text-[13.5px] text-steam-dim transition-colors group-hover:text-steam">
                   {{ tag.name }}
                 </span>
                 <span class="hidden flex-1 border-b border-dotted border-steam-dim/50 lg:block" aria-hidden="true"></span>
@@ -216,9 +216,8 @@ onMounted(load)
                 @click="selected = m"
               >
                 <span class="w-12 shrink-0 font-mono text-[10px] tracking-[0.1em] text-gold">#{{ m.id }}</span>
-                <span class="min-w-0 max-w-[55%] shrink truncate text-sm text-steam">{{ rowTitle(m) }}</span>
-                <span class="hidden flex-1 border-b border-dotted border-steam-dim/50 sm:block" aria-hidden="true"></span>
-                <span class="ml-auto shrink-0 font-mono text-[10px] text-steam-dim sm:ml-0">
+                <span class="min-w-0 flex-1 truncate text-sm text-steam">{{ rowTitle(m) }}</span>
+                <span class="ml-auto min-w-0 max-w-[45%] shrink truncate font-mono text-[10px] text-steam-dim sm:ml-0">
                   {{ rowChan(m) }} · {{ shortDate(m.created_at) }}
                 </span>
               </button>

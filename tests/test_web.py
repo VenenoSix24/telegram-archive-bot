@@ -25,7 +25,6 @@ def _config(**overrides) -> Config:
         preserve_original=True,
         rating_enabled=True,
         admins=frozenset({1}),
-        url_template=None,
         database_path=":memory:",
         config_path=None,
         web_enabled=True,

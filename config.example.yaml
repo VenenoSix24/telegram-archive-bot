@@ -50,11 +50,6 @@ thumbnails:
 # 修改仅影响之后新归档的消息，历史消息保持原样。
 message_template: [rating, tags, body, source]
 
-search:
-  # 私有频道时使用 url_template，{tag} 会被替换成对应 Tag；
-  # 公开频道自动生成 https://t.me/channel_name/123
-  url_template: "https://t.me/c/123456789?q={tag}"
-
 # 管理员 User ID，验证 event.sender_id 是否在列表中
 admins:
   - 123456789

@@ -148,8 +148,8 @@ const openUrl = computed(() => {
   return archiveLinkOf(props.message) || sourceLinkOf(props.message)
 })
 
+const archiveUrlOf = computed(() => (props.message ? archiveLinkOf(props.message) : null))
 const srcUrl = computed(() => (props.message ? sourceLinkOf(props.message) : null))
-const activeTarget = computed(() => props.message?.targets?.[0] ?? null)
 const activeRating = computed(() => props.message?.rating ?? 0)
 const activeTags = computed(() => props.message?.tags ?? [])
 const activeBody = computed(() => props.message?.original_text ?? '')
@@ -169,6 +169,23 @@ const RATING_WORDS = ['普通', '可留', '有用', '优质', '珍藏'] as const
 const ratingHint = computed(() => {
   const r = activeRating.value
   return r > 0 ? `${r} 星 · ${RATING_WORDS[r - 1]}` : '点击评鉴'
+})
+
+/* 图录数据表按行渲染：一行一个边框，dt/dd 高度随内容自适应且横线永远对齐 */
+const metaRows = computed(() => {
+  const m = props.message
+  if (!m) return []
+  const rows: { label: string; value: string; href?: string }[] = []
+  const chan = m.targets[0]?.name || displayChatId(m.target_chat_id)
+  if (chan) rows.push({ label: '归档频道', value: chan })
+  if (m.target_message_id != null) rows.push({ label: '归档消息', value: `#${m.target_message_id}` })
+  rows.push({ label: '来源频道', value: displayChatId(m.source_chat_id) })
+  rows.push({ label: '来源消息', value: `#${m.source_message_id}` })
+  rows.push({ label: '归档时间', value: formatTime(m.created_at) })
+  if (figMeta.value) rows.push({ label: '体例', value: figMeta.value })
+  if (metaLine.value) rows.push({ label: '文件', value: metaLine.value })
+  if (srcUrl.value) rows.push({ label: '来源', value: srcUrl.value, href: srcUrl.value })
+  return rows
 })
 
 function textToHtml(value: string) {
@@ -307,40 +324,30 @@ async function mutate(
               <div class="px-6 pb-9 pt-5">
                 <h2 class="font-display text-[21px] font-bold leading-snug text-steam">{{ drawerTitle }}</h2>
 
-                <!-- 图录数据表 -->
-                <dl class="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-6 border-t border-steam">
-                  <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">归档频道</dt>
-                  <dd class="min-w-0 break-words border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">
-                    {{ activeTarget?.name || displayChatId(message.target_chat_id) }}
-                  </dd>
-                  <dt v-if="message.target_message_id != null" class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">归档消息</dt>
-                  <dd v-if="message.target_message_id != null" class="border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">#{{ message.target_message_id }}</dd>
-                  <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">来源频道</dt>
-                  <dd class="border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">{{ displayChatId(message.source_chat_id) }}</dd>
-                  <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">来源消息</dt>
-                  <dd class="border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">#{{ message.source_message_id }}</dd>
-                  <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">归档时间</dt>
-                  <dd class="border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">{{ formatTime(message.created_at) }}</dd>
-                  <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">体例</dt>
-                  <dd class="border-b border-ink-line py-2 text-[13px] text-steam">{{ figMeta }}</dd>
-                  <template v-if="metaLine">
-                    <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">文件</dt>
-                    <dd class="min-w-0 break-words border-b border-ink-line py-2 font-mono text-[12.5px] text-steam">{{ metaLine }}</dd>
-                  </template>
-                  <template v-if="srcUrl">
-                    <dt class="whitespace-nowrap border-b border-ink-line py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">来源</dt>
-                    <dd class="min-w-0 border-b border-ink-line py-2 text-[13px]">
+                <!-- 图录数据表：一行一个横线，左右永对齐 -->
+                <dl class="mt-4 border-t border-steam">
+                  <div
+                    v-for="row in metaRows"
+                    :key="row.label"
+                    class="flex items-baseline gap-x-6 border-b border-ink-line"
+                  >
+                    <dt class="w-16 shrink-0 py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">
+                      {{ row.label }}
+                    </dt>
+                    <dd class="min-w-0 flex-1 py-2 text-[13px] text-steam">
                       <a
-                        :href="srcUrl"
+                        v-if="row.href"
+                        :href="row.href"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="inline-flex max-w-full items-center gap-1.5 break-all text-steam hover:text-gold"
+                        class="inline-flex max-w-full min-w-0 items-baseline gap-1.5 hover:text-gold"
                       >
-                        <Link2 class="h-3.5 w-3.5 shrink-0" />
-                        <span class="truncate">{{ srcUrl }}</span>
+                        <Link2 class="h-3.5 w-3.5 shrink-0 self-center" />
+                        <span class="break-all">{{ row.value }}</span>
                       </a>
+                      <span v-else class="block break-words font-mono text-[12.5px]">{{ row.value }}</span>
                     </dd>
-                  </template>
+                  </div>
                 </dl>
 
                 <!-- 正文 -->
@@ -435,15 +442,26 @@ async function mutate(
               </div>
             </div>
 
-            <footer v-if="openUrl" class="border-t border-ink-line p-4">
+            <footer v-if="openUrl" class="grid gap-2 border-t border-ink-line p-4" :class="archiveUrlOf && srcUrl ? 'grid-cols-2' : 'grid-cols-1'">
               <a
-                :href="openUrl"
+                v-if="archiveUrlOf"
+                :href="archiveUrlOf"
                 target="_blank"
                 rel="noopener"
-                class="flex w-full items-center justify-center gap-2 rounded-sm bg-gold px-3 py-3 text-sm font-semibold tracking-wide text-ink-bg transition-[filter,transform] hover:brightness-110 active:scale-[0.985]"
+                class="flex items-center justify-center gap-2 rounded-sm bg-gold px-3 py-3 text-sm font-semibold tracking-wide text-ink-bg transition-[filter,transform] hover:brightness-110 active:scale-[0.985]"
               >
                 <Send class="h-4 w-4" />
-                在 Telegram 中打开
+                归档频道
+              </a>
+              <a
+                v-if="srcUrl"
+                :href="srcUrl"
+                target="_blank"
+                rel="noopener"
+                class="flex items-center justify-center gap-2 rounded-sm border border-ink-line px-3 py-3 text-sm text-steam transition-colors hover:border-gold hover:text-gold"
+              >
+                <Link2 class="h-4 w-4" />
+                来源消息
               </a>
             </footer>
           </aside>

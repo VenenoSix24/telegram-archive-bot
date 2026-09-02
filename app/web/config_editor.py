@@ -61,7 +61,6 @@ def read_editable_config(path: Path) -> dict:
     src = raw.get("source", {})
     tags_cfg = raw.get("tags", {})
     rating = raw.get("rating", {})
-    search = raw.get("search", {})
     fw = raw.get("forward", {})
     thumbs = raw.get("thumbnails", {})
 
@@ -106,7 +105,6 @@ def read_editable_config(path: Path) -> dict:
         "show_link": _bool(src.get("show_link"), True),
         "preserve_original": _bool(tags_cfg.get("preserve_original"), True),
         "rating_enabled": _bool(rating.get("enabled"), True),
-        "url_template": search.get("url_template"),
         "admins": [int(a) for a in raw.get("admins", [])],
         "thumbnail_media": thumbs.get("media", "first_video"),
         "thumbnail_source": thumbs.get("source", "auto"),
@@ -164,7 +162,6 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw.setdefault("source", {})["show_link"] = merged["show_link"]
     raw.setdefault("tags", {})["preserve_original"] = merged["preserve_original"]
     raw.setdefault("rating", {})["enabled"] = merged["rating_enabled"]
-    raw.setdefault("search", {})["url_template"] = merged["url_template"]
     raw["admins"] = merged["admins"]
     raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
     raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
