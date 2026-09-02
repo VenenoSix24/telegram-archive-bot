@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 
 /*
- * 主题 = 设计 demo 定稿的三方向：素材志（默认）→ 暗房印样 → 标准后台。
+ * 主题 = 双主题定稿：素材志（默认）/ 标准后台；暗房印样已取消不上线（2026-09-02）。
  * 旧版三主题（放映室/深海/苔原）随重构移除，不迁移。
  * 每个主题 = 一份 token 文件 + [data-theme] 作用域母题层；结构层共享。
  * mode：dark/light 为显式，system 跟随系统 prefers-color-scheme
@@ -51,16 +51,27 @@ export function applyTheme() {
   void THEME_LOADERS[theme.value]()
 }
 
+let themeFadeTimer: ReturnType<typeof setTimeout> | undefined
+
+/** B8：切换瞬间给根节点挂 .theme-fading，颜色柔和过渡 300ms 后摘除（避免常驻全局 transition） */
+function applyThemeWithFade() {
+  const el = document.documentElement
+  el.classList.add('theme-fading')
+  applyTheme()
+  clearTimeout(themeFadeTimer)
+  themeFadeTimer = setTimeout(() => el.classList.remove('theme-fading'), 350)
+}
+
 export function setTheme(t: ThemeKey) {
   if (t === theme.value) return
   theme.value = t
-  applyTheme()
+  applyThemeWithFade()
 }
 
 export function setMode(m: Mode) {
   if (m === mode.value) return
   mode.value = m
-  applyTheme()
+  applyThemeWithFade()
 }
 
 /** 跟随系统时监听系统偏好变化，无需刷新即换肤 */

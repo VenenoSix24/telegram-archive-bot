@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { Check, ChevronDown, LayoutDashboard, Images, Menu, Moon, Paintbrush, Settings, LogOut, Sun, Tags } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/lib/api'
@@ -21,6 +21,24 @@ const router = useRouter()
 
 onMounted(applyTheme)
 
+/* 换页滚动复位：标准后台的滚动容器是 main（RouterView 之外，跨路由存活），
+   由这里复位；素材志滚文档，由 router.scrollBehavior 管。只在 path 变化时
+   复位——素材页标签筛选只改 query，复位会把用户甩回顶部 */
+const mainEl = ref<HTMLElement | null>(null)
+watch(
+  () => route.path,
+  () => {
+    if (isVault.value && mainEl.value) mainEl.value.scrollTop = 0
+  },
+)
+
+/* 滚动条槽位只给文档滚动壳（素材志/登录）：标准后台整壳 h-screen 不滚文档，
+   预留会留出右侧死条。登录页无 AppLayout 不带类，页面本身不出滚动条 */
+watchEffect(() => {
+  document.documentElement.classList.toggle('doc-scroll', !isVault.value)
+})
+onBeforeUnmount(() => document.documentElement.classList.remove('doc-scroll'))
+
 const nav = [
   { name: 'dashboard', label: '概览', icon: LayoutDashboard },
   { name: 'messages', label: '素材', icon: Images },
@@ -33,8 +51,6 @@ const themeLabels: Record<ThemeKey, string> = {
   minimal: '标准后台',
 }
 /* 已定稿待实现的方向：菜单里以禁用项示知路线，不做假开关 */
-const upcomingThemes = ['暗房印样 · 制作中']
-
 const isActive = (name: string) => route.name === name
 const currentTitle = computed(
   () => nav.find((item) => item.name === route.name)?.label ?? '素材库',
@@ -105,32 +121,27 @@ async function onLogout() {
         </RouterLink>
       </nav>
 
-      <SidebarCatalog class="min-h-0 flex-1 overflow-y-auto" @navigate="closeSidebar" />
+      <SidebarCatalog class="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" @navigate="closeSidebar" />
 
       <!-- 主题/账户控件：移动端移至顶栏右侧（max-lg 隐藏） -->
       <div class="relative flex-none border-t border-ink-line p-2.5 max-lg:hidden" data-theme-menu>
-        <div v-if="themeMenuOpen" role="menu" class="absolute bottom-full left-2.5 right-2.5 z-40 mb-1.5 rounded-lg border border-ink-line bg-ink-surface p-1 shadow-xl">
-          <button
-            v-for="(label, key) in themeLabels"
-            :key="key"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="currentTheme === key"
-            class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors"
-            :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
-            @click="pickTheme(key)"
-          >
-            {{ label }}
-            <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
-          </button>
-          <p
-            v-for="label in upcomingThemes"
-            :key="label"
-            class="cursor-default rounded-md px-2.5 py-2 text-left text-sm text-steam-dim/40"
-          >
-            {{ label }}
-          </p>
-        </div>
+        <Transition name="v-pop">
+          <div v-if="themeMenuOpen" role="menu" class="absolute bottom-full left-2.5 right-2.5 z-40 mb-1.5 rounded-lg border border-ink-line bg-ink-surface p-1 shadow-xl [--pop-origin:bottom_left]">
+            <button
+              v-for="(label, key) in themeLabels"
+              :key="key"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="currentTheme === key"
+              class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors"
+              :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
+              @click="pickTheme(key)"
+            >
+              {{ label }}
+              <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
+            </button>
+          </div>
+        </Transition>
         <div class="flex items-center gap-1">
           <button
             type="button"
@@ -169,12 +180,14 @@ async function onLogout() {
     </aside>
 
     <!-- 移动端侧栏遮罩 -->
-    <div
-      v-if="isVault && sidebarOpen"
-      class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px] lg:hidden"
-      aria-hidden="true"
-      @click="closeSidebar"
-    />
+    <Transition name="v-dialog">
+      <div
+        v-if="isVault && sidebarOpen"
+        class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px] lg:hidden"
+        aria-hidden="true"
+        @click="closeSidebar"
+      />
+    </Transition>
 
     <div
       class="flex min-w-0 flex-1 flex-col"
@@ -195,7 +208,10 @@ async function onLogout() {
         >
           <Menu class="h-5 w-5" />
         </button>
-        <span class="text-[14px] font-semibold text-steam">{{ currentTitle }}</span>
+        <!-- 标题随路由渐变（out-in 位移为零，两 span 不并存） -->
+        <Transition name="v-dialog" mode="out-in">
+          <span :key="route.path" class="text-[14px] font-semibold text-steam">{{ currentTitle }}</span>
+        </Transition>
 
         <div class="ml-auto flex items-center gap-0.5" data-theme-menu>
           <div class="relative">
@@ -209,32 +225,27 @@ async function onLogout() {
             >
               <Paintbrush class="h-4 w-4" />
             </button>
-            <div
-              v-if="themeMenuOpen"
-              role="menu"
-              class="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-ink-line bg-ink-surface/95 p-1 shadow-xl backdrop-blur-xl"
-            >
-              <button
-                v-for="(label, key) in themeLabels"
-                :key="key"
-                type="button"
-                role="menuitemradio"
-                :aria-checked="currentTheme === key"
-                class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors"
-                :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
-                @click="pickTheme(key)"
+            <Transition name="v-pop">
+              <div
+                v-if="themeMenuOpen"
+                role="menu"
+                class="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-ink-line bg-ink-surface/95 p-1 shadow-xl backdrop-blur-xl [--pop-origin:top_right]"
               >
-                {{ label }}
-                <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
-              </button>
-              <p
-                v-for="label in upcomingThemes"
-                :key="label"
-                class="cursor-default rounded-lg px-2.5 py-2 text-left text-sm text-steam-dim/40"
-              >
-                {{ label }}
-              </p>
-            </div>
+                <button
+                  v-for="(label, key) in themeLabels"
+                  :key="key"
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="currentTheme === key"
+                  class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors"
+                  :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
+                  @click="pickTheme(key)"
+                >
+                  {{ label }}
+                  <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
+                </button>
+              </div>
+            </Transition>
           </div>
           <button
             type="button"
@@ -289,7 +300,9 @@ async function onLogout() {
             >
               <component :is="item.icon" class="h-4 w-4" />
               {{ item.label }}
-              <span v-if="isActive(item.name)" class="absolute inset-x-3 bottom-0 h-[2px] bg-gold" aria-hidden="true"></span>
+              <Transition name="v-dialog">
+                <span v-if="isActive(item.name)" class="absolute inset-x-3 bottom-0 h-[2px] bg-gold" aria-hidden="true"></span>
+              </Transition>
             </RouterLink>
           </nav>
 
@@ -307,32 +320,27 @@ async function onLogout() {
                 <span class="hidden min-[480px]:inline">{{ themeLabels[currentTheme] }}</span>
                 <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="themeMenuOpen && 'rotate-180'" />
               </button>
-              <div
-                v-if="themeMenuOpen"
-                role="menu"
-                class="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-md border border-ink-line bg-ink-surface p-1 shadow-lg"
-              >
-                <button
-                  v-for="(label, key) in themeLabels"
-                  :key="key"
-                  type="button"
-                  role="menuitemradio"
-                  :aria-checked="currentTheme === key"
-                  class="flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2.5 py-2 text-left text-sm transition-colors"
-                  :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
-                  @click="pickTheme(key)"
+              <Transition name="v-pop">
+                <div
+                  v-if="themeMenuOpen"
+                  role="menu"
+                  class="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-md border border-ink-line bg-ink-surface p-1 shadow-lg [--pop-origin:top_right]"
                 >
-                  {{ label }}
-                  <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
-                </button>
-                <p
-                  v-for="label in upcomingThemes"
-                  :key="label"
-                  class="cursor-default rounded px-2.5 py-2 text-left text-sm text-steam-dim/40"
-                >
-                  {{ label }}
-                </p>
-              </div>
+                  <button
+                    v-for="(label, key) in themeLabels"
+                    :key="key"
+                    type="button"
+                    role="menuitemradio"
+                    :aria-checked="currentTheme === key"
+                    class="flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2.5 py-2 text-left text-sm transition-colors"
+                    :class="currentTheme === key ? 'text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
+                    @click="pickTheme(key)"
+                  >
+                    {{ label }}
+                    <Check v-if="currentTheme === key" class="h-3.5 w-3.5 shrink-0" />
+                  </button>
+                </div>
+              </Transition>
             </div>
 
             <button
@@ -361,12 +369,19 @@ async function onLogout() {
         </div>
       </header>
 
-      <!-- 主内容：标准后台由页面自管滚动；素材志沿用文档滚动 -->
+      <!-- 主内容：标准后台由页面自管滚动；素材志沿用文档滚动。
+           路由换页 out-in：key 用 path（query 变化不重放过渡）。
+           scrollbar-gutter 常驻槽位：中栏滚动条出没不再挤宽内容列 -->
       <main
+        ref="mainEl"
         class="min-w-0"
-        :class="isVault ? 'min-h-0 flex-1 overflow-y-auto' : 'flex-1 pb-24 md:pb-0'"
+        :class="isVault ? 'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]' : 'flex-1 pb-24 md:pb-0'"
       >
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <Transition name="v-page" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
       </main>
 
       <!-- 标准后台：移动端悬浮 Dock —— iOS 26 胶囊：容器圆角全弧、宽度随条目自适应，

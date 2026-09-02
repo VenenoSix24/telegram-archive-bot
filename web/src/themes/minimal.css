@@ -86,3 +86,11 @@
 [data-theme='minimal'] ::selection {
   background: rgb(var(--gold) / 0.15);
 }
+
+/* ===== 动效 token：标准后台 = 快而直的效率感，换页 fade + 4px 升起 ===== */
+[data-theme='minimal'] {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+  --page-rise: 4px;
+}
