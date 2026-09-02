@@ -1,121 +1,49 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import {
-  FileText,
-  Film,
-  Headphones,
-  Layers2,
-  Link2,
-  Music,
-  Play,
-  Send,
-  Sticker,
-  File as FileIcon,
-} from 'lucide-vue-next'
+import { computed } from 'vue'
+import { Layers2, Link2, Play, Send } from 'lucide-vue-next'
 import type { Message } from '@/lib/types'
 import StarRating from '@/components/ui/StarRating.vue'
-import {
-  displayChatId,
-  durationLabel,
-  ratioLabel,
-  shortDate,
-  sizeLabel,
-  splitBodyTitleDesc,
-} from '@/lib/format'
-import { useAspectRatio } from '@/composables/useAspectRatio'
-import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
+import MediaGlyph from '@/components/MediaGlyph.vue'
+import { useMessageCard } from '@/composables/useMessageCard'
+import { useThumbMode } from '@/composables/useDisplayPrefs'
 
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ rate: [number]; open: [] }>()
 
-const { ratio, onLoad } = useAspectRatio()
-const thumbFailed = ref(false)
-const natural = ref<{ w: number; h: number } | null>(null)
+/* 展示字段与标准后台卡片同源（useMessageCard），仅版式不同 */
+const {
+  ratio,
+  thumbFailed,
+  onImgLoad,
+  showThumb,
+  thumbSrc,
+  isDead,
+  isAlbum,
+  tagNames,
+  title,
+  desc,
+  durationLabelText,
+  fileLine,
+  ratioText,
+  figMeta,
+  chanLabel,
+  dateShort,
+  archiveUrl,
+  sourceUrl,
+} = useMessageCard(() => props.message)
 
-function onImgLoad(e: Event) {
-  onLoad(e)
-  const img = e.target as HTMLImageElement
-  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-    natural.value = { w: img.naturalWidth, h: img.naturalHeight }
-  }
-}
-
-const mediaIcon = computed(() => {
-  switch (props.message.media_type) {
-    case 'video': return Film
-    case 'audio': return Music
-    case 'voice': return Headphones
-    case 'sticker': return Sticker
-    case 'document': return FileIcon
-    case 'photo': return undefined
-    default: return FileText
-  }
-})
-
-const showThumb = computed(
-  () => props.message.media_type === 'photo' || props.message.media_type === 'video',
+/* 显示偏好：瀑布流 = 本主题原生装裱（真实比例）；统一画布 = 4:3 + 托底（完整/裁剪随偏好） */
+const { thumbMode } = useThumbMode()
+const masonry = computed(() => thumbMode.value === 'masonry')
+const thumbAspect = computed(() =>
+  masonry.value ? (showThumb.value && !thumbFailed.value ? ratio.value : '16 / 10') : '16 / 9',
 )
-
-const thumbSrc = computed(() => {
-  const target = props.message.target_id
-  return `/api/v1/messages/${props.message.id}/thumb${target == null ? '' : `?target_id=${target}`}`
-})
-
-const isDead = computed(() => props.message.status === 'deleted')
-const isAlbum = computed(() => props.message.media_group_id != null)
-const isText = computed(() => props.message.media_type === 'text')
-
-const TYPE_LABEL: Record<string, string> = {
-  photo: '图版',
-  video: '影像',
-  audio: '音频',
-  voice: '语音',
-  sticker: '贴纸',
-  document: '附件',
-  text: '抄本',
-  other: '其他',
-}
-const typeLabel = computed(() => TYPE_LABEL[props.message.media_type] ?? '素材')
-
-const tagNames = computed(() => props.message.tags.map((t) => t.name))
-const split = computed(() =>
-  splitBodyTitleDesc(props.message.original_text || props.message.rendered_text || '', tagNames.value),
-)
-const title = computed(() => split.value.title || props.message.file_name || '无题')
-const desc = computed(() => (isText.value ? '' : split.value.desc))
-const excerpt = computed(() => split.value.body)
-
-const durationLabelText = computed(() => durationLabel(props.message.duration))
-const fileLine = computed(() =>
-  [props.message.file_name, sizeLabel(props.message.file_size)].filter(Boolean).join(' · '),
-)
-
-const ratioText = computed(() =>
-  showThumb.value && !thumbFailed.value
-    ? ratioLabel(natural.value?.w ?? null, natural.value?.h ?? null)
-    : '',
-)
-const figMeta = computed(() => {
-  const parts = [typeLabel.value]
-  if (ratioText.value) parts.push(ratioText.value)
-  if (durationLabelText.value) parts.push(durationLabelText.value)
-  else if (props.message.media_type === 'document' && props.message.file_size != null) {
-    parts.push(sizeLabel(props.message.file_size))
-  }
-  return parts.filter(Boolean).join(' · ')
-})
-
-const chanLabel = computed(
-  () => props.message.targets[0]?.name || displayChatId(props.message.target_chat_id) || '',
-)
-const dateShort = computed(() => shortDate(props.message.created_at))
-const archiveUrl = computed(() => archiveLinkOf(props.message))
-const sourceUrl = computed(() => sourceLinkOf(props.message))
 </script>
 
 <template>
   <article
-    class="card-root group mb-6 flex cursor-pointer break-inside-avoid flex-col"
+    class="card-root group flex cursor-pointer break-inside-avoid flex-col"
+    :class="masonry ? 'mb-6' : ''"
     role="button"
     tabindex="0"
     :aria-label="'打开条目：' + title"
@@ -123,46 +51,33 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
     @keydown.enter.prevent="emit('open')"
     @keydown.space.prevent="emit('open')"
   >
-    <!-- 抄本卡：文本素材走活字版式 -->
+    <!-- 装裱图版：白边 + 发丝线；文本/文件/音频等无原生缩略图类型走绘制封面（与标准后台一致，用户定稿） -->
     <div
-      v-if="isText"
-      class="txt-root relative border bg-ink-surface px-5 pb-4 pt-5"
-      :class="isDead ? 'border-dashed border-ink-line' : 'border-ink-line'"
-    >
-      <span class="txt-mark hidden" aria-hidden="true">文</span>
-      <p
-        class="txt-body line-clamp-6 whitespace-pre-wrap text-sm text-steam"
-        :class="isDead && 'opacity-50'"
-      >
-        {{ excerpt || title }}
-      </p>
-    </div>
-
-    <!-- 装裱图版：白边 + 发丝线，真实宽高比 -->
-    <div
-      v-else
       class="plate-el relative border bg-ink-surface p-2.5 transition-[border-color,box-shadow] duration-200"
       :class="isDead ? 'border-dashed border-ink-line' : 'border-ink-line'"
     >
       <div
-        class="relative overflow-hidden"
-        :style="{ aspectRatio: showThumb && !thumbFailed ? ratio : '16 / 10' }"
+        class="plate-box relative overflow-hidden"
+        :class="!masonry && showThumb && !thumbFailed ? 'vthumb' : ''"
+        :style="{ aspectRatio: thumbAspect }"
       >
         <img
           v-if="showThumb && !thumbFailed"
           :src="thumbSrc"
           :alt="'素材 #' + message.id"
           loading="lazy"
-          class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
-          :class="isDead && 'opacity-40 grayscale'"
+          class="h-full w-full transition-transform duration-300 group-hover:scale-[1.015]"
+          :class="[masonry || thumbMode === 'crop' ? 'object-cover' : 'object-contain', isDead && 'opacity-40 grayscale']"
           @load="onImgLoad"
           @error="thumbFailed = true"
         />
         <div
           v-else
-          class="flex h-full w-full flex-col items-center justify-center gap-2.5 bg-ink-raised text-steam-dim/70"
+          class="flex h-full w-full flex-col items-center justify-center gap-2 bg-ink-raised text-steam-dim/70"
         >
-          <component :is="mediaIcon ?? FileText" class="h-9 w-9" />
+          <div class="h-16 w-44">
+            <MediaGlyph :type="message.media_type" :id="message.id" :file-name="message.file_name" />
+          </div>
           <span
             v-if="fileLine"
             class="max-w-[85%] truncate px-3 text-center font-mono text-[10px] tracking-[0.14em]"
@@ -178,6 +93,9 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         >
           {{ chanLabel }}
         </span>
+
+        <!-- 比例角标：均匀网格主题（标准后台）固定高裁切时标示真实比例；默认隐藏 -->
+        <span v-if="ratioText" class="plate-ratio hidden" aria-hidden="true">{{ ratioText }}</span>
 
         <!-- 角标：相册辑册 / 影像时长 -->
         <span
@@ -206,7 +124,7 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
     </div>
 
     <!-- 藏品图签 -->
-    <div class="flex flex-1 flex-col px-1 pt-3">
+    <div class="card-body flex flex-1 flex-col px-1 pt-3">
       <div class="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-steam-dim">
         <span class="shrink-0 font-semibold" :class="isDead ? 'text-steam-dim' : 'text-gold'">
           藏品 {{ message.id }}
@@ -235,7 +153,7 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         <span v-if="message.tags.length" class="min-w-0 truncate">#{{ tagNames.join(' #') }}</span>
       </div>
       <!-- 链接与星级同行：标签再长也不把评级挤走 -->
-      <div class="mt-1.5 flex items-center gap-3" @click.stop>
+      <div class="card-foot mt-1.5 flex items-center gap-3" @click.stop>
         <a
           v-if="archiveUrl"
           :href="archiveUrl"

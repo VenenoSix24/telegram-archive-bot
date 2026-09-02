@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import { AuthError, login } from '@/lib/api'
 import { APP_VERSION } from '@/lib/version'
+import { isVault } from '@/lib/vocab'
 
 const router = useRouter()
 const token = ref('')
@@ -32,8 +33,43 @@ async function submit() {
 </script>
 
 <template>
-  <!-- 扉页：印 + 刊名 + 双规则线（素材志下显形），其余主题退化为素卡 -->
-  <div class="grid min-h-screen place-items-center bg-ink-bg px-4">
+  <!-- 标准后台：居中登录卡 -->
+  <div v-if="isVault" class="grid min-h-screen place-items-center bg-ink-bg px-4">
+    <form
+      class="w-full max-w-sm rounded-xl border border-ink-line bg-ink-surface p-8 shadow-sm"
+      @submit.prevent="submit"
+    >
+      <div class="flex items-center gap-3">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-steam font-mono text-[15px] font-bold text-ink-bg">A</span>
+        <div>
+          <p class="text-[17px] font-semibold text-steam">素材库</p>
+          <p class="mt-0.5 font-mono text-[9px] tracking-[0.22em] text-steam-dim/60">TG ARCHIVE MANAGER</p>
+        </div>
+      </div>
+
+      <label for="token" class="mb-2 mt-6 block text-sm text-steam">访问令牌</label>
+      <Input
+        id="token"
+        v-model="token"
+        type="password"
+        placeholder="输入 WEB_TOKEN"
+        autocomplete="current-password"
+      />
+
+      <p v-if="error" role="alert" class="mt-3 text-sm text-destructive">{{ error }}</p>
+
+      <Button type="submit" class="mt-6 w-full" :disabled="busy || !token">
+        {{ busy ? '验证中…' : '登录' }}
+      </Button>
+
+      <p class="mt-5 border-t border-ink-line pt-3 text-center font-mono text-[9px] tracking-[0.18em] text-steam-dim/60">
+        v{{ APP_VERSION }}
+      </p>
+    </form>
+  </div>
+
+  <!-- 素材志：扉页登录 -->
+  <div v-else class="grid min-h-screen place-items-center bg-ink-bg px-4">
     <form
       class="w-full max-w-sm border border-ink-line bg-ink-surface p-8"
       @submit.prevent="submit"

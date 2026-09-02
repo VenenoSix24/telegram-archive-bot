@@ -3,77 +3,107 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   AlertTriangle,
+  LayoutGrid,
   Loader2,
   RotateCcw,
+  Rows3,
   Search,
   SlidersHorizontal,
   X,
 } from 'lucide-vue-next'
-import { getStats, getTags, listMessages, patchMessage } from '@/lib/api'
-import type { Message, MessagesResponse, Stats, TagCount, Target } from '@/lib/types'
+import { listMessages, patchMessage } from '@/lib/api'
+import type { Message, MessagesResponse, TagCount } from '@/lib/types'
 import MessageCard from '@/components/MessageCard.vue'
+import MessageCardVault from '@/components/MessageCardVault.vue'
+import MessageRow from '@/components/MessageRow.vue'
 import MessageDrawer from '@/components/MessageDrawer.vue'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
+import { useCatalogFilters } from '@/composables/useCatalogFilters'
+import { useThumbMode } from '@/composables/useDisplayPrefs'
 import { displayChatId } from '@/lib/format'
+import { isVault, useVocab } from '@/lib/vocab'
 
 const route = useRoute()
 const router = useRouter()
+const L = useVocab()
+const { thumbMode } = useThumbMode()
+
+/* 筛选状态与索引：与标准后台侧栏树共用（useCatalogFilters） */
+const {
+  q,
+  mediaType,
+  rating,
+  tagFilter,
+  targetFilter,
+  statusFilter,
+  stats,
+  tagIndex,
+  targets,
+  isFilterActive,
+  loadStats,
+  resetFilters,
+  toggleMedia,
+  toggleRating,
+  toggleTarget,
+  toggleStatus,
+  toggleTag,
+  removeTag,
+} = useCatalogFilters()
 
 const data = ref<MessagesResponse | null>(null)
 const loading = ref(true)
 const error = ref('')
-const q = ref('')
-const mediaType = ref('')
-const rating = ref<number | ''>('')
-const tagFilter = ref('')
-const targetFilter = ref<number | ''>('')
-const statusFilter = ref<'active' | 'deleted' | 'all'>('active')
-const targets = ref<Target[]>([])
-const stats = ref<Stats | null>(null)
-const tagIndex = ref<TagCount[]>([])
 const selected = ref<Message | null>(null)
 const tocOpen = ref(false)
 const searchInput = ref<HTMLInputElement | null>(null)
 
+/* 标准后台：视图切换与常驻详情栏 */
+const viewMode = ref<'grid' | 'list'>(
+  localStorage.getItem('archive:view:v1') === 'list' ? 'list' : 'grid',
+)
+watch(viewMode, (v) => localStorage.setItem('archive:view:v1', v))
+/* 网格容器：统一画布走均匀网格；瀑布流走 columns 瀑布流（两态都随显示偏好切换） */
+const gridClass = computed(() =>
+  thumbMode.value === 'masonry'
+    ? 'columns-1 gap-3.5 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4'
+    : 'feed-grid',
+)
+const paneOpen = ref(false)
+const isNarrow = ref(
+  typeof window !== 'undefined' ? window.matchMedia('(max-width: 1279px)').matches : false,
+)
+
 const PAGE = 30
-const mediaOptions = [
-  { value: '', label: '全卷' },
-  { value: 'photo', label: '图版' },
-  { value: 'video', label: '影像' },
-  { value: 'document', label: '附件' },
-  { value: 'text', label: '抄本' },
-]
-/* 评级词与抽屉评鉴提示一致；接口无评级分布，目录不标计数 */
-const ratingOptions = [
-  { value: 5, label: '五星 · 珍藏' },
-  { value: 4, label: '四星 · 优质' },
-  { value: 3, label: '三星 · 有用' },
-  { value: 2, label: '二星 · 可留' },
-  { value: 1, label: '一星 · 普通' },
-  { value: 0, label: '待评鉴' },
-]
-const statusOptions: { value: 'active' | 'deleted' | 'all'; label: string }[] = [
-  { value: 'active', label: '活跃' },
-  { value: 'deleted', label: '已删除' },
-  { value: 'all', label: '全部' },
-]
+const mediaOptions = computed(() => [
+  { value: '', label: L.value.all },
+  { value: 'photo', label: L.value.photo },
+  { value: 'video', label: L.value.video },
+  { value: 'document', label: L.value.document },
+  { value: 'text', label: L.value.text },
+  { value: 'audio', label: L.value.audio },
+  { value: 'voice', label: L.value.voice },
+  { value: 'sticker', label: L.value.sticker },
+  { value: 'other', label: L.value.other },
+])
+const ratingOptions = computed(() => [
+  { value: 5, label: isVault.value ? L.value.ratingHint[4] : `五星 · ${L.value.ratingHint[4]}` },
+  { value: 4, label: isVault.value ? L.value.ratingHint[3] : `四星 · ${L.value.ratingHint[3]}` },
+  { value: 3, label: isVault.value ? L.value.ratingHint[2] : `三星 · ${L.value.ratingHint[2]}` },
+  { value: 2, label: isVault.value ? L.value.ratingHint[1] : `二星 · ${L.value.ratingHint[1]}` },
+  { value: 1, label: isVault.value ? L.value.ratingHint[0] : `一星 · ${L.value.ratingHint[0]}` },
+  { value: 0, label: L.value.unrated },
+])
+const statusOptions = computed(() => [
+  { value: 'active' as const, label: L.value.statusActive },
+  { value: 'deleted' as const, label: '已删除' },
+  { value: 'all' as const, label: '全部' },
+])
 
 const shown = computed(() => data.value?.items.length ?? 0)
 const hasMore = computed(() => (data.value ? shown.value < data.value.total : false))
-const isFilterActive = computed(
-  () =>
-    !!(
-      q.value ||
-      mediaType.value ||
-      rating.value !== '' ||
-      tagFilter.value ||
-      targetFilter.value !== '' ||
-      statusFilter.value !== 'active'
-    ),
-)
 
-/** 刊头卷号：ISO 周数当卷号，配「不定期刊」的自嘲 */
+/** 刊头卷号：ISO 周数当卷号，配「不定期刊」的自嘲（素材志报眉用） */
 const issue = computed(() => {
   const now = new Date()
   const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
@@ -91,52 +121,59 @@ function typeCount(value: string): number | null {
   return stats.value.messages.by_type[value] ?? 0
 }
 
-/** 类目快捷切换条：热度前 12 + 当前类目（不在前 12 则补进来） */
+/** 类目快捷切换条：热度前 12 + 当前所选类目（不在前 12 则补进来） */
 const stripTags = computed<TagCount[]>(() => {
   const top = tagIndex.value.slice(0, 12)
-  const current = tagFilter.value
-  if (current && !top.some((t) => t.name === current)) {
-    const found = tagIndex.value.find((t) => t.name === current)
-    top.unshift(found ?? { name: current, count: 0 })
+  for (const current of tagFilter.value) {
+    if (!top.some((t) => t.name === current)) {
+      const found = tagIndex.value.find((t) => t.name === current)
+      top.unshift(found ?? { name: current, count: 0 })
+    }
   }
   return top
 })
 
-// URL ?tag=（从标签页点来）作为标签筛选的初始值
-function syncFromQuery() {
-  const t = route.query.tag
-  if (typeof t === 'string' && t) tagFilter.value = t
+// URL ?tag=（从标签页点来，可多值）作为标签筛选的初始值
+function tagsFromQuery(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && !!v)
+  return []
 }
 
-// 标签筛选变更时同步回 URL，可分享/前进后退
+function syncFromQuery() {
+  const next = tagsFromQuery(route.query.tag)
+  const cur = tagFilter.value
+  if (next.length !== cur.length || next.some((t, i) => t !== cur[i])) tagFilter.value = next
+}
+
+// 标签筛选变更时同步回 URL，可分享/前进后退（多值 ?tag=A&tag=B）
 function syncToQuery() {
   router.replace({
-    query: tagFilter.value ? { tag: tagFilter.value } : {},
+    query: tagFilter.value.length ? { tag: tagFilter.value } : {},
   })
 }
 
-// 抽屉点类目等场景在同一页改 query：路由变化要反映到筛选。
+// 详情面板点标签等场景在同一页改 query：路由变化要反映到筛选。
 // 仅在与当前值不同才回写，避免和 syncToQuery 打环。
 watch(
   () => route.query.tag,
   (t) => {
-    const v = typeof t === 'string' && t ? t : ''
-    if (v !== tagFilter.value) tagFilter.value = v
+    const next = tagsFromQuery(t)
+    const cur = tagFilter.value
+    if (next.length !== cur.length || next.some((name, i) => name !== cur[i])) tagFilter.value = next
   },
 )
 
-async function loadStats() {
-  try {
-    const [s, t] = await Promise.all([getStats(), getTags()])
-    stats.value = s
-    targets.value = s.targets
-    tagIndex.value = [...t.items].sort((a, b) => b.count - a.count).slice(0, 14)
-  } catch {
-    stats.value = null
-    targets.value = []
-    tagIndex.value = []
-  }
+// 窄屏判定：详情栏在 <1280 转覆盖层，需要给遮罩做条件渲染
+function onNarrowChange(e: MediaQueryListEvent) {
+  isNarrow.value = e.matches
 }
+onMounted(() => {
+  window.matchMedia('(max-width: 1279px)').addEventListener('change', onNarrowChange)
+})
+onBeforeUnmount(() => {
+  window.matchMedia('(max-width: 1279px)').removeEventListener('change', onNarrowChange)
+})
 
 let timer: ReturnType<typeof setTimeout> | undefined
 let requestGeneration = 0
@@ -160,7 +197,7 @@ async function load() {
       q: q.value || undefined,
       media_type: mediaType.value || undefined,
       rating: rating.value === '' ? undefined : Number(rating.value),
-      tag: tagFilter.value || undefined,
+      tag: tagFilter.value.length ? tagFilter.value : undefined,
       target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
       status: statusFilter.value,
       limit: PAGE,
@@ -181,7 +218,7 @@ async function loadMore() {
       q: q.value || undefined,
       media_type: mediaType.value || undefined,
       rating: rating.value === '' ? undefined : Number(rating.value),
-      tag: tagFilter.value || undefined,
+      tag: tagFilter.value.length ? tagFilter.value : undefined,
       target_chat_id: targetFilter.value === '' ? undefined : Number(targetFilter.value),
       status: statusFilter.value,
       limit: PAGE,
@@ -227,52 +264,61 @@ function onDrawerUpdate(updated: Message) {
   if (selected.value?.material_id === updated.material_id) selected.value = { ...selected.value, ...updated, material_id: selected.value.material_id }
 }
 
-/* 目录条目单选可反选；移动端选中后收起目录 */
+/* 目录条目单选可反选；移动端选中后收起目录（素材志） */
 function closeTocOnMobile() {
   if (window.innerWidth < 1024) tocOpen.value = false
 }
 function setMedia(value: string) {
-  mediaType.value = mediaType.value === value && value !== '' ? '' : value
+  toggleMedia(value)
   closeTocOnMobile()
 }
 function setRating(value: number) {
-  rating.value = rating.value === value ? '' : value
+  toggleRating(value)
   closeTocOnMobile()
 }
 function setTarget(value: number) {
-  targetFilter.value = targetFilter.value === value ? '' : value
+  toggleTarget(value)
   closeTocOnMobile()
 }
 function setStatus(value: 'active' | 'deleted' | 'all') {
-  statusFilter.value = statusFilter.value === value ? 'active' : value
+  toggleStatus(value)
   closeTocOnMobile()
 }
 function setTag(name: string) {
-  tagFilter.value = tagFilter.value === name ? '' : name
+  toggleTag(name)
   closeTocOnMobile()
 }
 
-function resetFilters() {
-  q.value = ''
-  mediaType.value = ''
-  rating.value = ''
-  targetFilter.value = ''
-  statusFilter.value = 'active'
-  tagFilter.value = '' // 触发 URL 同步与重查
+function resetAll() {
+  resetFilters()
   tocOpen.value = false
 }
 
-/* 「/」聚焦检索；Esc 优先收目录（抽屉自管 Esc） */
+/* 标准后台：点卡片 = 选中并展开详情栏 */
+function openCard(m: Message) {
+  selected.value = m
+  paneOpen.value = true
+}
+
+/* 「/」聚焦检索；Esc 优先收目录（素材志）/详情栏（标准后台） */
 function onGlobalKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && tocOpen.value) {
-    tocOpen.value = false
+  if (e.key === 'Escape') {
+    if (tocOpen.value) {
+      tocOpen.value = false
+      return
+    }
+    if (paneOpen.value && isNarrow.value) paneOpen.value = false
     return
   }
   const tag = document.activeElement?.tagName ?? ''
   if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(tag)) {
     e.preventDefault()
-    if (window.innerWidth < 1024) tocOpen.value = true
-    void nextTick(() => searchInput.value?.focus())
+    if (isVault.value) {
+      searchInput.value?.focus()
+    } else {
+      if (window.innerWidth < 1024) tocOpen.value = true
+      void nextTick(() => searchInput.value?.focus())
+    }
   }
 }
 
@@ -286,7 +332,187 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1440px] px-5 py-8 min-[820px]:px-8">
+  <!-- ================= 标准后台：工具条 + 视图切换 + 常驻详情栏 ================= -->
+  <div v-if="isVault" class="flex h-full min-w-0">
+    <div class="flex min-w-0 flex-1 flex-col">
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <!-- 语境条 + 类型 chips：吸顶毛玻璃，内容从其下方滚过 -->
+        <div class="sticky top-0 z-20 space-y-2 border-b border-ink-line bg-ink-bg/85 px-4 py-2.5 backdrop-blur-xl backdrop-saturate-150">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="text-[15px] font-semibold text-steam">素材</h1>
+            <span v-if="data" class="font-mono text-[11px] tabular-nums text-steam-dim">{{ shown }} / {{ data.total }}</span>
+            <label
+              class="flex h-9 w-full min-w-[180px] max-w-md flex-1 items-center gap-2 rounded-lg border border-ink-line bg-ink-raised px-2.5 transition-colors focus-within:border-gold focus-within:bg-ink-surface"
+            >
+              <Search class="h-4 w-4 shrink-0 text-steam-dim" />
+              <input
+                ref="searchInput"
+                v-model="q"
+                type="search"
+                :placeholder="L.searchPlaceholder"
+                aria-label="检索素材"
+                class="w-full min-w-0 bg-transparent text-[13px] text-steam outline-none placeholder:text-steam-dim/60"
+              />
+              <kbd class="hidden shrink-0 rounded border border-ink-line bg-ink-surface px-1 font-mono text-[10px] text-steam-dim/70 min-[480px]:block">/</kbd>
+            </label>
+            <button
+              v-if="isFilterActive"
+              type="button"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-ink-line px-2.5 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:text-gold"
+              @click="resetAll"
+            >
+              <RotateCcw class="h-3 w-3" /> {{ L.reset }}
+            </button>
+            <div class="ml-auto flex items-center gap-0.5 rounded-lg border border-ink-line bg-ink-raised p-0.5" role="tablist" aria-label="视图切换">
+              <button
+                type="button"
+                class="grid h-7 w-7 cursor-pointer place-items-center rounded-md transition-colors"
+                :class="viewMode === 'grid' ? 'bg-ink-surface text-steam shadow-sm' : 'text-steam-dim hover:text-steam'"
+                aria-label="网格视图"
+                :aria-pressed="viewMode === 'grid'"
+                @click="viewMode = 'grid'"
+              >
+                <LayoutGrid class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="grid h-7 w-7 cursor-pointer place-items-center rounded-md transition-colors"
+                :class="viewMode === 'list' ? 'bg-ink-surface text-steam shadow-sm' : 'text-steam-dim hover:text-steam'"
+                aria-label="列表视图"
+                :aria-pressed="viewMode === 'list'"
+                @click="viewMode = 'list'"
+              >
+                <Rows3 class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <!-- 类型 chips + 当前标签 -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              v-for="op in mediaOptions"
+              :key="op.value"
+              type="button"
+              class="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors"
+              :class="mediaType === op.value ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
+              :aria-pressed="mediaType === op.value"
+              @click="setMedia(op.value)"
+            >
+              {{ op.label }}
+            </button>
+            <template v-if="tagFilter.length">
+              <span class="mx-1 hidden h-4 w-px bg-ink-line min-[480px]:block" aria-hidden="true"></span>
+              <span
+                v-for="t in tagFilter"
+                :key="t"
+                class="inline-flex h-7 items-center gap-1.5 rounded-full border border-gold bg-gold/10 px-2.5 text-xs text-gold"
+              >
+                #{{ t }}
+                <button
+                  type="button"
+                  class="cursor-pointer transition-opacity hover:opacity-60"
+                  :aria-label="`移除标签 ${t}`"
+                  @click="removeTag(t)"
+                >
+                  <X class="h-3 w-3" />
+                </button>
+              </span>
+              <RouterLink :to="{ name: 'tags' }" class="text-[11px] text-gold underline underline-offset-4">
+                全部{{ L.tag }}
+              </RouterLink>
+            </template>
+          </div>
+        </div>
+
+        <!-- 内容区（工具条吸顶，独立滚动） -->
+        <div class="px-4 pb-24 pt-4 lg:pb-6">
+          <!-- 骨架屏 -->
+          <div v-if="loading && !shown" :class="gridClass" aria-hidden="true">
+            <div
+              v-for="i in 8"
+              :key="i"
+              class="animate-pulse overflow-hidden rounded-xl border border-ink-line bg-ink-surface"
+              :class="thumbMode === 'masonry' && 'mb-3.5 break-inside-avoid'"
+            >
+              <div class="aspect-video border-b border-ink-line bg-ink-raised" />
+              <div class="space-y-2 p-3">
+                <div class="h-2.5 w-16 rounded bg-ink-raised" />
+                <div class="h-3.5 w-3/4 rounded bg-ink-raised" />
+                <div class="h-2.5 w-1/2 rounded bg-ink-raised" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 首载失败 -->
+          <div v-else-if="error" class="flex flex-col items-center gap-3 rounded-xl border border-ink-line bg-ink-surface py-16 text-steam-dim">
+            <AlertTriangle class="h-8 w-8" />
+            <p class="text-sm">{{ error }}</p>
+            <Button variant="secondary" size="sm" @click="load">重试</Button>
+          </div>
+
+          <template v-else-if="data && data.items.length">
+            <div v-if="viewMode === 'grid'" :class="gridClass">
+              <MessageCardVault
+                v-for="m in data.items"
+                :key="m.material_id"
+                :message="m"
+                :selected="selected?.material_id === m.material_id"
+                @rate="(n) => rate(m, n)"
+                @open="openCard(m)"
+              />
+            </div>
+            <div v-else class="overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm">
+              <MessageRow
+                v-for="m in data.items"
+                :key="m.material_id"
+                :message="m"
+                :selected="selected?.material_id === m.material_id"
+                @rate="(n) => rate(m, n)"
+                @open="openCard(m)"
+              />
+            </div>
+
+            <!-- 加载更多 -->
+            <div v-if="hasMore" class="mt-4 flex justify-center">
+              <Button variant="secondary" size="sm" :disabled="loading" @click="loadMore">
+                <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
+                {{ loading ? L.loading : `加载更多（${shown} / ${data.total}）` }}
+              </Button>
+            </div>
+          </template>
+
+          <!-- 空态 -->
+          <div v-else-if="data" class="py-16 text-center">
+            <p class="text-[15px] font-semibold text-steam">{{ L.noMatch }}</p>
+            <p class="mt-2 text-[13px] text-steam-dim">
+              {{ L.noMatchHint }}
+              <button type="button" class="cursor-pointer text-gold underline underline-offset-4" @click="resetAll">
+                {{ L.reset }}
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 窄屏详情遮罩 -->
+    <div
+      v-if="paneOpen && isNarrow"
+      class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px]"
+      aria-hidden="true"
+      @click="paneOpen = false"
+    />
+    <!-- 详情栏：≥1280 常驻右栏（内衬圆角面板）；窄屏覆盖层（点卡片滑出） -->
+    <div
+      class="max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-50 max-xl:w-[min(94vw,380px)] max-xl:shadow-2xl max-xl:transition-transform xl:relative xl:h-full"
+      :class="paneOpen ? 'max-xl:translate-x-0 xl:w-[360px] xl:shrink-0 xl:py-2.5 xl:pr-2.5' : 'max-xl:translate-x-full xl:hidden'"
+    >
+      <MessageDrawer pane :message="selected" @close="paneOpen = false" @update="onDrawerUpdate" />
+    </div>
+  </div>
+
+  <!-- ================= 素材志：报眉 + 目录 + 瀑布流（原样保留） ================= -->
+  <div v-else class="mx-auto max-w-[1440px] px-5 py-8 min-[820px]:px-8">
     <!-- 报眉：顶栏即报头，页面以一行元信息 + 双规则线开场，不再重复刊名 -->
     <header>
       <div
@@ -310,7 +536,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
       <!-- 目录页：桌面常驻左栏，移动端全屏抽屉 -->
       <aside
-        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-14 lg:z-auto lg:max-h-[calc(100vh-3.5rem)] lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
+        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto overscroll-contain border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-14 lg:z-auto lg:max-h-[calc(100vh-3.5rem)] lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
         :class="tocOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
         aria-label="目录与筛选"
       >
@@ -372,15 +598,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
               <button
                 type="button"
                 class="flex w-full cursor-pointer items-baseline gap-2 px-0.5 py-[7px] text-left text-[13.5px] transition-colors"
-                :class="tagFilter === tag.name ? 'text-gold' : 'text-steam-dim hover:text-steam'"
-                :aria-pressed="tagFilter === tag.name"
+                :class="tagFilter.includes(tag.name) ? 'text-gold' : 'text-steam-dim hover:text-steam'"
+                :aria-pressed="tagFilter.includes(tag.name)"
                 @click="setTag(tag.name)"
               >
                 <span class="shrink-0 truncate">{{ tag.name }}</span>
                 <span class="toc-lead hidden" aria-hidden="true"></span>
                 <span
                   class="ml-auto shrink-0 font-mono text-xs"
-                  :class="tagFilter === tag.name ? 'font-bold text-gold' : 'text-steam-dim/80'"
+                  :class="tagFilter.includes(tag.name) ? 'font-bold text-gold' : 'text-steam-dim/80'"
                 >
                   {{ tag.count }}
                 </span>
@@ -468,31 +694,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
             v-if="isFilterActive"
             type="button"
             class="ml-auto inline-flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-gold underline underline-offset-4"
-            @click="resetFilters"
+            @click="resetAll"
           >
-            <RotateCcw class="h-3 w-3" /> 重置目录
+            <RotateCcw class="h-3 w-3" /> {{ L.reset }}
           </button>
         </div>
 
-        <!-- 类目快捷切换条：带类目筛选时出现，点其他类目直接换，× 清除 -->
-        <div v-if="tagFilter && stripTags.length" class="mb-5 flex flex-wrap items-center gap-2">
-          <span class="font-mono text-[10px] tracking-[0.22em] text-steam-dim">类目</span>
+        <!-- 类目快捷切换条：出现于带类目筛选时，点其他类目加入/移除多选 -->
+        <div v-if="tagFilter.length && stripTags.length" class="mb-5 flex flex-wrap items-center gap-2">
+          <span class="font-mono text-[10px] tracking-[0.22em] text-steam-dim">{{ L.tag }}</span>
           <button
             v-for="t in stripTags"
             :key="t.name"
             type="button"
             class="inline-flex cursor-pointer items-baseline gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors"
-            :class="t.name === tagFilter ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
-            :aria-pressed="t.name === tagFilter"
-            @click="tagFilter = t.name"
+            :class="tagFilter.includes(t.name) ? 'border-gold bg-gold/10 text-gold' : 'border-ink-line text-steam-dim hover:text-steam'"
+            :aria-pressed="tagFilter.includes(t.name)"
+            @click="toggleTag(t.name)"
           >
             #{{ t.name }}
             <span v-if="t.count > 0" class="font-mono text-[10px] opacity-70">{{ t.count }}</span>
             <X
-              v-if="t.name === tagFilter"
+              v-if="tagFilter.includes(t.name)"
               class="h-3 w-3 cursor-pointer self-center transition-opacity hover:opacity-60"
-              aria-label="清除类目筛选"
-              @click.stop="tagFilter = ''"
+              aria-label="移除该类目"
+              @click.stop="removeTag(t.name)"
             />
           </button>
           <RouterLink
@@ -506,7 +732,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
         <!-- 骨架屏：与图版同构的占位 -->
         <div
           v-if="loading && !shown"
-          class="columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4"
+          :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
           aria-hidden="true"
         >
           <div v-for="i in 8" :key="i" class="mb-6 break-inside-avoid animate-pulse">
@@ -521,10 +747,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </div>
         </div>
 
-        <!-- 图录瀑布流 -->
+        <!-- 图录：瀑布流（原生装裱）或统一画布（跟随显示偏好） -->
         <div
           v-else-if="data && data.items.length"
-          class="columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4"
+          :class="thumbMode === 'masonry' ? 'columns-1 gap-6 min-[480px]:columns-2 xl:columns-3 min-[1600px]:columns-4' : 'grid grid-cols-2 gap-5 xl:grid-cols-3 min-[1600px]:grid-cols-4'"
         >
           <MessageCard
             v-for="m in data.items"
@@ -544,15 +770,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
         <!-- 空态 -->
         <div v-else-if="data" class="border-t border-ink-line py-16 text-center">
-          <p class="empty-title font-display text-xl text-steam">查无此件</p>
+          <p class="empty-title font-display text-xl text-steam">{{ L.noMatch }}</p>
           <p class="mt-2 text-[13px] text-steam-dim">
             目录下没有匹配的条目，
             <button
               type="button"
               class="cursor-pointer text-gold underline underline-offset-4"
-              @click="resetFilters"
+              @click="resetAll"
             >
-              重置目录
+              {{ L.reset }}
             </button>
           </p>
         </div>
@@ -561,7 +787,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
         <div v-if="hasMore && data?.items.length" class="mt-2 flex justify-center">
           <Button variant="secondary" size="sm" :disabled="loading" @click="loadMore">
             <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-            {{ loading ? '载入中…' : `加载更多（${shown} / ${data?.total}）` }}
+            {{ loading ? L.loading : `加载更多（${shown} / ${data?.total}）` }}
           </Button>
         </div>
       </main>
