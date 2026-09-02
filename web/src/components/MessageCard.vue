@@ -203,6 +203,7 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         <span class="shrink-0 font-semibold" :class="isDead ? 'text-steam-dim' : 'text-gold'">
           藏品 {{ message.id }}
         </span>
+        <span class="min-w-0 shrink truncate font-semibold text-steam/80">{{ chanLabel }}</span>
         <span class="min-w-0 shrink truncate">{{ figMeta }}</span>
         <span class="flex-1 border-b border-ink-line" aria-hidden="true"></span>
       </div>
@@ -221,9 +222,7 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         class="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[10px] text-steam-dim"
         @click.stop
       >
-        <span class="shrink-0">
-          {{ chanLabel }}<template v-if="dateShort"> · {{ dateShort }}</template>
-        </span>
+        <span v-if="dateShort" class="shrink-0">{{ dateShort }}</span>
         <span v-if="message.tags.length" class="min-w-0 truncate">#{{ tagNames.join(' #') }}</span>
       </div>
       <!-- 链接与星级同行：标签再长也不把评级挤走 -->
