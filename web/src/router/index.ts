@@ -18,6 +18,13 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
+  scrollBehavior(to, from, savedPosition) {
+    // 后退/前进回原位；仅 query 变化（素材页标签筛选同步 URL）不动滚动；
+    // 真换页回顶——避免 out-in 换页中新页高度不足导致的滚动 clamp 跳动
+    if (savedPosition) return savedPosition
+    if (to.path === from.path) return false
+    return { top: 0 }
+  },
 })
 
 router.beforeEach((to) => {
