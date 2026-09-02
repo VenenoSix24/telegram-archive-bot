@@ -11,6 +11,7 @@ import logging
 
 from app.config import Config
 from app.media.thumbnails import ThumbnailCache, choose_thumbnail_message
+from app.telegram.copier import collect_album
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +49,10 @@ async def backfill_thumbs(
             source = await client.get_messages(chat, ids=row["source_message_id"])
             if source is None:
                 continue
-            messages = [source]
-            if source.grouped_id:
-                messages = [
-                    m
-                    for m in await client.get_messages(chat, limit=200)
-                    if m.grouped_id == source.grouped_id
-                ]
-                messages.sort(key=lambda m: m.id)
+            # 相册缩略图同样按落库成员取组，避免 200 条窗口外被拆散
+            messages = await collect_album(
+                client, chat, source, conn=conn, source_chat_id=row["source_chat_id"]
+            )
             selected = choose_thumbnail_message(
                 messages, getattr(config, "thumbnail_media", "first_video")
             )
