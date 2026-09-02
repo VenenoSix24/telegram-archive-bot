@@ -284,7 +284,7 @@ async function mutate(
         </span>
         <button
           type="button"
-          class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+          class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
           aria-label="关闭详情"
           @click="emit('close')"
         >
