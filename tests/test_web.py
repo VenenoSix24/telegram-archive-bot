@@ -321,7 +321,8 @@ def test_messages_list_multi_tag_is_intersection(tmp_path):
         "INSERT INTO tags (name, normalized_name) VALUES ('游戏', '游戏'), ('MOD', 'mod')"
     )
     conn.execute(
-        "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, original_text, status) "
+        "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, "
+        "original_text, status) "
         "VALUES (1, -1001, 1, 'photo', '双标签', 'archived'),"
         "      (2, -1002, 2, 'text', '仅游戏', 'archived'),"
         "      (3, -1003, 3, 'text', '仅MOD', 'archived')"
