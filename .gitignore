@@ -54,8 +54,8 @@ web/dist/
 
 # 前端设计 demo（本地审阅用，不进 Git）
 design_demo/
-docs/decisions/
-docs/transfers/
+# superpowers 工作文档整体不进 Git（含 specs 等）
+docs/
 .history/
 
 # Claude Code 本地运行配置（机器相关，不进 Git）
