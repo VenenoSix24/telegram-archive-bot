@@ -1,21 +1,37 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { sanitizeTelegramHtml } from '@/lib/telegramHtml'
-import { Calendar, Film, Link2, Plus, Send, Tag as TagIcon, X } from 'lucide-vue-next'
+import {
+  FileText,
+  Film,
+  Headphones,
+  Link2,
+  Music,
+  Pencil,
+  Plus,
+  Send,
+  Sticker,
+  Tag as TagIcon,
+  X,
+  File as FileIcon,
+} from 'lucide-vue-next'
 import type { Message } from '@/lib/types'
 import { patchMessage } from '@/lib/api'
 import Button from '@/components/ui/Button.vue'
 import StarRating from '@/components/ui/StarRating.vue'
-import { durationLabel, displayChatId, formatTime, sizeLabel } from '@/lib/format'
+import { displayChatId, durationLabel, formatTime, sizeLabel, splitBodyTitleDesc } from '@/lib/format'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { archiveLinkOf, sourceLinkOf } from '@/lib/links'
 
 const props = defineProps<{ message: Message | null }>()
 const emit = defineEmits<{ close: []; update: [Message] }>()
 
+const router = useRouter()
 const newTag = ref('')
 const busy = ref(false)
 const error = ref('')
+const tagEditing = ref(false)
 const drawerThumbFailed = ref(false)
 const bodyDraft = ref('')
 const bodyHtmlDraft = ref('')
@@ -71,6 +87,7 @@ watch(() => props.message, (message) => {
   newTag.value = ''
   error.value = ''
   drawerThumbFailed.value = false
+  tagEditing.value = false
   bodyDraft.value = message?.original_text ?? ''
   bodyHtmlDraft.value = message?.original_html ?? ''
   editingBody.value = false
@@ -81,6 +98,46 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   unlockBody()
 })
+
+const mediaIcon = computed(() => {
+  switch (props.message?.media_type) {
+    case 'video': return Film
+    case 'audio': return Music
+    case 'voice': return Headphones
+    case 'sticker': return Sticker
+    case 'document': return FileIcon
+    case 'photo': return undefined
+    default: return FileText
+  }
+})
+
+const showThumb = computed(
+  () => props.message?.media_type === 'photo' || props.message?.media_type === 'video',
+)
+
+const thumbSrc = computed(() => {
+  if (!props.message) return ''
+  const target = props.message.target_id
+  return `/api/v1/messages/${props.message.id}/thumb${target == null ? '' : `?target_id=${target}`}`
+})
+
+const TYPE_LABEL: Record<string, string> = {
+  photo: '图版',
+  video: '影像',
+  audio: '音频',
+  voice: '语音',
+  sticker: '贴纸',
+  document: '附件',
+  text: '抄本',
+  other: '其他',
+}
+const typeLabel = computed(() =>
+  props.message ? TYPE_LABEL[props.message.media_type] ?? '素材' : '',
+)
+const durationLabelText = computed(() => durationLabel(props.message?.duration ?? null))
+const figMeta = computed(() =>
+  [typeLabel.value, durationLabelText.value].filter(Boolean).join(' · '),
+)
 
 const metaLine = computed(() => {
   if (props.message == null) return ''
@@ -96,12 +153,45 @@ const openUrl = computed(() => {
   return archiveLinkOf(props.message) || sourceLinkOf(props.message)
 })
 
+const archiveUrlOf = computed(() => (props.message ? archiveLinkOf(props.message) : null))
 const srcUrl = computed(() => (props.message ? sourceLinkOf(props.message) : null))
-const activeTarget = computed(() => props.message?.targets?.[0] ?? null)
 const activeRating = computed(() => props.message?.rating ?? 0)
 const activeTags = computed(() => props.message?.tags ?? [])
 const activeBody = computed(() => props.message?.original_text ?? '')
 const activeRendered = computed(() => props.message?.rendered_text ?? '')
+
+/** 卡片标题同源：首行非骨架行，回退文件名 */
+const drawerTitle = computed(() => {
+  if (!props.message) return ''
+  const split = splitBodyTitleDesc(
+    props.message.original_text || props.message.rendered_text || '',
+    (props.message.tags ?? []).map((t) => t.name),
+  )
+  return split.title || props.message.file_name || '无题'
+})
+
+const RATING_WORDS = ['普通', '可留', '有用', '优质', '珍藏'] as const
+const ratingHint = computed(() => {
+  const r = activeRating.value
+  return r > 0 ? `${r} 星 · ${RATING_WORDS[r - 1]}` : '点击评鉴'
+})
+
+/* 图录数据表按行渲染：一行一个边框，dt/dd 高度随内容自适应且横线永远对齐 */
+const metaRows = computed(() => {
+  const m = props.message
+  if (!m) return []
+  const rows: { label: string; value: string; href?: string }[] = []
+  const chan = m.targets[0]?.name || displayChatId(m.target_chat_id)
+  if (chan) rows.push({ label: '归档位置', value: chan })
+  if (m.target_message_id != null) rows.push({ label: '归档消息', value: `#${m.target_message_id}` })
+  rows.push({ label: '来源频道', value: displayChatId(m.source_chat_id) })
+  rows.push({ label: '来源消息', value: `#${m.source_message_id}` })
+  rows.push({ label: '归档时间', value: formatTime(m.created_at) })
+  if (figMeta.value) rows.push({ label: '体例', value: figMeta.value })
+  if (metaLine.value) rows.push({ label: '文件', value: metaLine.value })
+  if (srcUrl.value) rows.push({ label: '来源', value: srcUrl.value, href: srcUrl.value })
+  return rows
+})
 
 function textToHtml(value: string) {
   const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -143,6 +233,12 @@ async function removeTag(tagName: string) {
   await mutate({ remove_tag_names: [tagName] }, `已移除标签「${tagName}」`)
 }
 
+/* 点类目跳到该类目的图录筛选；抽屉先收起避免盖住结果 */
+function jumpToTag(tagName: string) {
+  emit('close')
+  void router.push({ name: 'messages', query: { tag: tagName } })
+}
+
 async function mutate(
   change: { target_id?: number; body?: string; body_html?: string; rating?: number; add_tags?: string[]; remove_tag_names?: string[] },
   doneText: string,
@@ -177,184 +273,224 @@ async function mutate(
     >
       <div
         v-if="message"
-        class="fixed inset-0 z-40 flex justify-end bg-ink-bg/70 backdrop-blur-sm"
+        class="fixed inset-0 z-40 flex justify-end bg-ink-bg/60 backdrop-blur-[2px]"
         @click.self="emit('close')"
       >
         <Transition
           appear
           enter-active-class="transition-transform duration-300 ease-out"
           leave-active-class="transition-transform duration-200 ease-in"
-          enter-from-class="translate-x-8"
-          leave-to-class="translate-x-8"
+          enter-from-class="translate-x-full"
+          leave-to-class="translate-x-full"
         >
           <aside
             v-if="message"
-            class="flex h-full w-full max-w-lg flex-col bg-ink-surface shadow-2xl"
+            class="drawer-root relative flex h-full w-full max-w-[500px] flex-col border-l border-ink-line bg-ink-bg shadow-2xl"
             role="dialog"
             aria-modal="true"
-            aria-label="消息详情"
+            aria-label="素材详情"
           >
-            <header class="flex items-center justify-between border-b border-ink-line px-5 py-3">
-              <div class="flex items-center gap-2 font-mono text-sm text-steam-dim">
-                素材 <span class="text-steam">{{ activeTarget?.name || displayChatId(message.target_chat_id) }}</span>
-              </div>
+            <span class="drawer-spine absolute inset-x-0 top-0 z-[2] hidden h-1 bg-gold" aria-hidden="true"></span>
+
+            <header class="flex flex-none items-center justify-between border-b border-ink-line py-2.5 pl-6 pr-2.5">
+              <span class="font-mono text-[11px] tracking-[0.22em] text-steam-dim">
+                图 · 藏品 <b class="font-semibold text-gold">{{ message.id }}</b>
+              </span>
               <button
                 type="button"
-                class="rounded-md p-1.5 text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam cursor-pointer"
-                aria-label="关闭"
+                class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+                aria-label="关闭详情"
                 @click="emit('close')"
               >
-                <X class="h-4 w-4" />
+                <X class="h-5 w-5" />
               </button>
             </header>
 
-            <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <!-- 媒体：失败显示占位图标 -->
+            <div class="min-h-0 flex-1 overflow-y-auto">
+              <!-- 图版预览：真实比例不裁切，横图通栏 / 竖图居中限高 -->
               <div
-                v-if="((message.media_type === 'photo' || message.media_type === 'video') && !drawerThumbFailed)"
-                class="mb-4 overflow-hidden rounded-card bg-ink-raised"
+                v-if="showThumb && !drawerThumbFailed"
+                class="overflow-hidden border-b border-ink-line bg-ink-surface"
               >
                 <img
-                  :src="`/api/v1/messages/${message.id}/thumb${message.target_id == null ? '' : `?target_id=${message.target_id}`}`"
-                  :alt="'消息 #' + message.id"
-                  class="max-h-96 w-full object-contain"
+                  :src="thumbSrc"
+                  :alt="'素材 #' + message.id"
+                  class="mx-auto block max-h-[44vh] w-auto max-w-full object-contain"
                   @error="drawerThumbFailed = true"
                 />
               </div>
-              <div
-                v-else-if="message.media_type === 'photo' || message.media_type === 'video'"
-                class="mb-4 flex h-48 items-center justify-center rounded-card bg-ink-raised text-steam-dim/45"
-              >
-                <Film class="h-12 w-12" />
+              <div v-else class="border-b border-ink-line px-6 py-12 text-center text-steam-dim">
+                <component :is="mediaIcon ?? Film" class="mx-auto mb-2.5 h-6 w-6" />
+                <p class="font-mono text-[11px] tracking-[0.24em]">
+                  {{ typeLabel }} · {{ showThumb ? '图版加载失败' : '无图版' }}
+                </p>
               </div>
 
-              <!-- 当前目标副本已由素材卡片确定 -->
-              <!-- 评级 -->
-              <div class="mb-4 flex items-center gap-3">
-                <StarRating
-                  :value="activeRating"
-                  size="lg"
-                  interactive
-                  :disabled="busy"
-                  @change="setRating"
+              <p class="d-cap border-b border-ink-line px-6 py-2.5 text-[11px] tracking-[0.2em] text-steam-dim">
+                图 · 藏品 <b class="font-semibold text-gold">{{ message.id }}</b>
+                <span class="ml-3">{{ figMeta }}</span>
+                <span class="ml-3">归档于 {{ formatTime(message.created_at) }}</span>
+              </p>
+
+              <div class="px-6 pb-9 pt-5">
+                <h2 class="font-display text-[21px] font-bold leading-snug text-steam">{{ drawerTitle }}</h2>
+
+                <!-- 图录数据表：一行一个横线，左右永对齐 -->
+                <dl class="mt-4 border-t border-steam">
+                  <div
+                    v-for="row in metaRows"
+                    :key="row.label"
+                    class="flex items-baseline gap-x-6 border-b border-ink-line"
+                  >
+                    <dt class="w-16 shrink-0 py-2.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">
+                      {{ row.label }}
+                    </dt>
+                    <dd class="min-w-0 flex-1 py-2 text-[13px] text-steam">
+                      <a
+                        v-if="row.href"
+                        :href="row.href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex max-w-full min-w-0 items-baseline gap-1.5 hover:text-gold"
+                      >
+                        <Link2 class="h-3.5 w-3.5 shrink-0 self-center" />
+                        <span class="break-all">{{ row.value }}</span>
+                      </a>
+                      <span v-else class="block break-words font-mono text-[12.5px]">{{ row.value }}</span>
+                    </dd>
+                  </div>
+                </dl>
+
+                <!-- 正文 -->
+                <!-- eslint-disable vue/no-v-html -->
+                <div
+                  v-if="activeBody || activeRendered"
+                  class="telegram-content mt-5 text-sm leading-relaxed text-steam"
+                  v-html="sanitizeTelegramHtml(message.original_html, activeBody || activeRendered)"
                 />
-                <span class="text-xs text-steam-dim">{{ activeRating || '未评级' }}</span>
-                <button
-                  v-if="message.rating"
-                  type="button"
-                  class="ml-auto inline-flex min-h-8 items-center rounded-md border border-ink-line px-2.5 py-1 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:bg-ink-raised hover:text-gold"
-                  :disabled="busy"
-                  @click="setRating(0)"
-                >
-                  清除评级
-                </button>
-              </div>
-
-              <!-- 元数据 -->
-              <p v-if="metaLine" class="mb-3 font-mono text-xs text-steam-dim">{{ metaLine }}</p>
-
-              <!-- 正文 -->
-              <!-- eslint-disable vue/no-v-html -->
-              <div
-                v-if="activeBody || activeRendered"
-                class="telegram-content text-sm leading-relaxed text-steam"
-                v-html="sanitizeTelegramHtml(message.original_html, activeBody || activeRendered)"
-              />
-              <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">编辑正文</Button>
-              <div v-if="editingBody" class="mt-3 space-y-2">
-                <textarea v-model="bodyHtmlDraft" rows="7" class="w-full rounded-md border border-ink-line bg-ink-raised px-3 py-2 font-mono text-sm text-steam focus:border-gold focus:outline-none" aria-label="编辑 Telegram HTML 正文" />
-                <p class="text-xs text-steam-dim">支持 Telegram HTML：&lt;b&gt;粗体&lt;/b&gt;、&lt;i&gt;斜体&lt;/i&gt;、&lt;a href=""&gt;链接&lt;/a&gt;、&lt;code&gt;代码&lt;/code&gt;。</p>
-                <div v-if="bodyHtmlDraft" class="telegram-content rounded-md border border-ink-line bg-ink-raised/50 p-3 text-sm leading-relaxed text-steam" v-html="sanitizeTelegramHtml(bodyHtmlDraft, bodyDraft)" />
-                <div class="flex gap-2">
-                  <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
-                  <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
-                </div>
-              </div>
-              <!-- eslint-enable vue/no-v-html -->
-
-              <!-- 时间与来源元数据 -->
-              <dl class="mt-4 space-y-1.5 border-t border-ink-line pt-3 text-xs text-steam-dim">
-                <div class="flex items-center gap-2">
-                  <Calendar class="h-3.5 w-3.5 shrink-0" />
-                  {{ formatTime(message.created_at) }}
-                </div>
-                <div class="flex items-center gap-2 font-mono">
-                  <span class="w-20 shrink-0 text-steam-dim/70">来源频道</span>
-                  <span class="text-steam">{{ displayChatId(message.source_chat_id) }}</span>
-                </div>
-                <div class="flex items-center gap-2 font-mono">
-                  <span class="w-20 shrink-0 text-steam-dim/70">来源消息</span>
-                  <span class="text-steam">#{{ message.source_message_id }}</span>
-                </div>
-                <div v-if="message.target_chat_id != null" class="flex items-center gap-2 font-mono">
-                  <span class="w-20 shrink-0 text-steam-dim/70">归档频道</span>
-                  <span class="text-steam">{{ activeTarget?.name || displayChatId(message.target_chat_id) }}</span>
-                </div>
-                <div v-if="message.target_message_id != null" class="flex items-center gap-2 font-mono">
-                  <span class="w-20 shrink-0 text-steam-dim/70">归档消息</span>
-                  <span class="text-steam">#{{ message.target_message_id }}</span>
-                </div>
-                <div v-if="srcUrl" class="flex items-start gap-2">
-                  <Link2 class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <a
-                    :href="srcUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="min-w-0 break-all text-steam hover:text-gold"
-                  >
-                    {{ srcUrl }}
-                  </a>
-                </div>
-              </dl>
-
-              <!-- Tags：点击删除 -->
-              <div class="mt-5">
-                <div class="mb-2 flex items-center gap-1.5 text-xs font-medium text-steam-dim">
-                  <TagIcon class="h-3.5 w-3.5" /> 标签（点击移除）
-                </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="tag in activeTags"
-                    :key="tag.name + tag.type"
-                    type="button"
-                    :disabled="busy"
-                    class="cursor-pointer rounded-full bg-ink-raised px-2.5 py-1 text-xs text-steam transition-colors hover:bg-destructive/20 hover:text-destructive disabled:cursor-default"
-                    :title="`移除「${tag.name}」`"
-                    @click="removeTag(tag.name)"
-                  >
-                    {{ tag.name }}
-                  </button>
-                  <span v-if="!activeTags.length" class="text-xs text-steam-dim/60">暂无标签</span>
-                </div>
-
-                <!-- 添加标签 -->
-                <div class="mt-3 flex gap-2">
-                  <input
-                    v-model="newTag"
-                    type="text"
-                    placeholder="添加标签…"
-                    :disabled="busy"
-                    class="h-9 min-w-0 flex-1 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none disabled:opacity-50"
-                    @keyup.enter="addTag"
+                <p v-else class="mt-5 text-sm text-steam-dim/60">无正文</p>
+                <Button type="button" variant="secondary" size="sm" class="mt-3" :disabled="busy" @click="startBodyEdit">
+                  编辑正文
+                </Button>
+                <div v-if="editingBody" class="mt-3 space-y-2">
+                  <textarea
+                    v-model="bodyHtmlDraft"
+                    rows="7"
+                    class="w-full rounded-sm border border-ink-line bg-ink-raised px-3 py-2 font-mono text-sm text-steam focus:border-gold focus:outline-none"
+                    aria-label="编辑 Telegram HTML 正文"
                   />
-                  <Button size="sm" variant="secondary" :disabled="busy || !newTag.trim()" @click="addTag">
-                    <Plus class="h-3.5 w-3.5" /> 添加
-                  </Button>
+                  <p class="text-xs text-steam-dim">支持 Telegram HTML：&lt;b&gt;粗体&lt;/b&gt;、&lt;i&gt;斜体&lt;/i&gt;、&lt;a href=""&gt;链接&lt;/a&gt;、&lt;code&gt;代码&lt;/code&gt;。</p>
+                  <div
+                    v-if="bodyHtmlDraft"
+                    class="telegram-content rounded-sm border border-ink-line bg-ink-surface p-3 text-sm leading-relaxed text-steam"
+                    v-html="sanitizeTelegramHtml(bodyHtmlDraft, bodyDraft)"
+                  />
+                  <div class="flex gap-2">
+                    <Button size="sm" :disabled="busy" @click="saveBody">保存正文</Button>
+                    <Button type="button" variant="secondary" size="sm" :disabled="busy" @click="editingBody = false">取消</Button>
+                  </div>
                 </div>
-              </div>
+                <!-- eslint-enable vue/no-v-html -->
 
-              <p v-if="error" role="alert" class="mt-3 text-xs text-destructive">{{ error }}</p>
+                <!-- 类目：点按跳筛选；铅笔进编辑态后点按移除 -->
+                <div class="mt-6">
+                  <div class="mb-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.22em] text-steam-dim">
+                    <TagIcon class="h-3.5 w-3.5" /> 类目 · TAGS
+                    <button
+                      type="button"
+                      class="ml-auto cursor-pointer rounded p-1 transition-colors"
+                      :class="tagEditing ? 'bg-gold/15 text-gold' : 'text-steam-dim hover:text-steam'"
+                      :aria-pressed="tagEditing"
+                      :title="tagEditing ? '完成编辑' : '编辑类目'"
+                      :aria-label="tagEditing ? '完成编辑' : '编辑类目'"
+                      @click="tagEditing = !tagEditing"
+                    >
+                      <Pencil class="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="tag in activeTags"
+                      :key="tag.name + tag.type"
+                      type="button"
+                      :disabled="busy && tagEditing"
+                      class="inline-flex cursor-pointer items-center gap-1 rounded-sm border border-ink-line bg-ink-surface px-2.5 py-1 font-mono text-[11px] transition-colors disabled:cursor-default"
+                      :class="tagEditing
+                        ? 'text-steam hover:border-destructive/50 hover:text-destructive'
+                        : 'text-steam-dim hover:border-gold hover:text-gold'"
+                      :title="tagEditing ? `移除「${tag.name}」` : `查看「${tag.name}」类目`"
+                      @click="tagEditing ? removeTag(tag.name) : jumpToTag(tag.name)"
+                    >
+                      #{{ tag.name }}
+                      <X v-if="tagEditing" class="h-3 w-3" />
+                    </button>
+                    <span v-if="!activeTags.length" class="text-xs text-steam-dim/60">暂无类目</span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-steam-dim/70">
+                    {{ tagEditing ? '正在编辑：点类目即移除，再点铅笔完成。' : '点类目查看对应素材；误触删除用右上铅笔进入编辑态。' }}
+                  </p>
+
+                  <div class="mt-3 flex gap-2">
+                    <input
+                      v-model="newTag"
+                      type="text"
+                      placeholder="添加类目…"
+                      :disabled="busy"
+                      class="h-9 min-w-0 flex-1 rounded-sm border border-ink-line bg-ink-surface px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none disabled:opacity-50"
+                      @keyup.enter="addTag"
+                    />
+                    <Button size="sm" variant="secondary" :disabled="busy || !newTag.trim()" @click="addTag">
+                      <Plus class="h-3.5 w-3.5" /> 添加
+                    </Button>
+                  </div>
+                </div>
+
+                <!-- 评鉴 -->
+                <div class="mt-6 flex items-center gap-3 border-t border-ink-line pt-5">
+                  <span class="font-display text-[13px] tracking-[0.3em] text-steam-dim">评 鉴</span>
+                  <StarRating
+                    :value="activeRating"
+                    size="lg"
+                    interactive
+                    :disabled="busy"
+                    @change="setRating"
+                  />
+                  <span class="font-mono text-[10.5px] text-steam-dim">{{ ratingHint }}</span>
+                  <button
+                    v-if="message.rating"
+                    type="button"
+                    class="ml-auto inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-ink-line px-2.5 py-1 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:bg-ink-raised hover:text-gold"
+                    :disabled="busy"
+                    @click="setRating(0)"
+                  >
+                    清除
+                  </button>
+                </div>
+
+                <p v-if="error" role="alert" class="mt-3 text-xs text-destructive">{{ error }}</p>
+              </div>
             </div>
 
-            <footer v-if="openUrl" class="border-t border-ink-line p-4">
+            <footer v-if="openUrl" class="grid gap-2 border-t border-ink-line p-4" :class="archiveUrlOf && srcUrl ? 'grid-cols-2' : 'grid-cols-1'">
               <a
-                :href="openUrl"
+                v-if="archiveUrlOf"
+                :href="archiveUrlOf"
                 target="_blank"
                 rel="noopener"
-                class="flex w-full items-center justify-center gap-2 rounded-md bg-gold px-3 py-2.5 text-sm font-medium text-ink-bg transition-colors hover:bg-gold-soft"
+                class="flex items-center justify-center gap-2 rounded-sm bg-gold px-3 py-3 text-sm font-semibold tracking-wide text-ink-bg transition-[filter,transform] hover:brightness-110 active:scale-[0.985]"
               >
                 <Send class="h-4 w-4" />
-                在 Telegram 中打开
+                归档频道
+              </a>
+              <a
+                v-if="srcUrl"
+                :href="srcUrl"
+                target="_blank"
+                rel="noopener"
+                class="flex items-center justify-center gap-2 rounded-sm border border-ink-line px-3 py-3 text-sm text-steam transition-colors hover:border-gold hover:text-gold"
+              >
+                <Link2 class="h-4 w-4" />
+                来源消息
               </a>
             </footer>
           </aside>

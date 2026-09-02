@@ -64,6 +64,8 @@ export interface MessagesResponse {
 export interface Target {
   chat_id: number
   count: number
+  /** 配置里的人读名称；缺失为空串，前端回退拼 ID */
+  name?: string
 }
 
 export interface BackupItem {
@@ -87,7 +89,6 @@ export interface EditableConfig {
   show_link: boolean
   preserve_original: boolean
   rating_enabled: boolean
-  url_template: string | null
   admins: number[]
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'

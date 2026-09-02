@@ -25,7 +25,6 @@ def _config(**overrides) -> Config:
         preserve_original=True,
         rating_enabled=True,
         admins=frozenset({1}),
-        url_template=None,
         database_path=":memory:",
         config_path=None,
         web_enabled=True,
@@ -115,7 +114,30 @@ def test_login_ok_and_stats(tmp_path, seeded_db):
         assert body["messages"]["by_type"] == {"photo": 1, "video": 1, "text": 2}
         assert body["tags"] == {"total": 2, "with_messages": 2}
         assert body["queue"] == {"pending": 1, "processing": 0, "success": 1, "failed": 1}
-        assert body["targets"] == [{"chat_id": -1005, "count": 2}, {"chat_id": -1006, "count": 1}]
+        assert body["targets"] == [
+            {"chat_id": -1005, "count": 2, "name": ""},
+            {"chat_id": -1006, "count": 1, "name": ""},
+        ]
+
+
+def test_stats_targets_carry_config_names(tmp_path, seeded_db):
+    """目录筛选要显示人读名称：stats 把配置里的目标名一并返回，缺失为空串。"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "telegram:\n"
+        "  target_channels:\n"
+        "    - chat_id: -1005\n"
+        "      name: 日常归档\n",
+        encoding="utf-8",
+    )
+    cfg = _config(database_path=seeded_db, config_path=str(config_file), web_token="secret-token")
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        body = client.get("/api/v1/stats").json()
+
+    names = {t["chat_id"]: t["name"] for t in body["targets"]}
+    assert names[-1005] == "日常归档"
+    assert names[-1006] == ""
 
 
 def test_logout_invalidates_session(tmp_path):
@@ -429,3 +451,48 @@ def test_restore_valid_backup_pauses_queue(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["restart_required"] is True
     assert queue.paused is True
+
+
+def test_delete_backup_removes_file(tmp_path):
+    """备份可单个删除：文件消失、列表同步减少。"""
+    from app.web.backup import backup_database
+
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+    backup_path = backup_database(Path(db))
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        listed = client.get("/api/v1/ops/backups").json()["items"]
+        assert [item["name"] for item in listed] == [backup_path.name]
+
+        resp = client.delete(f"/api/v1/ops/backups/{backup_path.name}")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        remaining = client.get("/api/v1/ops/backups").json()["items"]
+        assert remaining == []
+
+    assert not backup_path.exists()
+
+
+def test_delete_backup_rejects_bad_name(tmp_path):
+    """非法名与不存在的备份分别 400 / 404，不动其他文件。"""
+    db = _seeded_messages_db(tmp_path)
+    from app.web.backup import backup_database
+
+    backup_path = backup_database(Path(db))
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        assert client.delete("/api/v1/ops/backups/not-a-bak").status_code == 400
+        assert client.delete("/api/v1/ops/backups/missing.bak").status_code == 404
+
+    assert backup_path.exists()

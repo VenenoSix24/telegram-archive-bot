@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { X } from 'lucide-vue-next'
-import Badge from '@/components/ui/Badge.vue'
 
 const model = defineModel<string[]>({ required: true })
 const draft = ref('')
@@ -40,11 +39,16 @@ function onKeydown(event: KeyboardEvent) {
   <!-- flex-wrap：tag 多时换行而不是把 chips 挤进横向滚动条，输入框始终可见 -->
   <div class="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1 rounded-md border border-ink-line bg-ink-raised px-2 py-1 focus-within:border-gold">
     <template v-if="model.length">
-      <span v-for="tag in model" :key="tag" class="inline-flex shrink-0 items-center gap-0.5">
-        <Badge tone="source">{{ tag }}</Badge>
+      <!-- 每个 tag 独立描边 chip，× 收进 chip 内部，边界一目了然 -->
+      <span
+        v-for="tag in model"
+        :key="tag"
+        class="inline-flex shrink-0 items-center gap-1 rounded-full border border-ink-line bg-ink-surface py-0.5 pl-2 pr-1 text-xs text-steam"
+      >
+        {{ tag }}
         <button
           type="button"
-          class="rounded p-0.5 text-steam-dim hover:bg-destructive/20 hover:text-destructive"
+          class="cursor-pointer rounded-full p-0.5 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive"
           :aria-label="`移除默认 Tag ${tag}`"
           @click="remove(tag)"
         >

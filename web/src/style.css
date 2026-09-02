@@ -2,40 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 默认 token = 放映室 · 深色，保证 JS 注入属性前的首屏不闪 */
-:root,
-[data-theme='projector'][data-mode='dark'] {
-  --ink-bg: 18 20 27;
-  --ink-surface: 21 24 32;
-  --ink-raised: 27 31 41;
-  --ink-line: 38 43 56;
-  --steam: 226 223 216;
-  --steam-dim: 162 154 141;
-  --gold: 232 166 45;
-  --gold-soft: 245 187 72;
-  --gold-muted: 118 89 35;
-  --destructive: 220 60 46;
-  color-scheme: dark;
+/* 默认 token = 素材志 · 浅色（与 themes/collection.css 一致），
+   保证 JS 注入属性 / 主题 CSS 按需加载前的首屏不闪。 */
+:root {
+  --ink-bg: 246 242 233;
+  --ink-surface: 253 251 245;
+  --ink-raised: 240 234 219;
+  --ink-line: 221 213 196;
+  --steam: 33 29 22;
+  --steam-dim: 109 102 90;
+  --gold: 188 58 38;
+  --gold-soft: 208 84 62;
+  --gold-muted: 168 106 94;
+  --destructive: 161 51 36;
+  color-scheme: light;
 }
 
-[data-theme='projector'][data-mode='light'] {
-  --ink-bg: 248 246 241;
-  --ink-surface: 255 254 251;
-  --ink-raised: 241 238 230;
-  --ink-line: 225 219 206;
-  --steam: 43 39 34;
-  --steam-dim: 128 119 106;
-  --gold: 183 128 16;
-  --gold-soft: 203 150 38;
-  --gold-muted: 216 182 112;
-  --destructive: 214 52 43;
-  color-scheme: light;
+[data-theme='collection'][data-mode='dark'] {
+  --ink-bg: 26 22 18;
+  --ink-surface: 34 29 24;
+  --ink-raised: 45 39 32;
+  --ink-line: 62 54 44;
+  --steam: 233 226 212;
+  --steam-dim: 168 159 142;
+  --gold: 214 90 66;
+  --gold-soft: 228 120 94;
+  --gold-muted: 142 92 76;
+  --destructive: 224 106 85;
+  color-scheme: dark;
 }
 
 /* 局部滚动条太刺眼，弱化 */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--ink-line)) transparent;
+}
+
+/* 移动端防横溢兜底：个别长内容把页面撑宽时，禁止整页横滚；
+   clip 不产生滚动容器，sticky 顶栏与 fixed 底栏不受影响 */
+html,
+body {
+  overflow-x: clip;
 }
 
 body {
