@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { Check, ChevronDown, LayoutDashboard, Images, Menu, Moon, Paintbrush, Settings, LogOut, Sun, Tags } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/lib/api'
@@ -57,6 +57,24 @@ const currentTitle = computed(
 )
 const shouldShowNav = computed(() => !!route.name)
 
+/* C4 侧栏导航滑动指示条：测量激活项位置，指示条以 transform 平移跟随。
+   导航项固定 h-9，位置稳定；resize 与路由变化时重测 */
+const navEl = ref<HTMLElement | null>(null)
+const indicatorY = ref<number | null>(null)
+function updateIndicator() {
+  const el = navEl.value
+  if (!el) return
+  const idx = nav.findIndex((item) => item.name === route.name)
+  const link = el.querySelectorAll<HTMLElement>('a')[idx]
+  indicatorY.value = link ? link.offsetTop : null
+}
+watch(() => route.name, () => nextTick(updateIndicator))
+onMounted(() => {
+  updateIndicator()
+  window.addEventListener('resize', updateIndicator)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', updateIndicator))
+
 /* ===== 标准后台：侧栏抽屉（移动端）/常驻（桌面）===== */
 const sidebarOpen = ref(false)
 function closeSidebar() {
@@ -106,14 +124,25 @@ async function onLogout() {
         <span class="ml-auto font-mono text-[9px] tracking-[0.18em] text-steam-dim/50">VAULT</span>
       </div>
 
-      <nav class="flex flex-none flex-col gap-0.5 border-b border-ink-line px-2 pb-2.5" aria-label="主导航">
+      <nav
+        ref="navEl"
+        class="relative flex flex-none flex-col gap-0.5 border-b border-ink-line px-2 pb-2.5"
+        aria-label="主导航"
+      >
+        <!-- C4 滑动指示条：激活项的金色轻底，路由切换时平移跟随 -->
+        <span
+          v-if="indicatorY !== null"
+          class="absolute inset-x-2 top-0 h-9 rounded-lg bg-gold/10 transition-transform [transition-duration:var(--motion-fast)] [transition-timing-function:var(--ease-standard)]"
+          :style="{ transform: `translateY(${indicatorY}px)` }"
+          aria-hidden="true"
+        ></span>
         <RouterLink
           v-for="item in nav"
           :key="item.name"
           :to="{ name: item.name }"
           :aria-current="isActive(item.name) ? 'page' : undefined"
-          class="flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors"
-          :class="isActive(item.name) ? 'bg-gold/10 font-medium text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
+          class="relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors"
+          :class="isActive(item.name) ? 'font-medium text-gold' : 'text-steam-dim hover:bg-ink-raised hover:text-steam'"
           @click="closeSidebar"
         >
           <component :is="item.icon" class="h-4 w-4" />
@@ -157,7 +186,7 @@ async function onLogout() {
           </button>
           <button
             type="button"
-            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
             :aria-label="renderedDark ? '切换浅色' : '切换深色'"
             :title="renderedDark ? '切换浅色' : '切换深色'"
             @click="setMode(renderedDark ? 'light' : 'dark')"
@@ -167,7 +196,7 @@ async function onLogout() {
           </button>
           <button
             type="button"
-            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-destructive"
+            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
             aria-label="退出登录"
             title="退出登录"
             @click="onLogout"
@@ -202,7 +231,7 @@ async function onLogout() {
       >
         <button
           type="button"
-          class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+          class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
           aria-label="打开导航"
           @click="sidebarOpen = true"
         >
@@ -217,7 +246,7 @@ async function onLogout() {
           <div class="relative">
             <button
               type="button"
-              class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+              class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
               aria-haspopup="menu"
               :aria-expanded="themeMenuOpen"
               aria-label="切换主题"
@@ -249,7 +278,7 @@ async function onLogout() {
           </div>
           <button
             type="button"
-            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
             :aria-label="renderedDark ? '切换浅色' : '切换深色'"
             :title="renderedDark ? '切换浅色' : '切换深色'"
             @click="setMode(renderedDark ? 'light' : 'dark')"
@@ -259,7 +288,7 @@ async function onLogout() {
           </button>
           <button
             type="button"
-            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition-colors hover:bg-ink-raised hover:text-destructive"
+            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
             aria-label="退出登录"
             title="退出登录"
             @click="onLogout"
@@ -345,7 +374,7 @@ async function onLogout() {
 
             <button
               type="button"
-              class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+              class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
               :aria-label="renderedDark ? '切换浅色' : '切换深色'"
               :title="renderedDark ? '切换浅色' : '切换深色'"
               @click="setMode(renderedDark ? 'light' : 'dark')"
@@ -356,7 +385,7 @@ async function onLogout() {
 
             <button
               type="button"
-              class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-steam-dim transition-colors hover:bg-ink-raised hover:text-destructive"
+              class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
               aria-label="退出登录"
               title="退出登录"
               @click="onLogout"
@@ -397,7 +426,7 @@ async function onLogout() {
           :to="{ name: item.name }"
           :aria-current="isActive(item.name) ? 'page' : undefined"
           :aria-label="item.label"
-          class="flex h-11 w-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full text-[10px] transition-colors"
+          class="flex h-11 w-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full text-[10px] transition active:scale-95"
           :class="isActive(item.name) ? 'bg-gold text-white shadow-sm' : 'text-steam-dim hover:text-steam'"
         >
           <component :is="item.icon" class="h-5 w-5" />
@@ -419,7 +448,7 @@ async function onLogout() {
         :aria-current="isActive(item.name) ? 'page' : undefined"
         :aria-label="item.label"
         :class="cn(
-          'flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full py-1 text-[10px] transition-colors',
+          'flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full py-1 text-[10px] transition active:scale-95',
           isActive(item.name) ? 'text-gold' : 'text-steam-dim hover:text-steam',
         )"
       >
