@@ -71,3 +71,13 @@ def test_format_status_report_worker_state(tmp_path):
     assert "运行中" in text
     queue.pause()
     assert "已暂停" in format_status_report(_config(), queue)
+
+
+def test_help_report_lists_all_commands():
+    from app.processor.reports import format_help_report
+
+    text = format_help_report()
+    commands = ("/tag", "/rating", "/status", "/queue",
+                "/tags", "/pause", "/resume", "/rethumb", "/id")
+    for command in commands:
+        assert command in text
