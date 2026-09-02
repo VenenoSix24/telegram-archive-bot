@@ -2,7 +2,7 @@
 
 <p align="left">
   <!-- TODO(badge): add real CI / coverage badge links once the repo is public -->
-  <img alt="version" src="https://img.shields.io/badge/version-0.3.0-blue" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.4.0-blue" />
   <img alt="python" src="https://img.shields.io/badge/python-3.11%2B-informational" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green" />
 </p>
