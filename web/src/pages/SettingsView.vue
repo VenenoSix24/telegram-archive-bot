@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { backup, backupDownloadUrl, deleteBackup, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup } from '@/lib/api'
 import type { BackupItem, EditableConfig } from '@/lib/types'
+import { isVault } from '@/lib/vocab'
 import Button from '@/components/ui/Button.vue'
 import Select from '@/components/ui/Select.vue'
 import TagInput from '@/components/ui/TagInput.vue'
@@ -28,6 +29,7 @@ import {
   currentMode, currentTheme, setMode, setTheme,
   type Mode, type ThemeKey,
 } from '@/composables/useTheme'
+import { useThumbMode, type ThumbMode } from '@/composables/useDisplayPrefs'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -47,6 +49,7 @@ const templateBlocks = [
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
   { key: 'collection', label: '素材志（朱砂）' },
+  { key: 'minimal', label: '标准后台（蓝灰）' },
 ]
 const modeOptions: { key: Mode; label: string }[] = [
   { key: 'system', label: '跟随系统' },
@@ -61,6 +64,14 @@ const thumbnailSourceOptions = [
   { key: 'auto' as const, label: '自动（归档优先，源消息回退）' },
   { key: 'archive' as const, label: '归档频道' },
   { key: 'source' as const, label: '源消息' },
+]
+
+/* 显示偏好：缩略图展示三模式（纯前端，两套主题通用） */
+const { thumbMode, setThumbMode } = useThumbMode()
+const thumbModeOptions: { key: ThumbMode; label: string; hint: string }[] = [
+  { key: 'fit', label: '完整展示', hint: '4:3 画布深色托底，竖图完整不裁' },
+  { key: 'crop', label: '裁剪填充', hint: '全部裁满 4:3，卡片完全统一' },
+  { key: 'masonry', label: '瀑布流', hint: '原始比例，高低错落' },
 ]
 
 /** Vue reactive 代理无法 structuredClone，配置全是纯 JSON 结构，用 JSON 深拷贝。 */
@@ -121,15 +132,15 @@ function addSource() {
 /* 手风琴：一次只展开一个来源的编辑表单 */
 const expandedSource = ref<number | null>(null)
 
-/* 章节锚点：长表单快速跳转 */
-const anchors = [
+/* 章节锚点：长表单快速跳转；标签随布局变体现代化 */
+const anchors = computed(() => [
   { id: 'sec-theme', label: '外观' },
-  { id: 'sec-sources', label: '输入' },
-  { id: 'sec-targets', label: '输出' },
-  { id: 'sec-template', label: '版式' },
+  { id: 'sec-sources', label: isVault.value ? '来源' : '输入' },
+  { id: 'sec-targets', label: isVault.value ? '目标' : '输出' },
+  { id: 'sec-template', label: isVault.value ? '模板' : '版式' },
   { id: 'sec-admin', label: '管理' },
   { id: 'sec-backups', label: '备份' },
-]
+])
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -338,10 +349,13 @@ async function resetDb() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl px-4 py-8 pb-28 sm:px-6">
+  <div class="mx-auto px-4 py-8 pb-28 sm:px-6" :class="isVault ? 'max-w-5xl' : 'max-w-4xl'">
     <header class="mb-5">
-      <h1 class="font-display text-2xl font-bold tracking-[0.18em] text-steam min-[480px]:text-3xl">设 置</h1>
-      <p class="mt-2 font-mono text-[10.5px] tracking-[0.3em] text-steam-dim">COLOPHON</p>
+      <h1 class="font-display text-2xl font-bold text-steam min-[480px]:text-3xl" :class="isVault ? 'tracking-normal' : 'tracking-[0.18em]'">
+        {{ isVault ? '设置' : '设 置' }}
+      </h1>
+      <p v-if="!isVault" class="mt-2 font-mono text-[10.5px] tracking-[0.3em] text-steam-dim">COLOPHON</p>
+      <p v-else class="mt-1 font-mono text-[10px] tracking-[0.14em] text-steam-dim/60">SETTINGS</p>
     </header>
 
     <!-- 章节锚点：长表单快速跳转 -->
@@ -359,7 +373,7 @@ async function resetDb() {
 
     <!-- 骨架 -->
     <div v-if="loading" class="space-y-6" aria-hidden="true">
-      <div v-for="i in 4" :key="i" class="border border-ink-line p-4">
+      <div v-for="i in 4" :key="i" class="rounded-xl border border-ink-line p-4">
         <div class="h-3.5 w-32 animate-pulse bg-ink-raised" />
         <div class="mt-4 h-9 animate-pulse bg-ink-raised" />
       </div>
@@ -374,7 +388,7 @@ async function resetDb() {
       <section id="sec-theme" class="mb-8 scroll-mt-20">
         <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
           <Palette class="h-3.5 w-3.5 self-center text-gold" />
-          <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">外观</h2>
+          <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">外观</h2>
           <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">THEME</span>
           <span class="ml-auto font-mono text-[9px] text-steam-dim/70">即时生效</span>
         </div>
@@ -399,7 +413,7 @@ async function resetDb() {
                 {{ t.label }}
               </button>
             </div>
-            <p class="mt-2 text-xs text-steam-dim/70">暗房印样、标准后台两套主题已定稿待实现。</p>
+            <p class="mt-2 text-xs text-steam-dim/70">暗房印样已定稿待实现。</p>
           </div>
           <div>
             <p class="mb-2 text-xs text-steam-dim">明暗模式</p>
@@ -423,21 +437,49 @@ async function resetDb() {
             </div>
           </div>
         </div>
+
+        <!-- 缩略图展示：显示偏好，两套主题通用 -->
+        <div class="mt-6">
+          <p class="mb-2 text-xs text-steam-dim">缩略图展示</p>
+          <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="缩略图展示">
+            <button
+              v-for="opt in thumbModeOptions"
+              :key="opt.key"
+              type="button"
+              role="radio"
+              :aria-checked="thumbMode === opt.key"
+              :class="cn(
+                'cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors',
+                thumbMode === opt.key
+                  ? 'border-gold text-gold'
+                  : 'border-ink-line text-steam-dim hover:text-steam',
+              )"
+              @click="setThumbMode(opt.key)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <p class="mt-2 text-xs text-steam-dim/70">
+            {{ thumbModeOptions.find((opt) => opt.key === thumbMode)?.hint }}。即时生效，按主题独立记忆——切主题自动切到该主题的上次选择；未选择过时取主题默认（素材志瀑布流 / 标准后台完整展示）。
+          </p>
+        </div>
       </section>
 
       <form @submit.prevent="save">
         <!-- 一 · 输入：列表行 + 展开编辑 -->
         <section id="sec-sources" class="mb-8 scroll-mt-20">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
-            <span class="font-display text-sm font-bold text-gold">一</span>
-            <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">输入 · 来源</h2>
+            <span v-if="!isVault" class="font-display text-sm font-bold text-gold">一</span>
+            <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
+              {{ isVault ? '来源' : '输入 · 来源' }}
+            </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">SOURCES</span>
             <Button type="button" variant="secondary" size="sm" class="ml-auto" @click="addSource">
               <Plus class="h-3.5 w-3.5" /> 新增
             </Button>
           </div>
 
-          <div v-for="(s, i) in form.source_chats" :key="i" class="mb-2 border border-ink-line bg-ink-surface">
+          <div v-for="(s, i) in form.source_chats" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface">
             <!-- 收起态：概要行，一眼看清有几个源、各自接什么 -->
             <button
               type="button"
@@ -549,15 +591,17 @@ async function resetDb() {
         <!-- 二 · 输出 -->
         <section id="sec-targets" class="mb-8 scroll-mt-20">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
-            <span class="font-display text-sm font-bold text-gold">二</span>
-            <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">输出 · 目标</h2>
+            <span v-if="!isVault" class="font-display text-sm font-bold text-gold">二</span>
+            <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
+              {{ isVault ? '目标' : '输出 · 目标' }}
+            </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">TARGETS</span>
             <Button type="button" variant="secondary" size="sm" class="ml-auto" @click="addTarget">
               <Plus class="h-3.5 w-3.5" /> 新增
             </Button>
           </div>
           <!-- 与来源同款：概要行 + 手风琴展开编辑 -->
-          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-2 border border-ink-line bg-ink-surface">
+          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface">
             <button
               type="button"
               class="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-ink-raised/50"
@@ -632,12 +676,14 @@ async function resetDb() {
         <!-- 三 · 版式 -->
         <section id="sec-template" class="mb-8 scroll-mt-20">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
-            <span class="font-display text-sm font-bold text-gold">三</span>
-            <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">版式 · 模板与发送</h2>
+            <span v-if="!isVault" class="font-display text-sm font-bold text-gold">三</span>
+            <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
+              {{ isVault ? '模板与发送' : '版式 · 模板与发送' }}
+            </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">TEMPLATE</span>
           </div>
 
-          <div class="mb-5 border border-ink-line bg-ink-surface p-4">
+          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4">
             <h3 class="mb-1 text-sm font-medium text-steam">归档消息模板</h3>
             <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
@@ -663,7 +709,7 @@ async function resetDb() {
             </div>
           </div>
 
-          <div class="mb-5 border border-ink-line bg-ink-surface p-4">
+          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4">
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs text-steam-dim" for="fwd-interval">发送间隔（秒）</label>
@@ -705,7 +751,7 @@ async function resetDb() {
             </div>
           </div>
 
-          <div class="border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
             <h3 class="mb-3 text-sm font-medium text-steam">缩略图</h3>
             <div class="grid gap-4 sm:grid-cols-2">
               <label class="min-w-0">
@@ -727,11 +773,13 @@ async function resetDb() {
         <!-- 四 · 管理 -->
         <section id="sec-admin" class="mb-8 scroll-mt-20">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
-            <span class="font-display text-sm font-bold text-gold">四</span>
-            <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">管理 · 权限与检索</h2>
+            <span v-if="!isVault" class="font-display text-sm font-bold text-gold">四</span>
+            <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
+              {{ isVault ? '管理' : '管理 · 权限与检索' }}
+            </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">ADMIN</span>
           </div>
-          <div class="border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
             <div class="mb-2 flex items-center justify-between">
               <h3 class="text-sm font-medium text-steam">管理员 ID</h3>
               <Button type="button" variant="secondary" size="sm" @click="addAdmin">
@@ -761,12 +809,14 @@ async function resetDb() {
         <!-- 五 · 备份与维护 -->
         <section id="sec-backups" class="mb-8 scroll-mt-20">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
-            <span class="font-display text-sm font-bold text-gold">五</span>
-            <h2 class="font-display text-base font-bold tracking-[0.2em] text-steam">备份 · 维护</h2>
+            <span v-if="!isVault" class="font-display text-sm font-bold text-gold">五</span>
+            <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
+              {{ isVault ? '备份与维护' : '备份 · 维护' }}
+            </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">BACKUPS</span>
           </div>
 
-          <div class="border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
             <p class="mb-3 text-xs leading-5 text-steam-dim">
               恢复与导入前都会先自动备份当前文件，完成后需重启进程。备份可下载保存到本地，也可单个删除。
             </p>
@@ -854,7 +904,7 @@ async function resetDb() {
           </div>
 
           <!-- 危险区：与常规操作隔离 -->
-          <div class="mt-4 flex flex-wrap items-center gap-3 border border-destructive/40 bg-destructive/5 p-4">
+          <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
             <TriangleAlert class="h-4 w-4 shrink-0 text-destructive" />
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-destructive">重置数据库</p>
@@ -867,8 +917,8 @@ async function resetDb() {
         <p v-if="error && form.target_channels" role="alert" class="mb-4 break-words text-sm leading-5 text-destructive">{{ error }}</p>
 
         <!-- 吸底保存栏：有改动才出现；移动端抬高避开底部 tab 栏 -->
-        <div v-if="dirty" class="sticky bottom-20 z-30 md:bottom-4">
-          <div class="flex flex-wrap items-center gap-3 border border-gold/50 bg-ink-surface/95 px-4 py-3 shadow-lg backdrop-blur">
+        <div v-if="dirty" class="sticky z-30" :class="isVault ? 'bottom-4' : 'bottom-20 md:bottom-4'">
+          <div class="flex flex-wrap items-center gap-3 rounded-xl border border-gold/50 bg-ink-surface/95 px-4 py-3 shadow-lg backdrop-blur">
             <span class="text-xs text-steam-dim">有未保存的修改</span>
             <div class="ml-auto flex gap-2">
               <Button type="button" variant="secondary" size="sm" :disabled="saving" @click="reset">
