@@ -7,7 +7,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green" />
 </p>
 
-> English ｜ [中文](README.zh.md)
+> English ｜ [中文](README.md)
 
 **Turn the firehose of your Telegram group chats into a searchable, editable personal knowledge base.**
 
