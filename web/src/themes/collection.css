@@ -194,3 +194,16 @@
 [data-theme='collection'][data-mode='dark'] .vthumb {
   background: #000000;
 }
+
+/* ===== 动效 token：素材志 = 慢一档的纸感，换页纯 fade 不位移 =====
+   transform:none 很关键：即使 0px 位移也会创建包含块，让页内 fixed 元素
+   （移动端目录 FAB 等）在进场动画期间错位一跳 */
+[data-theme='collection'] {
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --motion-slow: 420ms;
+  --page-rise: 0px;
+}
+[data-theme='collection'] .v-page-enter-from {
+  transform: none;
+}

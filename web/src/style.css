@@ -45,6 +45,13 @@ body {
   overflow-x: clip;
 }
 
+/* 文档滚动壳（素材志/登录）常驻滚动条槽位：竖向滚动条随页面高度出现/消失
+   会改变视口宽度，绝对居中的顶栏导航与内容列随之横移（换页「抽搐」根因）。
+   标准后台整壳 h-screen 不滚文档，由 AppLayout 摘掉此类，避免右侧死条 */
+html.doc-scroll {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-feature-settings: 'tnum' 1; /* 数据字面量等宽数字，时长/时间戳对齐 */
 }
@@ -56,12 +63,225 @@ body,
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 
+/* ===== 动效 token（G 节动效方案）=====
+   全局值 = 计划基线；两主题 css 各自覆写时长与换页位移（标准后台快而直，
+   素材志慢一档纸感）。动画只动 opacity/transform——例外仅两处计划内布局动画：
+   手风琴 grid-template-rows 0fr→1fr、宽屏详情栏 width。 */
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 240ms;
+  --motion-slow: 400ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-pop: cubic-bezier(0.3, 1.25, 0.45, 1); /* 轻微过冲 */
+  --page-rise: 4px; /* 路由换页升起量 */
+}
+
+/* ===== Transition 体系 =====
+   用法：<Transition name="v-page"> 等；v-pop 的弹出方向由使用处在面板上
+   标 --pop-origin（Tailwind 任意属性 [--pop-origin:top_right]）对齐。 */
+
+/* v-page 路由换页（out-in）：进场 fade + 微升起，离场快 fade */
+.v-page-enter-active {
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+.v-page-leave-active {
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+.v-page-enter-from {
+  opacity: 0;
+  transform: translateY(var(--page-rise));
+}
+.v-page-leave-to {
+  opacity: 0;
+}
+
+/* v-pop 弹出菜单：0.96→1 轻过冲，离场快一档 */
+.v-pop-enter-active {
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-pop);
+  transform-origin: var(--pop-origin, top);
+}
+.v-pop-leave-active {
+  transition:
+    opacity calc(var(--motion-fast) * 0.7) var(--ease-standard),
+    transform calc(var(--motion-fast) * 0.7) var(--ease-standard);
+  transform-origin: var(--pop-origin, top);
+}
+.v-pop-enter-from,
+.v-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* v-dialog 遮罩/模态：双向 fade */
+.v-dialog-enter-active,
+.v-dialog-leave-active {
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+.v-dialog-enter-from,
+.v-dialog-leave-to {
+  opacity: 0;
+}
+
+/* v-list 列表项（TransitionGroup）：进场 fade-up、离场 fade；
+   .v-list-move 供筛选变更 FLIP 平移（瀑布流模式降级时不启用） */
+.v-list-enter-active {
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+.v-list-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+.v-list-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.v-list-leave-to {
+  opacity: 0;
+}
+.v-list-move {
+  transition: transform var(--motion-base) var(--ease-standard);
+}
+
+/* v-rise 条栏浮入（保存栏等）：fade-up */
+.v-rise-enter-active {
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+.v-rise-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+.v-rise-enter-from,
+.v-rise-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ===== 动效工具类：静态挂载元素用（进场一次性动画） ===== */
+.anim-fade {
+  animation: anim-fade var(--motion-base) var(--ease-standard) both;
+}
+.anim-fade-up {
+  animation: anim-fade-up var(--motion-base) var(--ease-standard) both;
+}
+/* 登录卡等首屏仪式感用慢一档 */
+.anim-fade-up-slow {
+  animation: anim-fade-up var(--motion-slow) var(--ease-standard) both;
+}
+.anim-scale-in {
+  animation: anim-scale-in var(--motion-fast) var(--ease-pop) both;
+}
+@keyframes anim-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes anim-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes anim-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* 手风琴展开收起：grid-rows 0fr→1fr（高度动画的纯 CSS 解），内容同步 fade；
+   visibility 延迟翻转保证收起后内容不可聚焦 */
+.anim-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-base) var(--ease-standard);
+}
+.anim-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    visibility 0s linear var(--motion-base);
+}
+.anim-collapse.anim-collapse--open {
+  grid-template-rows: 1fr;
+}
+.anim-collapse.anim-collapse--open > * {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+
+/* 宽屏详情栏（≥1280，Tailwind xl）：宽度 + 透明度过渡；宽度值由组件工具类给
+   （收起 w-0 / 展开 xl:w-[360px]），这里只管过渡与 visibility 延迟翻转，
+   避免留下可聚焦的隐形表单。窄屏保持滑入覆盖层，不归这里管 */
+@media (min-width: 1280px) {
+  .anim-pane {
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      width var(--motion-base) var(--ease-standard),
+      opacity var(--motion-base) var(--ease-standard),
+      visibility 0s linear var(--motion-base);
+  }
+  .anim-pane.anim-pane--open {
+    visibility: visible;
+    opacity: 1;
+    transition:
+      width var(--motion-base) var(--ease-standard),
+      opacity var(--motion-base) var(--ease-standard);
+  }
+}
+
+/* v-img-fade（B4）：网络图加载完成后淡入 */
+.img-fade-pending {
+  opacity: 0;
+}
+.img-fade-in {
+  animation: anim-fade var(--motion-base) var(--ease-standard) both;
+}
+
+/* B8 主题/明暗切换：挂 300ms 白名单色彩过渡（只动颜色属性，不碰 transform/opacity；
+   结束即移除，避免常驻全局 transition 拖累性能） */
+html.theme-fading,
+html.theme-fading *,
+html.theme-fading *::before,
+html.theme-fading *::after {
+  transition:
+    background-color 300ms ease,
+    color 300ms ease,
+    border-color 300ms ease,
+    fill 300ms ease,
+    stroke 300ms ease,
+    box-shadow 300ms ease !important;
+}
+
 /* 减少动效偏好：遵守 prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
+  }
+  /* 色彩过渡同样瞬切（选择器权重压过 .theme-fading 规则） */
+  html.theme-fading,
+  html.theme-fading *,
+  html.theme-fading *::before,
+  html.theme-fading *::after {
     transition-duration: 0.01ms !important;
   }
 }
