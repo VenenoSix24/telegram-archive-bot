@@ -73,6 +73,20 @@
   font-size: clamp(30px, 4.2vw, 46px);
 }
 
+/* 顶栏下缘同款双规则（导航条是结构层，母题随主题显形） */
+[data-theme='collection'] .top-rules {
+  border-bottom: 3px solid rgb(var(--steam));
+}
+[data-theme='collection'] .top-rules::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: rgb(var(--steam));
+}
+
 /* 目录页：墨框检索框 + 点线引导符 */
 [data-theme='collection'] .toc-search {
   border-color: rgb(var(--steam));
