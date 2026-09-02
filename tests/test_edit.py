@@ -156,6 +156,82 @@ def test_apply_message_not_modified_treated_as_success(tmp_path):
     assert row["rating"] == 4
 
 
+def _setup_with_copies(tmp_path):
+    """父表 + 两条归档副本，用于数据分叉回归。"""
+    conn, mid = _setup(tmp_path)
+    for target_id, chat_id, tg_mid in ((1, -1005, 99), (2, -1006, 200)):
+        conn.execute(
+            "INSERT INTO message_targets "
+            "(id, message_id, target_chat_id, target_message_id, status, original_text, "
+            "original_html, rendered_text, rating) "
+            "VALUES (?, ?, ?, ?, 'archived', '正文', '', '正文', 0)",
+            (target_id, mid, chat_id, tg_mid),
+        )
+    conn.commit()
+    return conn, mid
+
+
+def test_source_level_edit_updates_parent_and_all_copies(tmp_path):
+    """E3 回归：源级编辑必须父表+副本双写，不再数据分叉。"""
+    conn, mid = _setup_with_copies(tmp_path)
+    client = _FakeClient()
+    assert asyncio_run(apply_message_edit(client, conn, mid, rating=4))
+    parent = conn.execute("SELECT rating FROM messages WHERE id=?", (mid,)).fetchone()
+    assert parent["rating"] == 4
+    ratings = {
+        row["target_chat_id"]: row["rating"]
+        for row in conn.execute(
+            "SELECT target_chat_id, rating FROM message_targets WHERE message_id=?", (mid,)
+        )
+    }
+    assert ratings == {-1005: 4, -1006: 4}
+    assert {(chat, mid_) for chat, mid_, _ in client.edits} == {(-1005, 99), (-1006, 200)}
+
+
+def test_source_level_tag_add_mirrors_to_copies(tmp_path):
+    """E3 回归：源级加 tag 写父表 message_tags 并镜像到每条副本 target_tags。"""
+    conn, mid = _setup_with_copies(tmp_path)
+    client = _FakeClient()
+    assert asyncio_run(apply_message_edit(client, conn, mid, add_tags=["游戏"]))
+    parent_tags = {
+        r["name"] for r in conn.execute(
+            "SELECT t.name FROM message_tags mt JOIN tags t ON t.id=mt.tag_id "
+            "WHERE mt.message_id=?", (mid,)
+        )
+    }
+    assert parent_tags == {"游戏"}
+    copy_tags = {
+        row["target_chat_id"]: {r["name"] for r in conn.execute(
+            "SELECT t.name FROM target_tags tt JOIN tags t ON t.id=tt.tag_id "
+            "WHERE tt.target_id=?", (row["id"],)
+        )}
+        for row in conn.execute(
+            "SELECT id, target_chat_id FROM message_targets WHERE message_id=?", (mid,)
+        )
+    }
+    assert copy_tags == {-1005: {"游戏"}, -1006: {"游戏"}}
+    assert len(client.edits) == 2
+
+
+def test_copy_level_edit_stays_copy_scoped(tmp_path):
+    """副本级编辑不传播兄弟副本，也不回写父表标签（独立副本模型不变）。"""
+    conn, mid = _setup_with_copies(tmp_path)
+    client = _FakeClient()
+    assert asyncio_run(
+        apply_message_edit(client, conn, mid, target_id=1, add_tags=["画质"])
+    )
+    sibling_tags = conn.execute(
+        "SELECT COUNT(*) AS n FROM target_tags tt "
+        "JOIN message_targets mt ON mt.id=tt.target_id WHERE mt.target_chat_id=-1006"
+    ).fetchone()["n"]
+    parent_tags = conn.execute(
+        "SELECT COUNT(*) AS n FROM message_tags WHERE message_id=?", (mid,)
+    ).fetchone()["n"]
+    assert sibling_tags == 0
+    assert parent_tags == 0
+    assert {(chat, mid_) for chat, mid_, _ in client.edits} == {(-1005, 99)}
+
+
 def test_extract_edited_body_strips_full_skeleton():
     text = "推荐指数：⭐⭐⭐\n\n#游戏 #MOD\n\n新正文\n\n来自：\nhttps://t.me/x/1"
     body, body_html = extract_edited_body(

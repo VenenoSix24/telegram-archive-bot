@@ -20,9 +20,10 @@ def attach_reply_command_handler(
 ):
     """回复指令 /tag /rating 的应用规则。
 
-    源群里回复源消息 → 更新该源消息的全部目标副本（指令作用于共享的源）；
+    源群里回复源消息 → 源级编辑（统一编辑服务）：更新父表与该源消息的
+    全部目标副本（指令作用于共享的源）；
     目标频道里回复目标消息 → 只更新被回复的那条副本（独立副本模型）。
-    旧数据没有副本行时回退父级路径。仅管理员生效，指令回复会被删除。
+    旧数据没有副本行时由服务回退父级路径。仅管理员生效，指令回复会被删除。
     """
     source_ids = [c.chat_id for c in config.source_chats]
     target_ids = sorted(config.all_target_channel_ids())
@@ -84,32 +85,21 @@ def attach_reply_command_handler(
             ).fetchone()
             if row is None:
                 return
-            copies = conn.execute(
-                "SELECT id FROM message_targets WHERE message_id=? AND status='archived'",
-                (row["id"],),
-            ).fetchall()
-            if copies:
-                ok = True
-                for copy in copies:
-                    try:
-                        applied = await _apply(row["id"], copy["id"], cmd, args)
-                    except Exception:
-                        logger.exception(
-                            "reply %s failed for messages#%s target#%s",
-                            cmd, row["id"], copy["id"],
-                        )
-                        applied = False
-                    ok = applied and ok
-            elif row["target_chat_id"]:
+            # 源级编辑交给统一编辑服务（E3）：服务内部写父表并镜像到全部
+            # 归档副本；单副本失败不中断其余副本，也不会覆盖指令消息。
+            try:
                 ok = await _apply(row["id"], None, cmd, args)
-            else:
-                return
+            except Exception:
+                logger.exception(
+                    "reply %s failed for messages#%s", cmd, row["id"]
+                )
+                ok = False
             if not ok:
                 return
             await client.delete_messages(event.chat_id, [msg.id])
             logger.info(
-                "reply %s on %s/%s applied to messages#%s (%s copies)",
-                cmd, event.chat_id, msg.reply_to_msg_id, row["id"], len(copies),
+                "reply %s on %s/%s applied to messages#%s (all archived copies)",
+                cmd, event.chat_id, msg.reply_to_msg_id, row["id"],
             )
 
     if target_ids:
