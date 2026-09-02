@@ -185,3 +185,12 @@
 [data-theme='collection'] .empty-title {
   letter-spacing: 0.3em;
 }
+
+/* 统一画布模式（显示偏好，两主题通用）：非瀑布流时图片衬深色托底，
+   竖图完整展示不裁（与标准后台 .vthumb 同语义） */
+[data-theme='collection'] .vthumb {
+  background: #1a1a1e;
+}
+[data-theme='collection'][data-mode='dark'] .vthumb {
+  background: #000000;
+}
