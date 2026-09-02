@@ -167,11 +167,12 @@ const shouldShowNav = computed(() => !!route.name)
       <RouterView />
     </main>
 
-    <!-- 移动端底部 tab 栏（顶栏在移动端只留品牌与工具钮） -->
+    <!-- 移动端底部 dock：胶囊玻璃，宽度随条目数自适应（iOS 做法），
+         条目定宽避免 4 项时被拉伸出大空隙 -->
     <nav
       v-if="shouldShowNav"
       aria-label="移动端导航"
-      class="fixed bottom-4 left-1/2 z-40 flex w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 items-center justify-between gap-0 rounded-full border border-ink-line/70 bg-ink-surface/75 px-2.5 py-2 shadow-lg backdrop-blur-xl md:hidden"
+      class="fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center justify-center gap-1 rounded-full border border-ink-line/70 bg-ink-surface/75 px-2 py-1.5 shadow-lg backdrop-blur-xl md:hidden"
     >
       <RouterLink
         v-for="item in nav"
@@ -180,7 +181,7 @@ const shouldShowNav = computed(() => !!route.name)
         :aria-current="isActive(item.name) ? 'page' : undefined"
         :aria-label="item.label"
         :class="cn(
-          'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1 text-[10px] transition-colors',
+          'flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full py-1 text-[10px] transition-colors',
           isActive(item.name) ? 'text-gold' : 'text-steam-dim hover:text-steam',
         )"
       >

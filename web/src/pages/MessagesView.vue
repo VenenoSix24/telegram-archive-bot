@@ -567,16 +567,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       </main>
     </div>
 
-    <!-- 移动端目录悬浮按钮（避开底部 tab 栏；再点收起） -->
+    <!-- 移动端目录悬浮按钮（避开底栏；再点收起） -->
     <button
       type="button"
-      class="fixed bottom-24 right-5 z-40 flex h-[54px] w-[54px] cursor-pointer items-center justify-center rounded-md bg-steam text-ink-bg shadow-lg transition-transform active:scale-95 lg:hidden"
+      class="fixed bottom-24 right-4 z-40 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-ink-line/70 bg-ink-surface/85 text-steam shadow-lg backdrop-blur-xl transition-transform active:scale-95 lg:hidden"
       :aria-label="tocOpen ? '收起目录' : '打开目录'"
       :aria-expanded="tocOpen"
       @click="tocOpen = !tocOpen"
     >
-      <X v-if="tocOpen" class="h-5 w-5" />
-      <SlidersHorizontal v-else class="h-5 w-5" />
+      <X v-if="tocOpen" class="h-4 w-4" />
+      <SlidersHorizontal v-else class="h-4 w-4" />
     </button>
 
     <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
