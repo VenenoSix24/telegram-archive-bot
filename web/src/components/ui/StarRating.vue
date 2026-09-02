@@ -30,7 +30,7 @@ function pick(n: number) {
       :disabled="disabled || !interactive"
       :aria-pressed="n <= value"
       :aria-label="'评 ' + n + ' 分'"
-      class="p-0 transition-transform duration-150 hover:scale-110 focus-visible:outline-none disabled:cursor-default"
+      class="p-1 -m-1 transition-transform duration-150 hover:scale-110 focus-visible:outline-none disabled:cursor-default"
       @click="pick(n)"
     >
       <Star

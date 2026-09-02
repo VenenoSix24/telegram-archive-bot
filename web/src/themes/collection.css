@@ -1,0 +1,187 @@
+/* 素材志 · Collection —— 道林纸 + 墨色 + 朱砂，默认主题。
+   token 映射：--ink-bg=道林纸 / --ink-surface=装裱白 / --ink-raised=衬纸
+   --ink-line=发丝线 / --steam=墨 / --steam-dim=淡墨 / --gold=朱砂。
+   母题层（印章 / 双规则刊头线 / 纸纹 / 点线引导符 / 朱砂题签 / 「废」印 /
+   书脊线）全部以 [data-theme='collection'] 作用域隔离，切换其他主题零残留；
+   组件里的 .mast-seal / .toc-lead 等钩子类在本主题之外不产生任何样式。
+   字体走 --font-display token（tailwind font-display 引用），宋体仅本主题生效。 */
+
+[data-theme='collection'][data-mode='light'] {
+  --ink-bg: 246 242 233; /* #f6f2e9 道林纸 */
+  --ink-surface: 253 251 245; /* #fdfbf5 装裱白 */
+  --ink-raised: 240 234 219; /* 衬纸：输入 / 代码 / 悬停底 */
+  --ink-line: 221 213 196; /* #ddd5c4 发丝线 */
+  --steam: 33 29 22; /* #211d16 墨 */
+  --steam-dim: 109 102 90; /* #6d665a 淡墨 */
+  --gold: 188 58 38; /* #bc3a26 朱砂（唯一强调） */
+  --gold-soft: 208 84 62;
+  --gold-muted: 168 106 94;
+  --destructive: 161 51 36;
+  --font-display: 'Songti SC', 'STSongti-SC', 'STSong', 'Noto Serif SC', Georgia,
+    'Times New Roman', serif;
+  color-scheme: light;
+}
+
+[data-theme='collection'][data-mode='dark'] {
+  /* 夜读版：暖墨纸底，同构不同纸 */
+  --ink-bg: 26 22 18;
+  --ink-surface: 34 29 24;
+  --ink-raised: 45 39 32;
+  --ink-line: 62 54 44;
+  --steam: 233 226 212;
+  --steam-dim: 168 159 142;
+  --gold: 214 90 66;
+  --gold-soft: 228 120 94;
+  --gold-muted: 142 92 76;
+  --destructive: 224 106 85;
+  --font-display: 'Songti SC', 'STSongti-SC', 'STSong', 'Noto Serif SC', Georgia,
+    'Times New Roman', serif;
+  color-scheme: dark;
+}
+
+/* ===== 母题层（仅本主题生效） ===== */
+
+/* 纸纹：整页 3.5% 噪点 */
+[data-theme='collection'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='.035'/></svg>");
+}
+
+/* 选中反白如钤印 */
+[data-theme='collection'] ::selection {
+  background: rgb(var(--gold));
+  color: #fdf6ec;
+}
+
+/* 刊头：朱砂「档」印 + 墨线双规则（3px + 1px） */
+[data-theme='collection'] .mast-seal {
+  display: block;
+}
+[data-theme='collection'] .mast-rules {
+  display: block;
+  height: 6px;
+  margin-top: 18px;
+  border-top: 3px solid rgb(var(--steam));
+  border-bottom: 1px solid rgb(var(--steam));
+}
+[data-theme='collection'] .mast-title {
+  letter-spacing: 0.22em;
+  font-size: clamp(30px, 4.2vw, 46px);
+}
+/* 报眉变体：紧贴元信息行，不留刊头的 18px 空气 */
+[data-theme='collection'] .mast-rules--flush {
+  margin-top: 0;
+}
+
+/* 顶栏下缘：细墨线 + 发丝线呼应双规则母题，但比刊头轻一档，
+   避免与内容争抢视觉（用户反馈粗黑线不协调） */
+[data-theme='collection'] .top-rules {
+  border-bottom: 1px solid rgb(var(--steam));
+}
+[data-theme='collection'] .top-rules::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: rgb(var(--ink-line));
+}
+
+/* 目录页：墨框检索框 + 点线引导符 */
+[data-theme='collection'] .toc-search {
+  border-color: rgb(var(--steam));
+}
+[data-theme='collection'] .toc-lead {
+  display: block;
+  flex: 1;
+  border-bottom: 1px dotted rgb(var(--steam-dim));
+  transform: translateY(-4px);
+}
+
+/* 装裱图版：悬停时墨线 + 硬偏移阴影（蜡纸压印感） */
+[data-theme='collection'] .card-root:hover .plate-el,
+[data-theme='collection'] .card-root:focus-visible .plate-el {
+  border-color: rgb(var(--steam));
+  box-shadow: 4px 4px 0 rgb(var(--steam) / 0.08);
+}
+
+/* 抄本卡：「文」铅印角标 + 宋体正文 */
+[data-theme='collection'] .txt-mark {
+  display: block;
+  position: absolute;
+  top: -1px;
+  right: 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  line-height: 1;
+  color: rgb(var(--gold));
+  border: 1px solid rgb(var(--gold));
+  background: rgb(var(--ink-surface));
+  padding: 3px 6px;
+  letter-spacing: 0.2em;
+}
+[data-theme='collection'] .txt-body {
+  font-family: var(--font-display);
+  line-height: 1.95;
+}
+
+/* 墓碑卡：朱印「废」（通用层的「已删除」小标在本主题隐藏） */
+[data-theme='collection'] .dead-pill {
+  display: none;
+}
+[data-theme='collection'] .dead-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgb(var(--gold));
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+}
+[data-theme='collection'] .dead-stamp .stamp {
+  width: 58px;
+  height: 58px;
+  border: 2.5px solid rgb(var(--gold));
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-indent: 0;
+  transform: rotate(-7deg);
+  opacity: 0.85;
+}
+
+/* 图录详情抽屉：墨线书脊 + 朱砂书脊线 + 宋体图注与正文 */
+[data-theme='collection'] .drawer-root {
+  border-left: 1px solid rgb(var(--steam));
+}
+[data-theme='collection'] .drawer-spine {
+  display: block;
+}
+[data-theme='collection'] .d-cap {
+  font-family: var(--font-display);
+}
+[data-theme='collection'] .drawer-root .telegram-content {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  line-height: 2.05;
+}
+[data-theme='collection'] .drawer-root .telegram-content a {
+  text-underline-offset: 4px;
+}
+
+/* 空态大字 */
+[data-theme='collection'] .empty-title {
+  letter-spacing: 0.3em;
+}
