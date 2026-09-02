@@ -7,6 +7,7 @@ import MessageDrawer from '@/components/MessageDrawer.vue'
 import Button from '@/components/ui/Button.vue'
 import { displayChatId, durationLabel, shortDate, splitBodyTitleDesc } from '@/lib/format'
 import { useAspectRatio } from '@/composables/useAspectRatio'
+import { isVault, typeLabel as vocabTypeLabel, useVocab } from '@/lib/vocab'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<Message[]>([])
@@ -15,6 +16,7 @@ const loading = ref(true)
 const loadError = ref('')
 const selected = ref<Message | null>(null)
 const coverFailed = ref(false)
+const L = useVocab()
 
 /* 本期封面图版：随图片真实比例 */
 const { ratio: coverRatio, onLoad: onCoverLoad } = useAspectRatio()
@@ -71,11 +73,21 @@ const ledger = computed(() => {
     { label: '已归档', value: String(stats.value.messages.archived) },
     { label: '来源', value: String(stats.value.messages.sources) },
     {
-      label: '类目',
+      label: isVault.value ? '标签' : '类目',
       value: `${stats.value.tags.with_messages}/${stats.value.tags.total}`,
     },
   ]
 })
+
+/** 归档率（标准后台 KPI 副行用） */
+const archivePct = computed(() => {
+  const m = stats.value?.messages
+  if (!m || !m.total) return ''
+  return `${Math.round((m.archived / m.total) * 100)}%`
+})
+
+/** 目标数（标准后台 KPI 副行用；与卡片同源的 targets 合并配置与运行时名称） */
+const targetsCount = computed(() => stats.value?.targets.length ?? 0)
 
 /** 卷首语：由统计自动生成的一句话编辑摘要 */
 const intro = computed(() => {
@@ -100,7 +112,7 @@ const mediaLine = computed(() => {
   const entries = Object.entries(stats.value.messages.by_type)
     .filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1])
-    .map(([type, n]) => `${TYPE_LABEL[type] ?? type} ${n}`)
+    .map(([type, n]) => `${vocabTypeLabel(L.value, type)} ${n}`)
   return entries.join(' · ')
 })
 
@@ -108,8 +120,8 @@ const queueRows = computed(() => {
   if (!stats.value?.queue) return []
   const q = stats.value.queue
   return [
-    { label: '待发', value: q.pending, tone: 'normal' as const },
-    { label: '印制中', value: q.processing, tone: 'normal' as const },
+    { label: isVault.value ? '等待中' : '待发', value: q.pending, tone: 'normal' as const },
+    { label: isVault.value ? '处理中' : '印制中', value: q.processing, tone: 'normal' as const },
     { label: '已完成', value: q.success, tone: 'normal' as const },
     { label: '失败', value: q.failed, tone: q.failed > 0 ? ('alert' as const) : ('normal' as const) },
   ]
@@ -158,7 +170,154 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl px-5 py-8 min-[820px]:px-8">
+  <!-- ================= 标准后台：KPI + 队列 + 分布 + 最近添加 ================= -->
+  <div v-if="isVault" class="mx-auto max-w-7xl px-5 pb-24 pt-6 lg:pb-6">
+    <div class="mb-5 flex items-baseline gap-2.5">
+      <h1 class="text-[17px] font-semibold text-steam">概览</h1>
+      <span class="font-mono text-[10px] tracking-[0.14em] text-steam-dim/60">OVERVIEW</span>
+    </div>
+
+    <!-- 骨架 -->
+    <div v-if="loading" aria-hidden="true">
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div v-for="i in 4" :key="i" class="h-[86px] animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
+      </div>
+      <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div class="h-44 animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
+        <div class="h-44 animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
+      </div>
+    </div>
+
+    <!-- 加载失败 -->
+    <div v-else-if="loadError" class="flex flex-col items-center gap-3 rounded-xl border border-ink-line bg-ink-surface py-16 text-steam-dim">
+      <p class="text-sm">{{ loadError }}</p>
+      <Button variant="secondary" size="sm" @click="load">重试</Button>
+    </div>
+
+    <template v-else-if="stats">
+      <!-- KPI 行 -->
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
+          <p class="text-xs text-steam-dim">{{ ledger[0].label }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[0].value }}</p>
+          <p class="mt-0.5 truncate font-mono text-[10px] text-steam-dim/70">{{ mediaLine }}</p>
+        </div>
+        <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
+          <p class="text-xs text-steam-dim">{{ ledger[1].label }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[1].value }}</p>
+          <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">{{ archivePct }}</p>
+        </div>
+        <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
+          <p class="text-xs text-steam-dim">{{ ledger[2].label }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[2].value }}</p>
+          <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">{{ targetsCount }} 个目标</p>
+        </div>
+        <div class="rounded-xl border border-ink-line bg-ink-surface p-4 shadow-sm">
+          <p class="text-xs text-steam-dim">{{ ledger[3].label }}</p>
+          <p class="mt-1 text-[22px] font-bold tabular-nums leading-tight text-steam">{{ ledger[3].value }}</p>
+          <p class="mt-0.5 font-mono text-[10px] text-steam-dim/70">使用中 / 全部</p>
+        </div>
+      </div>
+
+      <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <!-- 队列 -->
+        <section class="rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="队列状态">
+          <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
+            队列
+            <span class="ml-auto font-mono text-[10px] font-normal tracking-[0.14em] text-steam-dim/60">QUEUE</span>
+          </div>
+          <p v-if="queueIdle" class="px-4 py-3 text-[13px] text-steam-dim">队列空闲，全部素材均已处理。</p>
+          <div v-else>
+            <div
+              v-for="row in queueRows"
+              :key="row.label"
+              class="flex items-center gap-2.5 border-b border-ink-line/60 px-4 py-2 text-[13px] last:border-b-0"
+            >
+              <span
+                class="h-1.5 w-1.5 rounded-full"
+                :class="row.tone === 'alert' ? 'bg-destructive' : row.value > 0 ? 'bg-gold' : 'bg-steam-dim/40'"
+              />
+              <span :class="row.tone === 'alert' ? 'text-destructive' : 'text-steam-dim'">{{ row.label }}</span>
+              <span class="ml-auto font-mono text-xs tabular-nums" :class="row.tone === 'alert' ? 'font-semibold text-destructive' : 'text-steam'">
+                {{ row.value }}
+              </span>
+            </div>
+          </div>
+          <p v-if="queueRows.some((r) => r.tone === 'alert')" class="border-t border-ink-line/60 px-4 py-2 text-xs text-steam-dim">
+            存在失败任务：可在源群用 /queue 查看明细。
+          </p>
+        </section>
+
+        <!-- 标签分布 -->
+        <section class="rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="标签分布">
+          <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
+            {{ L.tag }}分布
+            <RouterLink
+              v-if="tagDist.length"
+              :to="{ name: 'tags' }"
+              class="ml-auto font-mono text-[10px] font-normal tracking-[0.14em] text-gold hover:underline"
+            >
+              全部 →
+            </RouterLink>
+          </div>
+          <div v-if="tagDist.length" class="px-4 py-2">
+            <RouterLink
+              v-for="tag in tagDist"
+              :key="tag.name"
+              :to="{ name: 'messages', query: { tag: tag.name } }"
+              class="flex items-center gap-3 py-1.5"
+            >
+              <span class="w-24 min-w-0 shrink truncate text-[12.5px] text-steam-dim">#{{ tag.name }}</span>
+              <span class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-ink-raised">
+                <span class="block h-full rounded-full bg-gold/70" :style="{ width: `${(tag.count / maxTagCount) * 100}%` }" />
+              </span>
+              <span class="w-7 shrink-0 text-right font-mono text-[11px] tabular-nums text-steam-dim">{{ tag.count }}</span>
+            </RouterLink>
+          </div>
+          <p v-else class="px-4 py-3 text-[13px] text-steam-dim">还没有{{ L.tag }}。</p>
+        </section>
+      </div>
+
+      <!-- 最近添加 -->
+      <section class="mt-3 overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="最近添加">
+        <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
+          最近添加
+          <RouterLink
+            v-if="recentList.length"
+            :to="{ name: 'messages' }"
+            class="ml-auto font-mono text-[10px] font-normal tracking-[0.14em] text-gold hover:underline"
+          >
+            查看全部 →
+          </RouterLink>
+        </div>
+        <ul v-if="recentList.length" class="divide-y divide-ink-line/60">
+          <li v-for="m in recentList" :key="m.material_id">
+            <button
+              type="button"
+              class="flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-ink-raised/60"
+              @click="selected = m"
+            >
+              <span class="w-11 shrink-0 font-mono text-[10.5px] text-steam-dim">#{{ m.id }}</span>
+              <span class="min-w-0 flex-1 truncate text-[13px] text-steam">{{ rowTitle(m) }}</span>
+              <span class="hidden shrink-0 rounded-full bg-ink-raised px-2 py-0.5 text-[11px] text-steam-dim min-[480px]:inline">
+                {{ vocabTypeLabel(L, m.media_type) }}
+              </span>
+              <span class="hidden w-24 min-w-0 shrink truncate text-right text-[12px] text-steam-dim sm:block">{{ rowChan(m) }}</span>
+              <span class="w-12 shrink-0 text-right font-mono text-[10.5px] text-steam-dim">{{ shortDate(m.created_at) }}</span>
+            </button>
+          </li>
+        </ul>
+        <div v-else-if="!recent.length" class="px-4 py-10 text-center text-[13px] text-steam-dim">
+          还没有素材，去来源群发送一条消息试试
+        </div>
+      </section>
+
+      <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />
+    </template>
+  </div>
+
+  <!-- ================= 素材志：卷首台账 + 本期封面 + 卷首语（原样保留） ================= -->
+  <div v-else class="mx-auto max-w-6xl px-5 py-8 min-[820px]:px-8">
     <header class="mb-7">
       <h1 class="font-display text-2xl font-bold tracking-[0.18em] text-steam min-[480px]:text-3xl">概 览</h1>
       <p class="mt-2 font-mono text-[10.5px] tracking-[0.3em] text-steam-dim">FRONT MATTER</p>
