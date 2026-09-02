@@ -1,14 +1,17 @@
 import { computed, ref } from 'vue'
 
-export type ThemeKey = 'projector' | 'midnight' | 'moss'
+export type ThemeKey = 'collection' | 'projector' | 'midnight' | 'moss'
 /** mode：dark/light 为显式，system 跟随系统 prefers-color-scheme */
 export type Mode = 'dark' | 'light' | 'system'
 
-const THEME_KEY = 'archive:theme'
+/* v2：默认主题换为素材志。换存储 key 让旧默认值（projector）一次性失效，
+   否则老用户 localStorage 里的旧默认会一直压住新默认。 */
+const THEME_KEY = 'archive:theme:v2'
 const MODE_KEY = 'archive:mode'
 
 /** 主题名 → 模块路径；动态 import 让 Vite 按主题 code-split，切到才加载对应 CSS。 */
 const THEME_LOADERS: Record<ThemeKey, () => Promise<unknown>> = {
+  collection: () => import('@/themes/collection.css'),
   projector: () => import('@/themes/projector.css'),
   midnight: () => import('@/themes/midnight.css'),
   moss: () => import('@/themes/moss.css'),
@@ -16,7 +19,9 @@ const THEME_LOADERS: Record<ThemeKey, () => Promise<unknown>> = {
 
 function initialTheme(): ThemeKey {
   const stored = localStorage.getItem(THEME_KEY)
-  return stored === 'midnight' || stored === 'moss' ? stored : 'projector'
+  return stored === 'collection' || stored === 'projector' || stored === 'midnight' || stored === 'moss'
+    ? stored
+    : 'collection'
 }
 
 function initialMode(): Mode {
@@ -56,7 +61,7 @@ export function setMode(m: Mode) {
 }
 
 export function cycleTheme() {
-  const order: ThemeKey[] = ['projector', 'midnight', 'moss']
+  const order: ThemeKey[] = ['collection', 'projector', 'midnight', 'moss']
   setTheme(order[(order.indexOf(theme.value) + 1) % order.length])
 }
 
