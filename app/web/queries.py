@@ -13,8 +13,10 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from fastapi import HTTPException
+
 from app.web.config_editor import read_editable_config
-from app.web.serializers import apply_target_names, expand_target, serialize_message
+from app.web.serializers import serialize_materials
 
 _QUEUE_COUNTS = "SELECT status, COUNT(*) AS n FROM queue GROUP BY status"
 
@@ -30,41 +32,91 @@ def open_connection(database_path: str):
         conn.close()
 
 
-def sql_filters(query) -> tuple[str, list]:
-    """构造仍可直接映射到 messages 表的筛选条件。"""
+
+def _material_filters(query, status: str, joined: bool) -> tuple[str, list]:
+    """素材列表的 WHERE 条件；joined=True 时条件取 COALESCE(副本, 父表)。
+
+    与旧版 Python 侧过滤语义一致：status 映射 archived/deleted、rating 与
+    target_chat_id 精确匹配、q 对正文+渲染文本做大小写不敏感子串匹配、
+    tag 可多值（?tag=A&tag=B）AND 交集——副本素材看副本标签，父表素材看父表标签。
+    """
     conds: list[str] = []
     params: list[object] = []
     media_type = query.get("media_type")
     if media_type:
-        conds.append("media_type = ?")
+        conds.append("m.media_type = ?")
         params.append(media_type)
+    if status != "all":
+        conds.append(f"{_coalesce('status', joined)} = ?")
+        params.append("archived" if status == "active" else "deleted")
+    rating = query.get("rating")
+    if rating not in (None, ""):
+        try:
+            value = int(rating)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="invalid rating") from exc
+        conds.append(f"{_coalesce('rating', joined)} = ?")
+        params.append(value)
+    target = query.get("target_chat_id")
+    if target:
+        try:
+            value = int(target)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="invalid target_chat_id") from exc
+        conds.append(f"{_coalesce('target_chat_id', joined)} = ?")
+        params.append(value)
+    text = query.get("q")
+    if text:
+        searchable = (
+            "COALESCE(mt.original_text, '') || ' ' || COALESCE(mt.rendered_text, '')"
+            if joined
+            else "COALESCE(m.original_text, '') || ' ' || COALESCE(m.rendered_text, '')"
+        )
+        escaped = text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        conds.append(f"{searchable} LIKE ? ESCAPE '\\'")
+        params.append(f"%{escaped}%")
+    for tag in query.getlist("tag"):
+        if joined:
+            conds.append(
+                "(EXISTS (SELECT 1 FROM target_tags tt JOIN tags t ON t.id = tt.tag_id "
+                "WHERE tt.target_id = mt.id AND t.name = ?) "
+                "OR (mt.id IS NULL AND EXISTS (SELECT 1 FROM message_tags mt2 "
+                "JOIN tags t2 ON t2.id = mt2.tag_id "
+                "WHERE mt2.message_id = m.id AND t2.name = ?)))"
+            )
+            params.extend([tag, tag])
+        else:
+            conds.append(
+                "EXISTS (SELECT 1 FROM message_tags mt2 JOIN tags t ON t.id = mt2.tag_id "
+                "WHERE mt2.message_id = m.id AND t.name = ?)"
+            )
+            params.append(tag)
     where = f"WHERE {' AND '.join(conds)}" if conds else ""
     return where, params
 
 
-def matches_message(message: dict, query, status: str = "all") -> bool:
-    """Python 侧过滤：status/rating/target/q/多标签 AND。"""
-    if status != "all":
-        expected = "archived" if status == "active" else "deleted"
-        if message["status"] != expected:
-            return False
-    rating = query.get("rating")
-    if rating not in (None, "") and message["rating"] != int(rating):
-        return False
-    target = query.get("target_chat_id")
-    if target and message["target_chat_id"] != int(target):
-        return False
-    text = query.get("q")
-    searchable = f'{message["original_text"] or ""} {message["rendered_text"] or ""}'
-    if text and text.lower() not in searchable.lower():
-        return False
-    # tag 可重复传多个（?tag=A&tag=B），交集过滤：同时带所有指定标签才命中
-    tags = query.getlist("tag")
-    if tags:
-        names = {item["name"] for item in message["tags"]}
-        if not all(tag in names for tag in tags):
-            return False
-    return True
+def _coalesce(column: str, joined: bool) -> str:
+    return f"COALESCE(mt.{column}, m.{column})" if joined else f"m.{column}"
+
+
+_JOINED_COLUMNS = (
+    "m.*, "
+    "mt.id AS mt_id, mt.target_chat_id AS mt_chat_id, "
+    "mt.target_message_id AS mt_message_id, mt.target_url AS mt_url, "
+    "mt.status AS mt_status, mt.original_text AS mt_original_text, "
+    "mt.original_html AS mt_original_html, mt.rendered_text AS mt_rendered_text, "
+    "mt.rating AS mt_rating"
+)
+
+_FALLBACK_COLUMNS = (
+    "m.*, "
+    "NULL AS mt_id, NULL AS mt_chat_id, NULL AS mt_message_id, NULL AS mt_url, "
+    "NULL AS mt_status, NULL AS mt_original_text, NULL AS mt_original_html, "
+    "NULL AS mt_rendered_text, NULL AS mt_rating"
+)
+
+_JOINED_FROM = "FROM messages m LEFT JOIN message_targets mt ON mt.message_id = m.id"
+_FALLBACK_FROM = "FROM messages m"
 
 
 def list_messages(
@@ -76,33 +128,43 @@ def list_messages(
     offset: int = 0,
     target_names: dict[int, str] | None = None,
 ) -> dict:
-    """列出素材：父表/副本展开 → 过滤 → 排序 → 切片。"""
-    names = target_names or {}
-    where, params = sql_filters(query)
-    rows = conn.execute(
-        f"SELECT * FROM messages {where} ORDER BY id DESC", params
-    ).fetchall()
-    expanded = []
-    for row in rows:
-        message = apply_target_names(serialize_message(conn, row), names)
-        if not message["targets"] or message["targets"][0].get("id") is None:
-            if matches_message(message, query, status):
-                expanded.append(message)
-            continue
-        for target in message["targets"]:
-            item = expand_target(message, target)
-            if matches_message(item, query, status):
-                expanded.append(item)
-    expanded.sort(
-        key=lambda item: (item["created_at"], item.get("target_id") or 0),
-        reverse=True,
+    """列出素材：SQL 侧展开父表/副本、过滤、排序，LIMIT/OFFSET 真分页。
+
+    messages LEFT JOIN message_targets 正好是素材展开语义：有 N 条副本出
+    N 行，无副本出 1 行父表素材。过滤与计数都在库内完成，序列化只处理
+    当前页（旧实现全表拉到 Python 过滤 + 内存切片 + 逐行打库取标签）。
+    message_targets 表不存在（旧库/最小测试库）时退化为纯父表查询。
+    """
+    limit = max(0, limit)
+    offset = max(0, offset)
+    try:
+        total, rows = _query_materials(conn, query, status, limit, offset, joined=True)
+    except sqlite3.OperationalError as exc:
+        if "no such table: message_targets" not in str(exc):
+            raise
+        total, rows = _query_materials(conn, query, status, limit, offset, joined=False)
+    items = serialize_materials(conn, rows, target_names or {})
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+def _query_materials(conn, query, status, limit, offset, *, joined: bool):
+    """同一 WHERE 下先 COUNT 再取页；返回 (total, 当前行)。"""
+    where, params = _material_filters(query, status, joined)
+    columns = _JOINED_COLUMNS if joined else _FALLBACK_COLUMNS
+    source = _JOINED_FROM if joined else _FALLBACK_FROM
+    order = (
+        "ORDER BY m.created_at DESC, COALESCE(mt.id, 0) DESC"
+        if joined
+        else "ORDER BY m.created_at DESC"
     )
-    return {
-        "items": expanded[offset:offset + limit],
-        "total": len(expanded),
-        "limit": limit,
-        "offset": offset,
-    }
+    total = conn.execute(
+        f"SELECT COUNT(*) AS n {source} {where}", params
+    ).fetchone()["n"]
+    rows = conn.execute(
+        f"SELECT {columns} {source} {where} {order} LIMIT ? OFFSET ?",
+        [*params, limit, offset],
+    ).fetchall()
+    return total, rows
 
 
 def get_message_row(conn: sqlite3.Connection, message_id: int):
