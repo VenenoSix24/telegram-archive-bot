@@ -53,7 +53,6 @@ class Config:
     preserve_original: bool = True
     rating_enabled: bool = True
     admins: frozenset[int] = field(default_factory=frozenset)
-    url_template: str | None = None
     database_path: str = "archive.sqlite"
     config_path: str = "config.yaml"
     web_enabled: bool = True
@@ -158,7 +157,6 @@ def load_config(config_path: str | Path | None = None) -> Config:
     src = raw.get("source", {})
     tags_cfg = raw.get("tags", {})
     rating = raw.get("rating", {})
-    search = raw.get("search", {})
     thumbs = raw.get("thumbnails", {})
 
     source_chats = [
@@ -257,7 +255,6 @@ def load_config(config_path: str | Path | None = None) -> Config:
         preserve_original=bool(tags_cfg.get("preserve_original", True)),
         rating_enabled=bool(rating.get("enabled", True)),
         admins=admins,
-        url_template=search.get("url_template"),
         database_path=str(database_path),
         config_path=str(config_file),
         web_enabled=web_enabled,

@@ -266,32 +266,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 <template>
   <div class="mx-auto max-w-[1440px] px-5 py-8 min-[820px]:px-8">
-    <!-- 刊头 -->
+    <!-- 报眉：顶栏即报头，页面以一行元信息 + 双规则线开场，不再重复刊名 -->
     <header>
-      <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
-        <div class="flex items-center gap-4">
-          <svg class="mast-seal hidden h-[52px] w-[52px] shrink-0 text-gold" viewBox="0 0 52 52" aria-hidden="true">
-            <rect x="2" y="2" width="48" height="48" rx="5" fill="none" stroke="currentColor" stroke-width="3.5" />
-            <text x="26" y="37" text-anchor="middle" font-size="27" font-weight="700" fill="currentColor">档</text>
-          </svg>
-          <div>
-            <h1 class="mast-title font-display text-3xl font-bold leading-none text-steam min-[480px]:text-4xl">
-              素材志
-            </h1>
-            <p class="mt-2.5 font-mono text-[10.5px] tracking-[0.34em] text-steam-dim">TG ARCHIVE CATALOGUE</p>
-          </div>
-        </div>
-        <p class="ml-auto hidden pb-1 text-right font-display text-xs leading-[1.9] text-steam-dim min-[820px]:block">
-          {{ issue }}<br />私人归档 · 不定期刊
-        </p>
-      </div>
-      <div class="mast-rules hidden" aria-hidden="true"></div>
       <div
-        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 pt-2.5 font-mono text-[10.5px] tracking-[0.18em] text-steam-dim"
+        class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2.5 font-mono text-[10.5px] tracking-[0.18em] text-steam-dim"
       >
         <span>COLLECTED FROM TELEGRAM</span>
+        <span class="hidden min-[480px]:inline">{{ issue }} · 私人归档</span>
         <span v-if="data">共 {{ data.total }} 件 · 已载 {{ shown }} 件</span>
       </div>
+      <div class="mast-rules mast-rules--flush hidden" aria-hidden="true"></div>
     </header>
 
     <div class="mt-7 flex items-start">
@@ -533,14 +517,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       </main>
     </div>
 
-    <!-- 移动端目录悬浮按钮（避开底部 tab 栏） -->
+    <!-- 移动端目录悬浮按钮（避开底部 tab 栏；再点收起） -->
     <button
       type="button"
       class="fixed bottom-24 right-5 z-40 flex h-[54px] w-[54px] cursor-pointer items-center justify-center rounded-md bg-steam text-ink-bg shadow-lg transition-transform active:scale-95 lg:hidden"
-      aria-label="打开目录"
-      @click="tocOpen = true"
+      :aria-label="tocOpen ? '收起目录' : '打开目录'"
+      :aria-expanded="tocOpen"
+      @click="tocOpen = !tocOpen"
     >
-      <SlidersHorizontal class="h-5 w-5" />
+      <X v-if="tocOpen" class="h-5 w-5" />
+      <SlidersHorizontal v-else class="h-5 w-5" />
     </button>
 
     <MessageDrawer :message="selected" @close="selected = null" @update="onDrawerUpdate" />

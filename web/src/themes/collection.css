@@ -72,6 +72,10 @@
   letter-spacing: 0.22em;
   font-size: clamp(30px, 4.2vw, 46px);
 }
+/* 报眉变体：紧贴元信息行，不留刊头的 18px 空气 */
+[data-theme='collection'] .mast-rules--flush {
+  margin-top: 0;
+}
 
 /* 顶栏下缘同款双规则（导航条是结构层，母题随主题显形） */
 [data-theme='collection'] .top-rules {
@@ -103,20 +107,6 @@
 [data-theme='collection'] .card-root:focus-visible .plate-el {
   border-color: rgb(var(--steam));
   box-shadow: 4px 4px 0 rgb(var(--steam) / 0.08);
-}
-
-/* 相册朱砂题签 */
-[data-theme='collection'] .album-ribbon {
-  display: block;
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 2;
-  width: 26px;
-  height: 44px;
-  border-radius: 0 0 2px 2px;
-  background: rgb(var(--gold));
-  box-shadow: inset 0 0 0 1px rgb(253 246 236 / 0.35);
 }
 
 /* 抄本卡：「文」铅印角标 + 宋体正文 */

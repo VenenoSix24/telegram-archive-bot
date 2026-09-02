@@ -33,7 +33,6 @@ def _config(chat_id: int = -1001) -> Config:
         preserve_original=True,
         rating_enabled=True,
         admins=frozenset({1}),
-        url_template=None,
         database_path="x.sqlite",
         config_path="config.yaml",
         web_enabled=False,

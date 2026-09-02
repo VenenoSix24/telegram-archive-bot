@@ -185,8 +185,6 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
           <Play class="h-2.5 w-2.5" /> {{ durationLabelText }}
         </span>
 
-        <span class="album-ribbon hidden" aria-hidden="true"></span>
-
         <!-- 墓碑：通用小标 + 素材志朱印「废」 -->
         <div v-if="isDead" class="absolute inset-0 z-[2] flex items-center justify-center">
           <span
@@ -218,7 +216,7 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         {{ desc }}
       </p>
 
-      <!-- 图签脚：频道 · 日期 / 标签 / 星级（可直接评） -->
+      <!-- 图签脚：频道 · 日期 / 标签 -->
       <div
         class="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[10px] text-steam-dim"
         @click.stop
@@ -227,15 +225,9 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
           {{ chanLabel }}<template v-if="dateShort"> · {{ dateShort }}</template>
         </span>
         <span v-if="message.tags.length" class="min-w-0 truncate">#{{ tagNames.join(' #') }}</span>
-        <StarRating
-          class="ml-auto shrink-0"
-          :value="message.rating"
-          size="sm"
-          interactive
-          @change="(n: number) => emit('rate', n)"
-        />
       </div>
-      <div v-if="archiveUrl || sourceUrl" class="mt-1.5 flex items-center gap-3" @click.stop>
+      <!-- 链接与星级同行：标签再长也不把评级挤走 -->
+      <div class="mt-1.5 flex items-center gap-3" @click.stop>
         <a
           v-if="archiveUrl"
           :href="archiveUrl"
@@ -254,6 +246,13 @@ const sourceUrl = computed(() => sourceLinkOf(props.message))
         >
           <Link2 class="h-3 w-3" /> 来源
         </a>
+        <StarRating
+          class="ml-auto shrink-0"
+          :value="message.rating"
+          size="sm"
+          interactive
+          @change="(n: number) => emit('rate', n)"
+        />
       </div>
     </div>
   </article>

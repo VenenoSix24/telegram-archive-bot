@@ -76,7 +76,6 @@ const form = reactive<EditableConfig>({
   show_link: true,
   preserve_original: true,
   rating_enabled: true,
-  url_template: null,
   admins: [],
   thumbnail_media: 'first_video' as 'first_video' | 'first',
   thumbnail_source: 'auto' as 'auto' | 'archive' | 'source',
@@ -94,7 +93,9 @@ async function load() {
   try {
     const cfg = await getConfig()
     Object.assign(form, cfg)
-    saved = _clone(cfg)
+    /* saved 必须从 form 克隆：接口响应的 key 顺序与 form 不同，
+       直接存响应会导致 JSON 比对永远不等（进页面就误报有改动） */
+    saved = _clone(form)
     await getStats() // 触发一次预热，顺带确认后端可用
     await loadBackups()
   } catch (e) {
@@ -238,7 +239,7 @@ async function save() {
   try {
     const updated = await putConfig(_clone(form))
     Object.assign(form, updated)
-    saved = _clone(updated)
+    saved = _clone(form)
     toastSuccess('已保存，重启进程后生效')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
@@ -550,20 +551,18 @@ async function resetDb() {
               <Plus class="h-3.5 w-3.5" /> 新增
             </Button>
           </div>
-          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_auto]">
-            <div class="min-w-0">
-              <input
-                v-model.number="target.chat_id"
-                type="number"
-                placeholder="频道内部 ID"
-                class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                :aria-label="`目标频道 ${i + 1} chat_id`"
-              />
-              <label class="mt-2 flex items-center gap-2 text-xs text-steam-dim">
-                <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密
-              </label>
-            </div>
-            <div class="flex min-w-0 gap-1.5">
+          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <input
+              v-model.number="target.chat_id"
+              type="number"
+              placeholder="频道内部 ID"
+              class="h-9 w-full min-w-0 rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none sm:w-44 sm:shrink-0"
+              :aria-label="`目标频道 ${i + 1} chat_id`"
+            />
+            <label class="flex shrink-0 items-center gap-1.5 text-xs text-steam-dim">
+              <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密
+            </label>
+            <div class="flex min-w-[10rem] flex-1 gap-1.5">
               <input
                 v-model="target.name"
                 type="text"
@@ -582,7 +581,7 @@ async function resetDb() {
                 <X class="h-4 w-4" />
               </button>
             </div>
-            <button type="button" class="cursor-pointer justify-self-end rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive" :aria-label="`删除目标频道 ${i + 1}`" @click="removeTarget(i)">
+            <button type="button" class="shrink-0 cursor-pointer rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive" :aria-label="`删除目标频道 ${i + 1}`" @click="removeTarget(i)">
               <Trash2 class="h-4 w-4" />
             </button>
           </div>
@@ -693,24 +692,13 @@ async function resetDb() {
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">ADMIN</span>
           </div>
           <div class="border border-ink-line bg-ink-surface p-4">
-            <label class="mb-1 block text-xs text-steam-dim" for="url-template">
-              私密频道搜索模板（{tag} 占位）
-            </label>
-            <input
-              id="url-template"
-              v-model="form.url_template"
-              type="text"
-              placeholder="https://t.me/c/123456789?q={tag}"
-              class="mb-1 h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-            />
-            <p class="mb-4 text-xs text-steam-dim/70">私密频道无用户名，用模板拼搜索链接；{tag} 会替换为标签名，留空则不启用。</p>
-
             <div class="mb-2 flex items-center justify-between">
               <h3 class="text-sm font-medium text-steam">管理员 ID</h3>
               <Button type="button" variant="secondary" size="sm" @click="addAdmin">
                 <Plus class="h-3.5 w-3.5" /> 新增
               </Button>
             </div>
+            <p class="mb-3 text-xs text-steam-dim/70">在源群里发指令（/status /tag /rating 等）仅对这些用户生效。</p>
             <div v-for="(a, i) in form.admins" :key="i" class="mb-2 flex items-center gap-2">
               <input
                 v-model.number="form.admins[i]"
