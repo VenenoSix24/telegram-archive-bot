@@ -305,7 +305,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
       <!-- 目录页：桌面常驻左栏，移动端全屏抽屉 -->
       <aside
-        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:z-auto lg:max-h-screen lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
+        class="fixed inset-y-0 left-0 z-50 w-[min(84vw,320px)] overflow-y-auto border-r border-ink-line bg-ink-bg px-6 pb-10 pt-6 transition-transform duration-300 ease-out lg:sticky lg:top-14 lg:z-auto lg:max-h-[calc(100vh-3.5rem)] lg:w-[236px] lg:shrink-0 lg:bg-transparent lg:px-0 lg:pb-16 lg:pr-7 lg:pt-0 lg:transition-none"
         :class="tocOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
         aria-label="目录与筛选"
       >
