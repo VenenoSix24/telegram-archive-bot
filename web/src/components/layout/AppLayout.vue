@@ -64,7 +64,7 @@ const shouldShowNav = computed(() => !!route.name)
   <div class="min-h-screen">
     <!-- 顶部导航条：素材页目录成为唯一左栏，内容独占整宽 -->
     <header class="top-rules sticky top-0 z-30 border-b border-transparent bg-ink-bg/95 backdrop-blur">
-      <div class="mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 min-[820px]:px-8">
+      <div class="relative mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 min-[820px]:px-8">
         <RouterLink :to="{ name: 'dashboard' }" class="mr-2 flex shrink-0 items-center gap-2.5">
           <svg class="mast-seal hidden h-8 w-8 text-gold min-[400px]:block" viewBox="0 0 52 52" aria-hidden="true">
             <rect x="2" y="2" width="48" height="48" rx="5" fill="none" stroke="currentColor" stroke-width="3.5" />
@@ -73,7 +73,11 @@ const shouldShowNav = computed(() => !!route.name)
           <span class="font-display text-lg font-bold tracking-[0.2em] text-steam">素材志</span>
         </RouterLink>
 
-        <nav class="hidden h-full items-stretch gap-1 md:flex" aria-label="主导航">
+        <!-- 桌面导航绝对居中：品牌与工具钮分列两侧，视觉重心平衡 -->
+        <nav
+          class="absolute left-1/2 top-0 hidden h-full -translate-x-1/2 items-stretch gap-1 md:flex"
+          aria-label="主导航"
+        >
           <RouterLink
             v-for="item in nav"
             :key="item.name"

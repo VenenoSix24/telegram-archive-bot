@@ -70,7 +70,7 @@ async def _run() -> int:
         print("该源消息已归档过，跳过。")
     else:
         target_id = await archive_message_by_db_id(client, config, conn, mid)
-        print(f"归档完成：来源 {chat_id}/{message_id} → 目标频道消息 {target_id}")
+        print(f"归档完成：来源 {chat_id}/{message_id} → 目标消息 {target_id}")
 
     await client.disconnect()
     conn.close()
