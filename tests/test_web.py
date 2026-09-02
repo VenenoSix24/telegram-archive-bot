@@ -313,6 +313,42 @@ def test_messages_list_filter_and_tags(tmp_path):
         assert body["items"][0]["thumb"]["available"] is False
 
 
+def test_messages_list_multi_tag_is_intersection(tmp_path):
+    """?tag 可重复多值：同时带全部指定标签才命中（AND 语义）。"""
+    db = _make_schema_db(tmp_path, name="multitag.sqlite")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "INSERT INTO tags (name, normalized_name) VALUES ('游戏', '游戏'), ('MOD', 'mod')"
+    )
+    conn.execute(
+        "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, original_text, status) "
+        "VALUES (1, -1001, 1, 'photo', '双标签', 'archived'),"
+        "      (2, -1002, 2, 'text', '仅游戏', 'archived'),"
+        "      (3, -1003, 3, 'text', '仅MOD', 'archived')"
+    )
+    # 消息 1：游戏+MOD；消息 2：游戏；消息 3：MOD
+    conn.executescript(
+        """
+        INSERT INTO message_tags (message_id, tag_id, type) VALUES
+            (1, 1, 'source'), (1, 2, 'source'),
+            (2, 1, 'source'),
+            (3, 2, 'source');
+        """
+    )
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        both = client.get("/api/v1/messages?tag=游戏&tag=MOD").json()
+        assert both["total"] == 1
+        assert both["items"][0]["id"] == 1
+
+        single = client.get("/api/v1/messages?tag=游戏").json()
+        assert single["total"] == 2
+
+        missing = client.get("/api/v1/messages?tag=游戏&tag=不存在").json()
+        assert missing["total"] == 0
+
+
 
 
 def test_reset_database_uses_request_owned_connection(tmp_path):
