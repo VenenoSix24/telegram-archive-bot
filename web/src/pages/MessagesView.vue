@@ -115,6 +115,16 @@ function syncToQuery() {
   })
 }
 
+// 抽屉点类目等场景在同一页改 query：路由变化要反映到筛选。
+// 仅在与当前值不同才回写，避免和 syncToQuery 打环。
+watch(
+  () => route.query.tag,
+  (t) => {
+    const v = typeof t === 'string' && t ? t : ''
+    if (v !== tagFilter.value) tagFilter.value = v
+  },
+)
+
 async function loadStats() {
   try {
     const [s, t] = await Promise.all([getStats(), getTags()])

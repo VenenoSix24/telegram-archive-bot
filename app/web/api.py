@@ -237,7 +237,7 @@ def build_api_router(
                     "SELECT target_chat_id, COUNT(*) AS n FROM messages "
                     "WHERE target_chat_id IS NOT NULL GROUP BY target_chat_id ORDER BY n DESC"
                 ).fetchall()
-            # 目标名来自配置：目录筛选直接显示人读名称，缺失回退前端拼 ID
+            # 目标名与卡片同源：配置备注名 + 运行时解析的会话名，缺失回退前端拼 ID
             target_names: dict[int, str] = {}
             if config_path:
                 try:
@@ -249,6 +249,7 @@ def build_api_router(
                     }
                 except (OSError, ValueError, TypeError):
                     target_names = {}
+            target_names.update(chat_names or {})
             targets = [
                 {
                     "chat_id": r["target_chat_id"],

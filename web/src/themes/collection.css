@@ -77,9 +77,10 @@
   margin-top: 0;
 }
 
-/* 顶栏下缘同款双规则（导航条是结构层，母题随主题显形） */
+/* 顶栏下缘：细墨线 + 发丝线呼应双规则母题，但比刊头轻一档，
+   避免与内容争抢视觉（用户反馈粗黑线不协调） */
 [data-theme='collection'] .top-rules {
-  border-bottom: 3px solid rgb(var(--steam));
+  border-bottom: 1px solid rgb(var(--steam));
 }
 [data-theme='collection'] .top-rules::after {
   content: '';
@@ -88,7 +89,7 @@
   right: 0;
   bottom: -4px;
   height: 1px;
-  background: rgb(var(--steam));
+  background: rgb(var(--ink-line));
 }
 
 /* 目录页：墨框检索框 + 点线引导符 */

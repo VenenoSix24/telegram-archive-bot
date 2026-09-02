@@ -457,7 +457,7 @@ async function resetDb() {
 
             <!-- 展开态：编辑表单，字段配常驻说明 -->
             <div v-if="expandedSource === i" class="border-t border-ink-line px-4 py-4">
-              <div class="grid gap-x-6 gap-y-4 md:grid-cols-2">
+              <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
                 <div class="min-w-0">
                   <label class="mb-1 block text-xs text-steam-dim" :for="`src-chat-${i}`">会话 ID（必填）</label>
                   <input
@@ -575,7 +575,7 @@ async function resetDb() {
             </button>
 
             <div v-if="expandedTarget === i" class="border-t border-ink-line px-4 py-4">
-              <div class="grid gap-x-6 gap-y-4 md:grid-cols-2">
+              <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
                 <div class="min-w-0">
                   <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-chat-${i}`">会话 ID（必填）</label>
                   <input
@@ -640,7 +640,7 @@ async function resetDb() {
           <div class="mb-5 border border-ink-line bg-ink-surface p-4">
             <h3 class="mb-1 text-sm font-medium text-steam">归档消息模板</h3>
             <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
               <div class="space-y-1.5">
                 <div v-for="(key, index) in form.message_template" :key="key" class="flex items-center gap-2 rounded-md border border-ink-line bg-ink-raised px-2 py-1.5">
                   <span class="min-w-0 flex-1 text-sm text-steam">{{ templateBlocks.find((block) => block.key === key)?.label }}</span>
