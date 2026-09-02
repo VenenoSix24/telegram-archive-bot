@@ -7,7 +7,7 @@ Phase 6/7 的命令（/tag /rating）与管理命令（/status /queue …）共�
 from __future__ import annotations
 
 MANAGEMENT_COMMANDS = {
-    "start", "help", "tag", "rating", "status", "queue", "pause", "resume", "tags", "id",
+    "start", "help", "rethumb", "tag", "rating", "status", "queue", "pause", "resume", "tags", "id",
 }
 
 
