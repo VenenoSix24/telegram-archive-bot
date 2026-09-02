@@ -1,0 +1,88 @@
+/* 标准后台 · Minimal —— zinc 灰 + 蓝（唯一强调），三栏资产库布局变体（vault）。
+   来源：design_demo/vault-wireframe.html（方向 B，用户已确认）+ demo 配色定稿。
+   token 映射：--ink-bg=#fafafa / --ink-surface=#ffffff / 墨三级 #18181b/#52525b
+   --ink-line=zinc-200 / --gold=#2563eb（唯一强调蓝）/ --destructive=#b91c1c。
+   与素材志的「设计」差异由组件按布局变体（vocab.ts variant）分支承担：
+   侧栏壳 / 视图切换 / 常驻详情面板 / 现代词汇；本文件只负责 token 与少量
+   全局母题（均匀网格、控件圆角、选中色）。深浅两套 token 都必须提供
+   （THEME-SPEC 架构不变量 2）。 */
+
+[data-theme='minimal'][data-mode='light'] {
+  --ink-bg: 250 250 250; /* #fafafa zinc-50 页面底 */
+  --ink-surface: 255 255 255; /* #ffffff 卡片 / 输入 / 侧栏 */
+  --ink-raised: 244 244 245; /* #f4f4f5 zinc-100 hover 底 / 封面兜底 */
+  --ink-line: 228 228 231; /* #e4e4e7 zinc-200 发丝线 */
+  --steam: 24 24 27; /* #18181b zinc-900 主文字（兼作反白 chip 底） */
+  --steam-dim: 82 82 91; /* #52525b zinc-600 次文字 */
+  --gold: 37 99 235; /* #2563eb blue-600（唯一强调） */
+  --gold-soft: 29 78 216; /* #1d4ed8 hover（蓝系惯例：加深） */
+  --gold-muted: 191 219 254; /* #bfdbfe 引用边等弱强调 */
+  --destructive: 185 28 28; /* #b91c1c */
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color-scheme: light;
+}
+
+[data-theme='minimal'][data-mode='dark'] {
+  --ink-bg: 19 19 22; /* #131316 页面底 */
+  --ink-surface: 28 28 31; /* #1c1c1f 卡片 */
+  --ink-raised: 39 39 44; /* hover 底 / 封面兜底 */
+  --ink-line: 52 52 58; /* 发丝线 */
+  --steam: 250 250 250;
+  --steam-dim: 161 161 170; /* #a1a1aa */
+  --gold: 59 130 246; /* #3b82f6 blue-500：暗底提一档 */
+  --gold-soft: 96 165 250; /* #60a5fa */
+  --gold-muted: 30 64 175; /* #1e40af 引用边 */
+  --destructive: 239 68 68; /* #ef4444 */
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color-scheme: dark;
+}
+
+/* ===== 母题层（仅本主题生效） ===== */
+
+/* 素材网格：均匀自适应网格（auto-fill 随中栏宽度自动取 2–4 列，
+   minmax(0,1fr) 防 max-content 撑宽——已踩过的坑）。素材志的瀑布流
+   由 columns-* 工具类承担，display:grid 在此主题天然中和它。 */
+[data-theme='minimal'] .feed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 14px;
+}
+
+/* 缩略图托底：封面完整展示（object-contain）时用深色底凸显图片本体，
+   竖图不再像局部放大（用户定稿：完整展示 + 黑底） */
+[data-theme='minimal'] .vthumb {
+  background: #1a1a1e;
+}
+[data-theme='minimal'][data-mode='dark'] .vthumb {
+  background: #000000;
+}
+
+/* 控件圆角体系：卡/面板 12px（组件内 rounded-xl）、控件 10px、徽章 6px、胶囊 999px。
+   原生 button（详情页图标钮等）与输入控件统一收敛到 10px；
+   rounded-full 的胶囊钮显式回填，避免被通配规则抹平 */
+[data-theme='minimal'] input,
+[data-theme='minimal'] select,
+[data-theme='minimal'] textarea {
+  border-radius: 10px;
+}
+[data-theme='minimal'] button {
+  border-radius: 10px;
+}
+[data-theme='minimal'] button.rounded-full {
+  border-radius: 999px;
+}
+[data-theme='minimal'] .btn {
+  border-radius: 10px;
+}
+/* 主按钮：蓝底上的墨色文字对比不足，标准后台固定反白 */
+[data-theme='minimal'] .btn.bg-gold,
+[data-theme='minimal'] a.bg-gold {
+  color: #ffffff;
+}
+
+/* 选中文字：强调蓝的轻底 */
+[data-theme='minimal'] ::selection {
+  background: rgb(var(--gold) / 0.15);
+}

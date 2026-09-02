@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
  * 每个主题 = 一份 token 文件 + [data-theme] 作用域母题层；结构层共享。
  * mode：dark/light 为显式，system 跟随系统 prefers-color-scheme
  */
-export type ThemeKey = 'collection'
+export type ThemeKey = 'collection' | 'minimal'
 /** mode：dark/light 为显式，system 跟随系统 prefers-color-scheme */
 export type Mode = 'dark' | 'light' | 'system'
 
@@ -16,10 +16,11 @@ const MODE_KEY = 'archive:mode'
 /** 主题名 → 模块路径；动态 import 让 Vite 按主题 code-split，切到才加载对应 CSS。 */
 const THEME_LOADERS: Record<ThemeKey, () => Promise<unknown>> = {
   collection: () => import('@/themes/collection.css'),
+  minimal: () => import('@/themes/minimal.css'),
 }
 
 /** 上线中的主题才可被选中；旧主题存值一律回落默认 */
-const AVAILABLE: ThemeKey[] = ['collection']
+const AVAILABLE: ThemeKey[] = ['collection', 'minimal']
 
 function initialTheme(): ThemeKey {
   const stored = localStorage.getItem(THEME_KEY)
