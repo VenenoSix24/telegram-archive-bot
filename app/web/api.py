@@ -172,9 +172,12 @@ def _matches_message(message: dict, query, status: str = "all") -> bool:
     searchable = f'{message["original_text"] or ""} {message["rendered_text"] or ""}'
     if text and text.lower() not in searchable.lower():
         return False
-    tag = query.get("tag")
-    if tag and tag not in {item["name"] for item in message["tags"]}:
-        return False
+    # tag 可重复传多个（?tag=A&tag=B），交集过滤：同时带所有指定标签才命中
+    tags = query.getlist("tag")
+    if tags:
+        names = {item["name"] for item in message["tags"]}
+        if not all(tag in names for tag in tags):
+            return False
     return True
 
 
