@@ -396,15 +396,28 @@ html.theme-fading *::after {
   transform: translateX(100%);
 }
 
-/* K4 移动端筛选面板：纯上滑、全程不透明——v-rise 的透明度渐入会让面板
-   第一帧看穿背后的页面，用户感知为「闪一下」（用户反馈） */
-.v-sheet-enter-active {
-  transition: transform var(--motion-base) var(--ease-pop);
+/* K4 移动端筛选面板（二次重写）：常驻 DOM + 纯 transform 上滑，不经
+   Transition 的挂载/卸载——挂载帧与离场类竞争是「闪一下」的根源。
+   关闭态延迟翻转 visibility：滑出动画跑完才真正隐藏，开启即现。 */
+.sheet-scrim {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
-.v-sheet-leave-active {
-  transition: transform var(--motion-fast) var(--ease-standard);
+.sheet-scrim--open {
+  opacity: 1;
+  pointer-events: auto;
 }
-.v-sheet-enter-from,
-.v-sheet-leave-to {
+.sheet-panel {
+  visibility: hidden;
   transform: translateY(100%);
+  pointer-events: none;
+  transition: transform var(--motion-base) var(--ease-standard),
+    visibility 0s var(--motion-base);
+}
+.sheet-panel--open {
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition: transform var(--motion-base) var(--ease-pop);
 }
