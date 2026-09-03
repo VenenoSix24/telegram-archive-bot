@@ -94,3 +94,47 @@
   --motion-slow: 280ms;
   --page-rise: 4px;
 }
+
+/* ===== 配色方案（data-accent）：覆写唯一强调三件套，其余 token 不动。
+   选择器必须带 data-mode——与深浅基底同为双属性时靠源顺序会互相踩，
+   三属性选择器对两套基底都是确定性胜利。 ===== */
+[data-theme='minimal'][data-accent='teal'][data-mode='light'] {
+  --gold: 13 148 136; /* #0d9488 teal-600 */
+  --gold-soft: 15 118 110; /* #0f766e hover 加深 */
+  --gold-muted: 153 246 228; /* #99f6e4 弱强调 */
+}
+[data-theme='minimal'][data-accent='teal'][data-mode='dark'] {
+  --gold: 45 212 191; /* #2dd4bf teal-400：暗底提一档 */
+  --gold-soft: 94 234 212;
+  --gold-muted: 17 94 89; /* #115e59 引用边 */
+}
+[data-theme='minimal'][data-accent='violet'][data-mode='light'] {
+  --gold: 124 58 237; /* #7c3aed violet-600 */
+  --gold-soft: 109 40 217;
+  --gold-muted: 221 214 254;
+}
+[data-theme='minimal'][data-accent='violet'][data-mode='dark'] {
+  --gold: 167 139 250; /* #a78bfa violet-400 */
+  --gold-soft: 196 181 253;
+  --gold-muted: 76 29 149;
+}
+[data-theme='minimal'][data-accent='rose'][data-mode='light'] {
+  --gold: 225 29 72; /* #e11d48 rose-600 */
+  --gold-soft: 190 18 60;
+  --gold-muted: 254 205 211;
+}
+[data-theme='minimal'][data-accent='rose'][data-mode='dark'] {
+  --gold: 251 113 133; /* #fb7185 rose-400 */
+  --gold-soft: 253 164 175;
+  --gold-muted: 136 19 55;
+}
+[data-theme='minimal'][data-accent='amber'][data-mode='light'] {
+  --gold: 217 119 6; /* #d97706 amber-600 */
+  --gold-soft: 180 83 9;
+  --gold-muted: 253 230 138;
+}
+[data-theme='minimal'][data-accent='amber'][data-mode='dark'] {
+  --gold: 251 191 36; /* #fbbf24 amber-400 */
+  --gold-soft: 252 211 77;
+  --gold-muted: 146 64 14;
+}
