@@ -25,7 +25,7 @@ import MessageCard from '@/components/MessageCard.vue'
 import MessageCardVault from '@/components/MessageCardVault.vue'
 import MessageRow from '@/components/MessageRow.vue'
 import MessageDrawer from '@/components/MessageDrawer.vue'
-import SidebarCatalog from '@/components/layout/SidebarCatalog.vue'
+import MobileFilterSheet from '@/components/MobileFilterSheet.vue'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { useCatalogFilters } from '@/composables/useCatalogFilters'
@@ -681,58 +681,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 移动端筛选抽屉：遮罩 + 底部面板（内容复用左栏筛选树，同一份筛选状态） -->
-    <Transition name="v-dialog">
-      <div
-        v-if="sheetOpen"
-        class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px] lg:hidden"
-        aria-hidden="true"
-        @click="sheetOpen = false"
-      />
-    </Transition>
-    <Transition name="v-sheet">
-      <div
-        v-if="sheetOpen"
-        class="fixed inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-line bg-ink-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-2xl lg:hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-label="筛选归档"
-      >
-        <div class="sticky top-0 z-10 flex items-center gap-1 border-b border-ink-line bg-ink-surface/95 px-3 py-2 backdrop-blur">
-          <h2 class="text-[14px] font-semibold text-steam">筛选</h2>
-          <button
-            v-if="isFilterActive"
-            type="button"
-            class="ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-ink-line px-2.5 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:text-gold"
-            @click="resetAll"
-          >
-            <RotateCcw class="h-3 w-3" /> {{ L.reset }}
-          </button>
-          <button
-            type="button"
-            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
-            :class="!isFilterActive && 'ml-auto'"
-            aria-label="收起筛选"
-            @click="sheetOpen = false"
-          >
-            <X class="h-4 w-4" />
-          </button>
-        </div>
-        <label
-          class="mx-3 mt-3 flex h-9 items-center gap-2 rounded-lg border border-ink-line bg-ink-raised px-2.5 transition-[border-color,box-shadow,background-color] [transition-duration:var(--motion-fast)] [transition-timing-function:var(--ease-standard)] focus-within:border-gold focus-within:bg-ink-surface focus-within:ring-2 focus-within:ring-gold/15"
-        >
-          <Search class="h-4 w-4 shrink-0 text-steam-dim" />
-          <input
-            v-model="q"
-            type="search"
-            :placeholder="L.searchPlaceholder"
-            aria-label="检索归档"
-            class="w-full min-w-0 bg-transparent text-[13px] text-steam focus:outline-none placeholder:text-steam-dim/60"
-          />
-        </label>
-        <SidebarCatalog @navigate="sheetOpen = false" />
-      </div>
-    </Transition>
+    <!-- 移动端筛选面板（K4 重写）：常驻 DOM 纯 class 上滑，见 MobileFilterSheet -->
+    <MobileFilterSheet :open="sheetOpen" @close="sheetOpen = false" />
 
     <!-- 移动端筛选悬浮钮（避开底栏；再点收起），与素材志目录 FAB 同款 -->
     <button
