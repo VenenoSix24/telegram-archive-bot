@@ -371,3 +371,27 @@ html.theme-fading *::after {
   outline: 2px solid rgb(var(--gold));
   outline-offset: 2px;
 }
+/* 素材志详情抽屉（MessageDrawer 抽屉模式，素材页/概览页共用）：遮罩 fade +
+   屉体侧滑，时长全走动效 token。离场遮罩与屉体同为 --motion-base、同步收口，
+   滑出全程可见——此前遮罩 150ms 先消失、屉体 200ms 滑出大半被吞，加上内层
+   out-in 在关闭瞬间把内容切走，观感即「关闭=瞬间消失」（用户反馈） */
+.drawer-fade-enter-active {
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+.drawer-fade-leave-active {
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+.drawer-fade-enter-from,
+.drawer-fade-leave-to {
+  opacity: 0;
+}
+.drawer-slide-enter-active {
+  transition: transform var(--motion-slow) var(--ease-standard);
+}
+.drawer-slide-leave-active {
+  transition: transform var(--motion-base) var(--ease-standard);
+}
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  transform: translateX(100%);
+}
