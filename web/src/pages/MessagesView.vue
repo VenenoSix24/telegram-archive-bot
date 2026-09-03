@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  type ComponentPublicInstance,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   AlertTriangle,
@@ -200,6 +208,95 @@ onBeforeUnmount(() => {
   window.matchMedia('(max-width: 1279px)').removeEventListener('change', onNarrowChange)
 })
 
+/* ===== 详情栏开合 × 网格重排衔接（用户反馈：开合详情栏时图录硬闪） =====
+   宽屏面板宽度走 .anim-pane 的 width 过渡，但 auto-fill 网格（feed-grid）的列数
+   随中栏宽度突变（如 5↔4）；TransitionGroup 的 FLIP 只在列表增删时触发，纯容器
+   缩放不会动——重排只能逐帧跳变，即「硬闪」。做法：开合同帧先把网格冻结在
+   「终态宽度」上量好新旧两套卡片位置，再让卡片以 FLIP 位移滑进终局：布局只在
+   绘制前跳一次，肉眼所见是卡片滑移与面板滑入/滑出同步完成。
+   窄屏（覆盖层滑入，不重排）、瀑布流（columns 列数固定，宽度连续变化）、
+   列表视图（整行等宽挤压，无位置跳变）本就平滑，直接开合。 */
+const paneEl = ref<HTMLElement | null>(null)
+const listEl = ref<ComponentPublicInstance | null>(null)
+let paneFlipCleanup: (() => void) | null = null
+
+function setPane(open: boolean) {
+  paneFlipCleanup?.() // 上一次开合动画若在途：先复位内联样式，再取基准位置
+  const host = listEl.value?.$el as HTMLElement | undefined
+  const pane = paneEl.value
+  const flip =
+    !!host &&
+    !!pane &&
+    host.childElementCount > 0 &&
+    !isNarrow.value &&
+    open !== paneOpen.value &&
+    viewMode.value === 'grid' &&
+    thumbMode.value !== 'masonry'
+  if (!flip || !host || !pane) {
+    paneOpen.value = open
+    return
+  }
+  const cards = Array.from(host.children) as HTMLElement[]
+  const first = cards.map((el) => el.getBoundingClientRect())
+  const gridW = host.getBoundingClientRect().width
+  // 面板内容定宽（xl:w-[360px]），宽度过渡只是外层裁切展开：网格终态宽度可直推
+  const paneW = (pane.firstElementChild as HTMLElement | null)?.getBoundingClientRect().width ?? 0
+  if (!paneW) {
+    paneOpen.value = open
+    return
+  }
+  paneOpen.value = open
+  let cancelled = false
+  paneFlipCleanup = () => {
+    cancelled = true
+  }
+  void nextTick(() => {
+    if (cancelled) return
+    // 类已切换（仍在同一帧、未绘制）：冻结网格于终态宽度，量终态位置并反向位移回旧位
+    host.style.width = `${gridW + (open ? -paneW : paneW)}px`
+    const last = cards.map((el) => el.getBoundingClientRect())
+    const moving = cards
+      .map((el, i) => ({ el, dx: first[i].left - last[i].left, dy: first[i].top - last[i].top }))
+      .filter((c) => c.dx !== 0 || c.dy !== 0)
+    for (const { el, dx, dy } of moving) {
+      el.style.transition = 'none'
+      el.style.transform = `translate(${dx}px, ${dy}px)`
+    }
+    // 时长读主题动效 token（简档 180ms / 素材志 240ms），不写死
+    const motionMs = parseFloat(getComputedStyle(pane).getPropertyValue('--motion-base')) || 240
+    const timers: ReturnType<typeof setTimeout>[] = []
+    let raf = 0
+    const onPaneEnd = (e: TransitionEvent) => {
+      if (e.target === pane && e.propertyName === 'width') host.style.width = ''
+    }
+    const cleanup = () => {
+      cancelAnimationFrame(raf)
+      for (const t of timers) clearTimeout(t)
+      pane.removeEventListener('transitionend', onPaneEnd)
+      host.style.width = ''
+      for (const { el } of moving) {
+        el.style.transition = ''
+        el.style.transform = ''
+      }
+      paneFlipCleanup = null
+    }
+    pane.addEventListener('transitionend', onPaneEnd)
+    // 宽度过渡收口即解冻（此时网格自然宽度=冻结宽度，零跳变）；超时兜底
+    timers.push(setTimeout(() => (host.style.width = ''), motionMs + 200))
+    // 双 rAF：先让反向位移上屏，再释放过渡做 FLIP；时长与面板宽度过渡同为 --motion-base
+    raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        for (const { el } of moving) {
+          el.style.transition = 'transform var(--motion-base) var(--ease-standard)'
+          el.style.transform = ''
+        }
+        timers.push(setTimeout(cleanup, motionMs + 300))
+      }),
+    )
+    paneFlipCleanup = cleanup
+  })
+}
+
 let timer: ReturnType<typeof setTimeout> | undefined
 let requestGeneration = 0
 // 筛选变更不清空旧数据：旧列表原地保留到新数据到达，由 TransitionGroup
@@ -331,7 +428,7 @@ function resetAll() {
 /* 标准后台：点卡片 = 选中并展开详情栏 */
 function openCard(m: Message) {
   selected.value = m
-  paneOpen.value = true
+  setPane(true)
 }
 
 /* 「/」聚焦检索；Esc 优先收目录（素材志）/详情栏（标准后台） */
@@ -341,7 +438,7 @@ function onGlobalKey(e: KeyboardEvent) {
       tocOpen.value = false
       return
     }
-    if (paneOpen.value && isNarrow.value) paneOpen.value = false
+    if (paneOpen.value && isNarrow.value) setPane(false)
     return
   }
   const tag = document.activeElement?.tagName ?? ''
@@ -372,7 +469,7 @@ onBeforeUnmount(() => {
   <!-- ================= 标准后台：工具条 + 视图切换 + 常驻详情栏 ================= -->
   <div v-if="isVault" class="flex h-full min-w-0">
     <div class="flex min-w-0 flex-1 flex-col">
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="min-h-0 flex-1 overflow-x-clip overflow-y-auto">
         <!-- 语境条 + 类型 chips：吸顶毛玻璃，内容从其下方滚过 -->
         <div class="sticky top-0 z-20 space-y-2 border-b border-ink-line bg-ink-bg/85 px-4 py-2.5 backdrop-blur-xl backdrop-saturate-150">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -503,6 +600,7 @@ onBeforeUnmount(() => {
               <Transition name="v-dialog" mode="out-in">
                 <TransitionGroup
                   v-if="viewMode === 'grid'"
+                  ref="listEl"
                   :key="`grid-${thumbMode}`"
                   tag="div"
                   name="v-list"
@@ -522,6 +620,7 @@ onBeforeUnmount(() => {
                 </TransitionGroup>
                 <TransitionGroup
                   v-else
+                  ref="listEl"
                   :key="`list-${thumbMode}`"
                   tag="div"
                   name="v-list"
@@ -571,17 +670,18 @@ onBeforeUnmount(() => {
         v-if="paneOpen && isNarrow"
         class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px]"
         aria-hidden="true"
-        @click="paneOpen = false"
+        @click="setPane(false)"
       />
     </Transition>
     <!-- 详情栏：≥1280 常驻右栏（内衬圆角面板，宽度+透明度过渡）；窄屏覆盖层（点卡片滑出） -->
     <div
+      ref="paneEl"
       class="anim-pane max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-50 max-xl:w-[min(94vw,380px)] max-xl:shadow-2xl max-xl:transition-transform xl:relative xl:h-full xl:shrink-0 xl:overflow-hidden"
       :class="paneOpen ? 'anim-pane--open max-xl:translate-x-0 xl:w-[360px]' : 'max-xl:translate-x-full xl:w-0'"
     >
       <!-- 内层定宽：收起动画期间内容不被压缩重排，由外层裁切 -->
       <div class="h-full w-full xl:w-[360px] xl:py-2.5 xl:pr-2.5">
-        <MessageDrawer pane :message="selected" @close="paneOpen = false" @update="onDrawerUpdate" />
+        <MessageDrawer pane :message="selected" @close="setPane(false)" @update="onDrawerUpdate" />
       </div>
     </div>
   </div>
