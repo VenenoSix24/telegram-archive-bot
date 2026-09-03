@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
-import { Check, ChevronDown, LayoutDashboard, Images, Menu, Moon, Paintbrush, Settings, LogOut, Sun, Tags } from 'lucide-vue-next'
+import { Check, ChevronDown, LayoutDashboard, Images, Menu, Paintbrush, Settings, LogOut, Tags } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -8,13 +8,12 @@ import { APP_VERSION } from '@/lib/version'
 import {
   applyTheme,
   currentTheme,
-  renderedDark,
-  setMode,
   setTheme,
   type ThemeKey,
 } from '@/composables/useTheme'
 import { isVault } from '@/lib/vocab'
 import SidebarCatalog from '@/components/layout/SidebarCatalog.vue'
+import ModeMenu from '@/components/layout/ModeMenu.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,7 +47,7 @@ const nav = [
 
 const themeLabels: Record<ThemeKey, string> = {
   collection: '素材志',
-  minimal: '标准后台',
+  minimal: '简档',
 }
 /* 已定稿待实现的方向：菜单里以禁用项示知路线，不做假开关 */
 const isActive = (name: string) => route.name === name
@@ -56,6 +55,8 @@ const currentTitle = computed(
   () => nav.find((item) => item.name === route.name)?.label ?? '素材库',
 )
 const shouldShowNav = computed(() => !!route.name)
+
+/* 主题名用户定稿（2026-09-02）：minimal 从「标准后台」更名「简档」，与素材志对仗 */
 
 /* C4 侧栏导航滑动指示条：测量激活项位置，指示条以 transform 平移跟随。
    导航项固定 h-9，位置稳定；resize 与路由变化时重测 */
@@ -184,16 +185,7 @@ async function onLogout() {
             <span class="truncate">{{ themeLabels[currentTheme] }}</span>
             <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="themeMenuOpen && 'rotate-180'" />
           </button>
-          <button
-            type="button"
-            class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
-            :aria-label="renderedDark ? '切换浅色' : '切换深色'"
-            :title="renderedDark ? '切换浅色' : '切换深色'"
-            @click="setMode(renderedDark ? 'light' : 'dark')"
-          >
-            <Sun v-if="renderedDark" class="h-4 w-4" />
-            <Moon v-else class="h-4 w-4" />
-          </button>
+          <ModeMenu button-class="h-9 w-9 rounded-lg" menu-class="bottom-full right-0 mb-1.5 [--pop-origin:bottom_right]" />
           <button
             type="button"
             class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
@@ -276,16 +268,7 @@ async function onLogout() {
               </div>
             </Transition>
           </div>
-          <button
-            type="button"
-            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
-            :aria-label="renderedDark ? '切换浅色' : '切换深色'"
-            :title="renderedDark ? '切换浅色' : '切换深色'"
-            @click="setMode(renderedDark ? 'light' : 'dark')"
-          >
-            <Sun v-if="renderedDark" class="h-4 w-4" />
-            <Moon v-else class="h-4 w-4" />
-          </button>
+          <ModeMenu button-class="h-10 w-10 rounded-lg" menu-class="top-full right-0 mt-1 [--pop-origin:top_right]" />
           <button
             type="button"
             class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
@@ -372,16 +355,7 @@ async function onLogout() {
               </Transition>
             </div>
 
-            <button
-              type="button"
-              class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
-              :aria-label="renderedDark ? '切换浅色' : '切换深色'"
-              :title="renderedDark ? '切换浅色' : '切换深色'"
-              @click="setMode(renderedDark ? 'light' : 'dark')"
-            >
-              <Sun v-if="renderedDark" class="h-4 w-4" />
-              <Moon v-else class="h-4 w-4" />
-            </button>
+            <ModeMenu button-class="h-9 w-9 rounded-md" menu-class="top-full right-0 mt-1.5 [--pop-origin:top_right]" />
 
             <button
               type="button"

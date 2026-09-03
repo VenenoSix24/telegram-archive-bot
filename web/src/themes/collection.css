@@ -207,3 +207,37 @@
 [data-theme='collection'] .v-page-enter-from {
   transform: none;
 }
+
+/* ===== 配色方案（data-accent）：覆写唯一强调三件套，其余 token 不动。
+   选择器必须带 data-mode——与深浅基底同为双属性时靠源顺序会互相踩，
+   三属性选择器对两套基底都是确定性胜利。 ===== */
+[data-theme='collection'][data-accent='indigo'][data-mode='light'] {
+  --gold: 52 86 122; /* #34567a 黛蓝（墨系蓝） */
+  --gold-soft: 42 70 99;
+  --gold-muted: 195 212 227;
+}
+[data-theme='collection'][data-accent='indigo'][data-mode='dark'] {
+  --gold: 143 176 207; /* #8fb0cf 暗底提一档 */
+  --gold-soft: 169 196 220;
+  --gold-muted: 44 69 87;
+}
+[data-theme='collection'][data-accent='pine'][data-mode='light'] {
+  --gold: 63 116 88; /* #3f7458 松绿 */
+  --gold-soft: 51 96 73;
+  --gold-muted: 197 221 208;
+}
+[data-theme='collection'][data-accent='pine'][data-mode='dark'] {
+  --gold: 134 183 156; /* #86b79c */
+  --gold-soft: 161 201 179;
+  --gold-muted: 44 74 59;
+}
+[data-theme='collection'][data-accent='wisteria'][data-mode='light'] {
+  --gold: 122 82 150; /* #7a5296 紫棠 */
+  --gold-soft: 101 66 126;
+  --gold-muted: 221 203 234;
+}
+[data-theme='collection'][data-accent='wisteria'][data-mode='dark'] {
+  --gold: 179 148 204; /* #b394cc */
+  --gold-soft: 198 174 217;
+  --gold-muted: 74 51 96;
+}
