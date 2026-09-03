@@ -105,6 +105,10 @@ python -m app
 | `thumbnails.media` | 相册缩略图取哪条媒体：`first_video`（默认）/ `first` |
 | `thumbnails.source` | 缩略图来源：`auto`（默认，归档优先回退源消息）/ `archive` / `source` |
 | `message_template` | 消息区块顺序，默认 `[rating, tags, body, source]`；`body` 必须保留；改动只影响之后新归档的消息 |
+| `backup.enabled` | 定时自动备份开关，默认 `true` |
+| `backup.interval_days` | 备份间隔天数：`1` / `3` / `7`（默认）/ `30`；程序运行期间到点即备，停机顺延到下次启动补跑 |
+| `backup.retain` | 本地保留最新备份份数，默认 `7`，防止备份文件无限堆积 |
+| `backup.upload_chat_id` | 可选；填 Telegram 会话 ID 则每次备份完成后把文件发到该会话，失败不影响本地备份 |
 | `admins` | 管理员用户 ID 列表，命令校验用 |
 | `database.path` | SQLite 路径，默认 `archive.sqlite`（相对路径锚定 `config.yaml` 所在目录） |
 
@@ -162,7 +166,8 @@ Tag 用空格分隔（不换行、不连写），数据库存结构化列表而�
 - **消息**：浏览归档消息与缩略图；按关键词（搜索原文与渲染文本）、Tag（多选取交集）、评级、媒体类型、目标频道筛选；详情页直接改评级、增删 Tag，保存后写库 → 重渲染 → 同步 Telegram 消息与置顶索引
 - **Tags**：Tag 统计视图
 - **设置**：配置编辑器（保存自动备份并提示重启生效）、配置 / 数据库的备份、下载、恢复、导入，以及重置数据库
-- **双主题**：`collection`（素材志）与 `minimal` 两套主题，支持明暗模式切换
+- **双主题**：`minimal`（简档，默认）与 `collection`（素材志）两套主题，各有可选配色方案；明暗模式支持浅色 / 深色 / 跟随系统
+- **定时自动备份**：按 1 / 3 / 7 / 30 天间隔自动备份数据库（运行期间到点即备，停机则下次启动补跑），本地保留份数可配，也可同时上传到指定的 Telegram 会话
 
 ### 本机运行
 
