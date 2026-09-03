@@ -30,28 +30,31 @@ const innerMessage = computed(() => props.message ?? (props.pane ? null : lastMe
 
 <template>
   <Teleport to="body" :disabled="pane">
-    <!-- 抽屉模式（素材志）：遮罩 fade 与屉体侧滑走 style.css 的 token 级
-         drawer-fade / drawer-slide，离场同步收口，滑出全程可见 -->
-    <Transition v-if="!pane" name="drawer-fade" appear>
-      <div
-        v-if="message"
-        class="fixed inset-0 z-40 flex justify-end bg-ink-bg/60 backdrop-blur-[2px]"
-        @click.self="emit('close')"
-      >
-        <Transition name="drawer-slide" appear>
-          <aside
-            v-if="message"
-            class="drawer-root relative flex h-full w-full max-w-[500px] flex-col border-l border-ink-line bg-ink-bg shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="归档详情"
-          >
-            <span class="drawer-spine absolute inset-x-0 top-0 z-[2] hidden h-1 bg-gold" aria-hidden="true"></span>
-            <MessageDetailInner :message="innerMessage" @close="emit('close')" @update="(m) => emit('update', m)" />
-          </aside>
-        </Transition>
-      </div>
-    </Transition>
+    <!-- 抽屉模式（素材志）：遮罩与屉体用「兄弟过渡」——原先屉体嵌在遮罩 div
+         里，屉体滑出的离场会被遮罩离场结束时的整树移除截断，观感退化为纯
+         渐隐（K2 用户反馈）。拆成兄弟后各自的 leave 独立跑满；屉体 z 高于
+         遮罩，遮罩整面点击关闭（屉体已不在遮罩子树内，无需 .self） -->
+    <template v-if="!pane">
+      <Transition name="drawer-fade" appear>
+        <div
+          v-if="message"
+          class="fixed inset-0 z-40 bg-ink-bg/60 backdrop-blur-[2px]"
+          @click="emit('close')"
+        />
+      </Transition>
+      <Transition name="drawer-slide" appear>
+        <aside
+          v-if="message"
+          class="drawer-root fixed right-0 top-0 z-50 flex h-full w-full max-w-[500px] flex-col border-l border-ink-line bg-ink-bg shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          aria-label="归档详情"
+        >
+          <span class="drawer-spine absolute inset-x-0 top-0 z-[2] hidden h-1 bg-gold" aria-hidden="true"></span>
+          <MessageDetailInner :message="innerMessage" @close="emit('close')" @update="(m) => emit('update', m)" />
+        </aside>
+      </Transition>
+    </template>
 
     <!-- 面板模式（标准后台）：常驻右栏，内衬圆角毛玻璃面板；空态由 Inner 给出 -->
     <aside

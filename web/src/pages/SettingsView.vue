@@ -16,7 +16,7 @@ import {
   Upload,
   X,
 } from 'lucide-vue-next'
-import { backup, backupDownloadUrl, deleteBackup, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup } from '@/lib/api'
+import { backup, backupDownloadUrl, deleteBackup, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup, runBackupNow } from '@/lib/api'
 import type { BackupItem, EditableConfig } from '@/lib/types'
 import { isVault } from '@/lib/vocab'
 import Button from '@/components/ui/Button.vue'
@@ -37,6 +37,22 @@ const saving = ref(false)
 const error = ref('')
 const openTargetMenu = ref<number | null>(null)
 const opsBusy = ref(false)
+const backupNowBusy = ref(false)
+
+/* K3 立即备份：不等定时器，当场跑一次（本地落盘 + 按配置上传），完成后刷新备份列表 */
+async function runBackup() {
+  if (backupNowBusy.value) return
+  backupNowBusy.value = true
+  try {
+    const result = await runBackupNow()
+    toastSuccess(`已生成备份 ${result.name}`)
+    backups.value = (await listBackups()).items
+  } catch (e) {
+    toastError(e instanceof Error ? e.message : '备份失败')
+  } finally {
+    backupNowBusy.value = false
+  }
+}
 const backups = ref<BackupItem[]>([])
 const importKind = ref<'config' | 'database'>('config')
 const importFile = ref<File | null>(null)
@@ -895,8 +911,14 @@ async function resetDb() {
           </div>
           <!-- 自动备份：对应 config.yaml backup: 段；保存走同一 putConfig，重启生效 -->
           <div class="mb-4 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
-            <h3 class="mb-1 text-sm font-medium text-steam">自动备份</h3>
-            <p class="mb-3 text-xs text-steam-dim">按间隔自动备份数据库，产物出现在上方备份列表可随时下载；停机期间顺延，下次启动时补跑。重启进程后生效。</p>
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <h3 class="text-sm font-medium text-steam">自动备份</h3>
+              <Button type="button" variant="secondary" size="sm" :disabled="backupNowBusy" @click="runBackup">
+                <Loader2 v-if="backupNowBusy" class="h-3.5 w-3.5 animate-spin" />
+                {{ backupNowBusy ? '备份中…' : '立即备份' }}
+              </Button>
+            </div>
+            <p class="mb-3 text-xs text-steam-dim">按间隔自动备份数据库，产物出现在上方备份列表可随时下载；停机期间顺延，下次启动时补跑。计划修改重启进程后生效。</p>
             <div class="grid gap-4 sm:grid-cols-2">
               <label class="flex items-center gap-2 text-sm text-steam">
                 <input v-model="form.backup.enabled" type="checkbox" class="h-4 w-4 accent-gold" />

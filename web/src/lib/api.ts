@@ -84,6 +84,10 @@ export async function restoreBackup(name: string): Promise<{ ok: boolean; kind: 
   return request('/ops/restore', { method: 'POST', body: JSON.stringify({ name }) })
 }
 
+export async function runBackupNow(): Promise<{ ok: boolean; name: string }> {
+  return request('/ops/backups/run', { method: 'POST' })
+}
+
 export async function deleteBackup(name: string): Promise<{ ok: boolean; kind: string }> {
   return request(`/ops/backups/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
