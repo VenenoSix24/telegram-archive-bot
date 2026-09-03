@@ -241,3 +241,10 @@
   --gold-soft: 198 174 217;
   --gold-muted: 74 51 96;
 }
+
+/* 目录检索框焦点态（用户反馈：默认 outline 外圈生硬）：focus-within 描边转朱，
+   输入本体 focus:outline-none 压过全局 :focus-visible 外圈。主题 css 晚于
+   utilities 加载，同权重下此处可稳压 .toc-search 的墨框基底 */
+[data-theme='collection'] .toc-search:focus-within {
+  border-color: rgb(var(--gold));
+}
