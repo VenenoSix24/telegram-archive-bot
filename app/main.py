@@ -8,6 +8,7 @@ import socket
 from contextlib import suppress
 from pathlib import Path
 
+from app.backup_scheduler import AutoBackupScheduler
 from app.config import ConfigError, config_dir, load_config
 from app.database.migrate import apply_migrations, open_db
 from app.logging_setup import setup_logging
@@ -66,6 +67,9 @@ def _startup_banner(config, chats: dict[int, str]) -> str:
         lines.append(f"  Web 后台    {_web_url(config)}")
     lines.append(f"  数据库      {Path(config.database_path).name}")
     lines.append(f"  日志        {config_dir() / 'logs'}")
+    if config.backup_enabled:
+        days = config.backup_interval_days
+        lines.append(f"  自动备份    每 {days} 天（本地保留 {config.backup_retain} 份）")
     lines.append("  来源 → 目标")
     for src in config.source_chats:
         targets = "、".join(
@@ -135,6 +139,8 @@ async def _run() -> int:
     worker = asyncio.create_task(queue.run())
     indexer = IndexUpdater(client, config, conn)
     indexer.start()
+    auto_backup = AutoBackupScheduler(client, config)
+    auto_backup.start()
     attach_new_message_handler(client, config, conn, queue, indexer)
     attach_reply_command_handler(client, config, conn, indexer)
     attach_target_edit_handler(client, config, conn, indexer)
@@ -165,6 +171,7 @@ async def _run() -> int:
         with suppress(asyncio.CancelledError):
             await worker
         await indexer.stop()
+        await auto_backup.stop()
         await client.disconnect()
         conn.close()
         logger.info("归档管道已停止")
