@@ -395,3 +395,16 @@ html.theme-fading *::after {
 .drawer-slide-leave-to {
   transform: translateX(100%);
 }
+
+/* K4 移动端筛选面板：纯上滑、全程不透明——v-rise 的透明度渐入会让面板
+   第一帧看穿背后的页面，用户感知为「闪一下」（用户反馈） */
+.v-sheet-enter-active {
+  transition: transform var(--motion-base) var(--ease-pop);
+}
+.v-sheet-leave-active {
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+.v-sheet-enter-from,
+.v-sheet-leave-to {
+  transform: translateY(100%);
+}
