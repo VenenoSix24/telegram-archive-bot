@@ -27,8 +27,8 @@ import { displayChatId, sizeLabel } from '@/lib/format'
 import { STAGGER_CAP, STAGGER_STEP, staggerDelay } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import {
-  currentMode, currentTheme, setMode, setTheme,
-  type Mode, type ThemeKey,
+  currentAccent, currentMode, currentTheme, setAccent, setMode, setTheme,
+  THEME_ACCENTS, type Mode, type ThemeKey,
 } from '@/composables/useTheme'
 import { useThumbMode, type ThumbMode } from '@/composables/useDisplayPrefs'
 
@@ -49,9 +49,12 @@ const templateBlocks = [
 ]
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
-  { key: 'collection', label: '素材志（朱砂）' },
-  { key: 'minimal', label: '标准后台（蓝灰）' },
+  { key: 'minimal', label: '简档' },
+  { key: 'collection', label: '素材志' },
 ]
+
+/* 配色方案随主题切换：清单与预览色来自 useTheme（色值本体在 token 文件里覆写） */
+const accentOptions = computed(() => THEME_ACCENTS[currentTheme.value])
 const modeOptions: { key: Mode; label: string }[] = [
   { key: 'system', label: '跟随系统' },
   { key: 'dark', label: '深色' },
@@ -483,6 +486,34 @@ async function resetDb() {
                 {{ m.label }}
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- 配色方案：只换强调三件套，跟随主题/明暗联动（即时生效） -->
+        <div class="mt-6">
+          <p class="mb-2 text-xs text-steam-dim">配色方案</p>
+          <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="配色方案">
+            <button
+              v-for="a in accentOptions"
+              :key="a.key"
+              type="button"
+              role="radio"
+              :aria-checked="currentAccent === a.key"
+              :class="cn(
+                'flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                currentAccent === a.key
+                  ? 'border-gold text-gold'
+                  : 'border-ink-line text-steam-dim hover:text-steam',
+              )"
+              @click="setAccent(a.key)"
+            >
+              <span
+                class="h-3 w-3 shrink-0 rounded-full border border-ink-line"
+                :style="{ background: a.dot }"
+                aria-hidden="true"
+              ></span>
+              {{ a.label }}
+            </button>
           </div>
         </div>
 

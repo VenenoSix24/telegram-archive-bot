@@ -25,20 +25,20 @@ const THEME_LOADERS: Record<ThemeKey, () => Promise<unknown>> = {
 /** 上线中的主题才可被选中；旧主题存值一律回落默认 */
 const AVAILABLE: ThemeKey[] = ['collection', 'minimal']
 
-/** 每个主题的配色方案清单（色值本体在各 token 文件里，这里只管 key/文案） */
-export const THEME_ACCENTS: Record<ThemeKey, { key: string; label: string }[]> = {
+/** 每个主题的配色方案清单（dot 为浅色模式下的预览色，供设置页色板用） */
+export const THEME_ACCENTS: Record<ThemeKey, { key: string; label: string; dot: string }[]> = {
   minimal: [
-    { key: 'default', label: '蓝' },
-    { key: 'teal', label: '青碧' },
-    { key: 'violet', label: '紫罗兰' },
-    { key: 'rose', label: '玫红' },
-    { key: 'amber', label: '琥珀' },
+    { key: 'default', label: '蓝', dot: '#2563eb' },
+    { key: 'teal', label: '青碧', dot: '#0d9488' },
+    { key: 'violet', label: '紫罗兰', dot: '#7c3aed' },
+    { key: 'rose', label: '玫红', dot: '#e11d48' },
+    { key: 'amber', label: '琥珀', dot: '#d97706' },
   ],
   collection: [
-    { key: 'default', label: '朱砂' },
-    { key: 'indigo', label: '黛蓝' },
-    { key: 'pine', label: '松绿' },
-    { key: 'wisteria', label: '紫棠' },
+    { key: 'default', label: '朱砂', dot: '#bc3a26' },
+    { key: 'indigo', label: '黛蓝', dot: '#34567a' },
+    { key: 'pine', label: '松绿', dot: '#3f7458' },
+    { key: 'wisteria', label: '紫棠', dot: '#7a5296' },
   ],
 }
 
