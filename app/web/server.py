@@ -24,6 +24,7 @@ def start_server_task(
     indexer=None,
     chat_names: dict[int, str] | None = None,
     queue=None,
+    auto_backup=None,
 ) -> uvicorn.Server:
     """Build app + uvicorn server; caller runs serve() as an asyncio task."""
     app = create_app(
@@ -33,6 +34,7 @@ def start_server_task(
         indexer=indexer,
         chat_names=chat_names,
         queue=queue,
+        auto_backup=auto_backup,
     )
     server = uvicorn.Server(
         uvicorn.Config(

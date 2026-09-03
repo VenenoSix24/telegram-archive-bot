@@ -27,6 +27,7 @@ def create_app(
     indexer=None,
     chat_names: dict[int, str] | None = None,
     queue=None,
+    auto_backup=None,
 ) -> FastAPI:
     sessions = Sessions()
     app = FastAPI(title="Telegram Archive Bot", version="0.2.0")
@@ -36,6 +37,7 @@ def create_app(
     app.state.conn = conn
     app.state.indexer = indexer
     app.state.queue = queue
+    app.state.auto_backup = auto_backup
     app.include_router(build_auth_router(config.web_token, sessions), prefix="/api/v1")
     app.include_router(
         build_api_router(
