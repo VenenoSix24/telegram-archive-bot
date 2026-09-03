@@ -5,6 +5,7 @@ import type {
   MessagesResponse,
   Stats,
   TagsResponse,
+  TrendResponse,
 } from '@/lib/types'
 
 /** 未登录（cookie 失效）时的统一跳转。 */
@@ -52,6 +53,11 @@ export async function logout(): Promise<{ ok: boolean }> {
 
 export async function getStats(): Promise<Stats> {
   return request('/stats')
+}
+
+/** 近 N 天归档趋势（服务端收敛 1..90，缺数日已补 0） */
+export async function getTrend(days = 30): Promise<TrendResponse> {
+  return request(`/stats/trend?days=${days}`)
 }
 
 export async function getTags(): Promise<TagsResponse> {
