@@ -42,7 +42,7 @@ async function submit() {
       <div class="flex items-center gap-3">
         <span class="grid h-10 w-10 place-items-center rounded-xl bg-steam font-mono text-[15px] font-bold text-ink-bg">A</span>
         <div>
-          <p class="text-[17px] font-semibold text-steam">素材库</p>
+          <p class="text-[17px] font-semibold text-steam">归档库</p>
           <p class="mt-0.5 font-mono text-[9px] tracking-[0.22em] text-steam-dim/60">TG ARCHIVE MANAGER</p>
         </div>
       </div>

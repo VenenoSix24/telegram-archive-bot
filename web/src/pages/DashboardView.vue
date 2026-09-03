@@ -63,7 +63,7 @@ const coverIcon = computed(() => (cover.value ? iconOf(cover.value) : FileText))
 const coverFigMeta = computed(() => {
   const m = cover.value
   if (!m) return ''
-  const parts = [TYPE_LABEL[m.media_type] ?? '素材']
+  const parts = [TYPE_LABEL[m.media_type] ?? '归档']
   const d = durationLabel(m.duration)
   if (d) parts.push(d)
   return parts.join(' · ')
@@ -149,7 +149,7 @@ function rowTitle(m: Message) {
     m.original_text || m.rendered_text || '',
     (m.tags ?? []).map((t) => t.name),
   )
-  return split.title || m.file_name || `素材 #${m.id}`
+  return split.title || m.file_name || `归档 #${m.id}`
 }
 
 function rowChan(m: Message) {
@@ -240,7 +240,7 @@ onMounted(load)
             队列
             <span class="ml-auto font-mono text-[10px] font-normal tracking-[0.14em] text-steam-dim/60">QUEUE</span>
           </div>
-          <p v-if="queueIdle" class="px-4 py-3 text-[13px] text-steam-dim">队列空闲，全部素材均已处理。</p>
+          <p v-if="queueIdle" class="px-4 py-3 text-[13px] text-steam-dim">队列空闲，全部归档均已处理。</p>
           <div v-else>
             <div
               v-for="row in queueRows"
@@ -322,7 +322,7 @@ onMounted(load)
           </li>
         </ul>
         <div v-else-if="!recent.length" class="px-4 py-10 text-center text-[13px] text-steam-dim">
-          还没有素材，去来源群发送一条消息试试
+          还没有归档，去来源群发送一条消息试试
         </div>
       </section>
 
@@ -381,7 +381,7 @@ onMounted(load)
                 v-if="coverImg"
                 v-img-fade
                 :src="coverImg"
-                :alt="'本期封面 · 素材 #' + cover.id"
+                :alt="'本期封面 · 归档 #' + cover.id"
                 class="h-full w-full object-cover"
                 @load="onCoverLoad"
                 @error="coverFailed = true"
@@ -409,7 +409,7 @@ onMounted(load)
       <!-- 印制 · 队列状态：失败必须被看见 -->
       <section class="anim-fade-up mt-8" aria-label="队列状态" :style="{ animationDelay: '150ms' }">
         <h2 class="font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">印制 · QUEUE</h2>
-        <p v-if="queueIdle" class="mt-3 text-sm text-steam-dim">队列空闲，全部素材均已处理。</p>
+        <p v-if="queueIdle" class="mt-3 text-sm text-steam-dim">队列空闲，全部归档均已处理。</p>
         <div v-else class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
           <span
             v-for="row in queueRows"
@@ -489,7 +489,7 @@ onMounted(load)
             </li>
           </ul>
           <div v-else-if="!recent.length" class="mt-3 border border-dashed border-ink-line p-6 text-center text-sm text-steam-dim">
-            还没有归档素材，去源群发一条消息试试
+            还没有归档，去源群发一条消息试试
           </div>
         </section>
       </div>

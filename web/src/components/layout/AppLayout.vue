@@ -13,7 +13,7 @@ import {
 } from '@/composables/useTheme'
 import { isVault } from '@/lib/vocab'
 import SidebarCatalog from '@/components/layout/SidebarCatalog.vue'
-import ModeMenu from '@/components/layout/ModeMenu.vue'
+import ModeToggle from '@/components/layout/ModeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -40,23 +40,23 @@ onBeforeUnmount(() => document.documentElement.classList.remove('doc-scroll'))
 
 const nav = [
   { name: 'dashboard', label: '概览', icon: LayoutDashboard },
-  { name: 'messages', label: '素材', icon: Images },
+  { name: 'messages', label: '归档', icon: Images },
   { name: 'tags', label: '标签', icon: Tags },
   { name: 'settings', label: '设置', icon: Settings },
 ]
 
 const themeLabels: Record<ThemeKey, string> = {
   collection: '素材志',
-  minimal: '简档',
+  minimal: '简约风',
 }
 /* 已定稿待实现的方向：菜单里以禁用项示知路线，不做假开关 */
 const isActive = (name: string) => route.name === name
 const currentTitle = computed(
-  () => nav.find((item) => item.name === route.name)?.label ?? '素材库',
+  () => nav.find((item) => item.name === route.name)?.label ?? '归档库',
 )
 const shouldShowNav = computed(() => !!route.name)
 
-/* 主题名用户定稿（2026-09-02）：minimal 从「标准后台」更名「简档」，与素材志对仗 */
+/* 主题名用户定稿（2026-09-03）：minimal 从「标准后台」更名「简约风」 */
 
 /* C4 侧栏导航滑动指示条：测量激活项位置，指示条以 transform 平移跟随。
    导航项固定 h-9，位置稳定；resize 与路由变化时重测 */
@@ -121,7 +121,7 @@ async function onLogout() {
     >
       <div class="flex flex-none items-center gap-2.5 px-4 pb-3 pt-4">
         <span class="grid h-7 w-7 place-items-center rounded-lg bg-steam font-mono text-[12px] font-bold text-ink-bg">A</span>
-        <span class="text-[14px] font-semibold tracking-wide text-steam">素材库</span>
+        <span class="text-[14px] font-semibold tracking-wide text-steam">归档库</span>
         <span class="ml-auto font-mono text-[9px] tracking-[0.18em] text-steam-dim/50">VAULT</span>
       </div>
 
@@ -185,7 +185,7 @@ async function onLogout() {
             <span class="truncate">{{ themeLabels[currentTheme] }}</span>
             <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="themeMenuOpen && 'rotate-180'" />
           </button>
-          <ModeMenu button-class="h-9 w-9 rounded-lg" menu-class="bottom-full right-0 mb-1.5 [--pop-origin:bottom_right]" />
+          <ModeToggle button-class="h-9 w-9 rounded-lg" />
           <button
             type="button"
             class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
@@ -268,7 +268,7 @@ async function onLogout() {
               </div>
             </Transition>
           </div>
-          <ModeMenu button-class="h-10 w-10 rounded-lg" menu-class="top-full right-0 mt-1 [--pop-origin:top_right]" />
+          <ModeToggle button-class="h-10 w-10 rounded-lg" />
           <button
             type="button"
             class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
@@ -355,7 +355,7 @@ async function onLogout() {
               </Transition>
             </div>
 
-            <ModeMenu button-class="h-9 w-9 rounded-md" menu-class="top-full right-0 mt-1.5 [--pop-origin:top_right]" />
+            <ModeToggle button-class="h-9 w-9 rounded-md" />
 
             <button
               type="button"

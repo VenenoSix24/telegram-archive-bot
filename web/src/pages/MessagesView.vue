@@ -431,6 +431,14 @@ function resetAll() {
   sheetOpen.value = false
 }
 
+/* J6 筛选变更整体淡切：筛选签名进内容区 key，外层 out-in 渐出渐入。
+   用户定稿的降级方案：逐卡 FLIP 在筛选场景新旧卡片混排仍会闪，改为整列表
+   柔和淡出→淡入；翻页加载不换 key，新增卡片仍走 TransitionGroup appear */
+const filterKey = computed(
+  () =>
+    `${q.value}|${mediaType.value}|${rating.value}|${targetFilter.value}|${statusFilter.value}|${tagFilter.value.join('+')}`,
+)
+
 /* 标准后台：点卡片 = 选中并展开详情栏 */
 function openCard(m: Message) {
   selected.value = m
@@ -483,7 +491,7 @@ onBeforeUnmount(() => {
         <!-- 语境条 + 类型 chips：吸顶毛玻璃，内容从其下方滚过 -->
         <div class="sticky top-0 z-20 space-y-2 border-b border-ink-line bg-ink-bg/85 px-4 py-2.5 backdrop-blur-xl backdrop-saturate-150">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h1 class="text-[15px] font-semibold text-steam">素材</h1>
+            <h1 class="text-[15px] font-semibold text-steam">归档</h1>
             <span v-if="data" class="font-mono text-[11px] tabular-nums text-steam-dim">{{ shown }} / {{ data.total }}</span>
             <!-- 焦点态由容器 focus-within 承担（描边 + 轻环，与卡片选中态同一语言）；
                  输入本体 focus:outline-none 压过全局 :focus-visible 外圈（简档下是刺眼默认蓝） -->
@@ -496,7 +504,7 @@ onBeforeUnmount(() => {
                 v-model="q"
                 type="search"
                 :placeholder="L.searchPlaceholder"
-                aria-label="检索素材"
+                aria-label="检索归档"
                 class="w-full min-w-0 bg-transparent text-[13px] text-steam focus:outline-none placeholder:text-steam-dim/60"
               />
               <kbd class="hidden shrink-0 rounded border border-ink-line bg-ink-surface px-1 font-mono text-[10px] text-steam-dim/70 min-[480px]:block">/</kbd>
@@ -611,7 +619,7 @@ onBeforeUnmount(() => {
                 <TransitionGroup
                   v-if="viewMode === 'grid'"
                   ref="listEl"
-                  :key="`grid-${thumbMode}`"
+                  :key="`grid-${thumbMode}-${filterKey}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -631,7 +639,7 @@ onBeforeUnmount(() => {
                 <TransitionGroup
                   v-else
                   ref="listEl"
-                  :key="`list-${thumbMode}`"
+                  :key="`list-${thumbMode}-${filterKey}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -689,7 +697,7 @@ onBeforeUnmount(() => {
         class="fixed inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-line bg-ink-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-2xl lg:hidden"
         role="dialog"
         aria-modal="true"
-        aria-label="筛选素材"
+        aria-label="筛选归档"
       >
         <div class="sticky top-0 z-10 flex items-center gap-1 border-b border-ink-line bg-ink-surface/95 px-3 py-2 backdrop-blur">
           <h2 class="text-[14px] font-semibold text-steam">筛选</h2>
@@ -719,7 +727,7 @@ onBeforeUnmount(() => {
             v-model="q"
             type="search"
             :placeholder="L.searchPlaceholder"
-            aria-label="检索素材"
+            aria-label="检索归档"
             class="w-full min-w-0 bg-transparent text-[13px] text-steam focus:outline-none placeholder:text-steam-dim/60"
           />
         </label>
@@ -818,7 +826,7 @@ onBeforeUnmount(() => {
             v-model="q"
             type="search"
             placeholder="检索本卷…"
-            aria-label="检索素材"
+            aria-label="检索归档"
             class="w-full bg-transparent text-sm text-steam focus:outline-none placeholder:text-steam-dim/70"
           />
         </label>
@@ -938,7 +946,7 @@ onBeforeUnmount(() => {
         </nav>
 
         <p class="mt-8 border-t border-ink-line pt-4 text-xs leading-[2] text-steam-dim/80">
-          条目来自已归档素材，点击即可筛选图录；按 / 快速检索。
+          条目来自归档消息，点击即可筛选图录；按 / 快速检索。
         </p>
       </aside>
 
@@ -1013,6 +1021,7 @@ onBeforeUnmount(() => {
           <!-- 图录：瀑布流（原生装裱）或统一画布（跟随显示偏好） -->
           <TransitionGroup
             v-else-if="data && data.items.length"
+            :key="`plate-${thumbMode}-${filterKey}`"
             tag="div"
             name="v-list"
             appear
