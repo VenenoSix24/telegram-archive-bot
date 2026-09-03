@@ -112,7 +112,7 @@ python -m app
 | `admins` | 管理员用户 ID 列表，命令校验用 |
 | `database.path` | SQLite 路径，默认 `archive.sqlite`（相对路径锚定 `config.yaml` 所在目录） |
 
-完整字段见 [config.example.yaml](../../config.example.yaml)。
+完整字段见 [config.example.yaml](https://github.com/VenenoSix24/telegram-archive-bot/blob/main/config.example.yaml)。
 
 <!-- TODO(config): 旧 README 提到的「搜索链接模板」在当前 config.py / config.example.yaml 中已不存在，确认是否为已删除的遗留功能 -->
 
@@ -122,10 +122,10 @@ python -m app
 
 ```text
 推荐指数：⭐⭐⭐⭐⭐
-#游戏 #GTA5 #MOD
 
-GTA5 NVE 教程
+#存档 #Archive #Nice
 
+收藏的消息再也不乱啦！
 
 来自：
 https://t.me/xxx/123

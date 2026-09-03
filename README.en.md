@@ -113,7 +113,7 @@ Secrets live in `.env` (not committed); everything else lives in `config.yaml`. 
 | `admins` | Admin user ids allowed to run commands |
 | `database.path` | SQLite path, default `archive.sqlite` (relative paths resolve against the directory containing `config.yaml`) |
 
-See [config.example.yaml](../../config.example.yaml) for a full annotated example.
+See [config.example.yaml](https://github.com/VenenoSix24/telegram-archive-bot/blob/main/config.example.yaml) for a full annotated example.
 
 <!-- TODO(config): the old README mentioned a "search link template" config; it no longer exists in config.py / config.example.yaml — confirm it was removed before documenting anything similar -->
 
@@ -123,10 +123,10 @@ The renderer composes every archived message from fixed blocks:
 
 ```text
 推荐指数：⭐⭐⭐⭐⭐        ← rating block (stars)
-#游戏 #GTA5 #MOD          ← tags, space-separated
 
-GTA5 NVE 教程              ← original body
+#存档 #Archive #Nice      ← tags, space-separated
 
+收藏的消息再也不乱啦！      ← original body
 
 来自：                     ← source block
 https://t.me/xxx/123
