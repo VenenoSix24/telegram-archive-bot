@@ -65,7 +65,7 @@ const thumbAspect = computed(() =>
           v-if="showThumb && !thumbFailed"
           v-img-fade
           :src="thumbSrc"
-          :alt="'素材 #' + message.id"
+          :alt="'归档 #' + message.id"
           loading="lazy"
           class="h-full w-full transition-transform duration-300 group-hover:scale-[1.015]"
           :class="[masonry || thumbMode === 'crop' ? 'object-cover' : 'object-contain', isDead && 'opacity-40 grayscale']"
@@ -144,23 +144,21 @@ const thumbAspect = computed(() =>
       </p>
 
       <!-- 图签脚：频道 · 日期 / 标签 -->
-      <div
-        class="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[10px] text-steam-dim"
-        @click.stop
-      >
+      <div class="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[10px] text-steam-dim">
         <span v-if="dateShort || chanLabel" class="shrink-0">
           {{ chanLabel }}<template v-if="dateShort"> · {{ dateShort }}</template>
         </span>
         <span v-if="message.tags.length" class="min-w-0 truncate">#{{ tagNames.join(' #') }}</span>
       </div>
       <!-- 链接与星级同行：标签再长也不把评级挤走 -->
-      <div class="card-foot mt-1.5 flex items-center gap-3" @click.stop>
+      <div class="card-foot mt-1.5 flex items-center gap-3">
         <a
           v-if="archiveUrl"
           :href="archiveUrl"
           target="_blank"
           rel="noopener"
           class="inline-flex items-center gap-1 font-mono text-[10px] text-steam-dim transition-colors hover:text-gold"
+          @click.stop
         >
           <Send class="h-3 w-3" /> 归档
         </a>
@@ -170,6 +168,7 @@ const thumbAspect = computed(() =>
           target="_blank"
           rel="noopener"
           class="inline-flex items-center gap-1 font-mono text-[10px] text-steam-dim transition-colors hover:text-gold"
+          @click.stop
         >
           <Link2 class="h-3 w-3" /> 来源
         </a>
@@ -178,6 +177,7 @@ const thumbAspect = computed(() =>
           :value="message.rating"
           size="sm"
           interactive
+          @click.stop
           @change="(n: number) => emit('rate', n)"
         />
       </div>

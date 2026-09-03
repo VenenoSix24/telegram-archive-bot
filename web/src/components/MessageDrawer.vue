@@ -44,7 +44,7 @@ const innerMessage = computed(() => props.message ?? (props.pane ? null : lastMe
             class="drawer-root relative flex h-full w-full max-w-[500px] flex-col border-l border-ink-line bg-ink-bg shadow-2xl"
             role="dialog"
             aria-modal="true"
-            aria-label="素材详情"
+            aria-label="归档详情"
           >
             <span class="drawer-spine absolute inset-x-0 top-0 z-[2] hidden h-1 bg-gold" aria-hidden="true"></span>
             <MessageDetailInner :message="innerMessage" @close="emit('close')" @update="(m) => emit('update', m)" />
@@ -57,7 +57,7 @@ const innerMessage = computed(() => props.message ?? (props.pane ? null : lastMe
     <aside
       v-else
       class="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-ink-line bg-ink-surface/85 backdrop-blur-xl backdrop-saturate-150"
-      aria-label="素材详情"
+      aria-label="归档详情"
     >
       <MessageDetailInner pane :message="innerMessage" @close="emit('close')" @update="(m) => emit('update', m)" />
     </aside>

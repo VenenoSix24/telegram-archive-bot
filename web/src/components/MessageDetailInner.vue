@@ -269,7 +269,7 @@ async function mutate(
     <div v-if="!message" key="empty" class="flex flex-1 flex-col items-center justify-center gap-2.5 p-10 text-center">
       <ImageIcon class="h-7 w-7 text-steam-dim/40" />
       <p class="text-[12.5px] leading-relaxed text-steam-dim/80">
-        在列表中选择一条素材<br>详情与操作会常驻在这里
+        在列表中选择一条归档条目<br>详情与操作会常驻在这里
       </p>
     </div>
 
@@ -300,7 +300,7 @@ async function mutate(
         >
           <img
             :src="thumbSrc"
-            :alt="'素材 #' + message.id"
+            :alt="'归档 #' + message.id"
             class="mx-auto block max-h-[44vh] w-auto max-w-full object-contain"
             @error="drawerThumbFailed = true"
           />
@@ -432,7 +432,7 @@ async function mutate(
               <span v-if="!activeTags.length" key="empty" class="text-xs text-steam-dim/60">暂无{{ L.tag }}</span>
             </TransitionGroup>
             <p class="mt-1.5 text-xs text-steam-dim/70">
-              {{ tagEditing ? `正在编辑：点${L.tag}即移除，再点铅笔完成。` : `点${L.tag}查看对应素材；误触删除用右上铅笔进入编辑态。` }}
+              {{ tagEditing ? `正在编辑：点${L.tag}即移除，再点铅笔完成。` : `点${L.tag}查看对应归档；误触删除用右上铅笔进入编辑态。` }}
             </p>
 
             <div class="mt-3 flex gap-2">

@@ -85,3 +85,57 @@ def test_apply_preserves_comment(tmp_path):
     text = p.read_text(encoding="utf-8")
     assert "注释应被保留" in text
     assert "interval: 7" in text
+
+
+def test_backup_defaults_when_absent(tmp_path):
+    p = _write(tmp_path)
+    cfg = read_editable_config(p)
+    assert cfg["backup"] == {
+        "enabled": True,
+        "interval_days": 7,
+        "retain": 7,
+        "upload_chat_id": None,
+    }
+
+
+def test_backup_round_trip_and_clamp(tmp_path):
+    p = _write(tmp_path)
+    new = apply_editable_config(
+        p,
+        {
+            "backup": {
+                "enabled": False,
+                "interval_days": 5,  # 白名单外 → 回落 7
+                "retain": "3",
+                "upload_chat_id": "",
+            }
+        },
+    )
+    assert new["backup"] == {
+        "enabled": False,
+        "interval_days": 7,
+        "retain": 3,
+        "upload_chat_id": None,
+    }
+    text = p.read_text(encoding="utf-8")
+    assert "backup:" in text
+    # ruamel 把 None 写成空键；round-trip 读回语义等价（上面断言已覆盖）
+    assert "upload_chat_id:" in text
+
+    apply_editable_config(
+        p,
+        {
+            "backup": {
+                "enabled": True,
+                "interval_days": 30,
+                "retain": 10,
+                "upload_chat_id": -1001234,
+            }
+        },
+    )
+    assert read_editable_config(p)["backup"] == {
+        "enabled": True,
+        "interval_days": 30,
+        "retain": 10,
+        "upload_chat_id": -1001234,
+    }
