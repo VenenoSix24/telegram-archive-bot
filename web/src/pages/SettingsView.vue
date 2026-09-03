@@ -180,6 +180,42 @@ function removeTarget(idx: number) {
   }
 }
 
+/* 删除来源/目标两段确认：手风琴面板在 overflow-hidden 卡片内，浮层会被裁剪，
+   模态对未保存表单的行级删除也太重——沿用就地两步：首击进入待确认态（按钮翻红），
+   窗口期内再点才真删，3 秒未确认自动还原；切换条目或卸载时复位 */
+const CONFIRM_WINDOW_MS = 3000
+const pendingDelete = ref<{ kind: 'source' | 'target'; idx: number } | null>(null)
+let confirmTimer: ReturnType<typeof setTimeout> | undefined
+
+function isDeletePending(kind: 'source' | 'target', idx: number): boolean {
+  return pendingDelete.value?.kind === kind && pendingDelete.value?.idx === idx
+}
+
+function requestRemove(kind: 'source' | 'target', idx: number) {
+  if (isDeletePending(kind, idx)) {
+    clearDeletePending()
+    if (kind === 'source') {
+      expandedSource.value = null
+      removeSource(idx)
+    } else {
+      expandedTarget.value = null
+      removeTarget(idx)
+    }
+    return
+  }
+  clearDeletePending()
+  pendingDelete.value = { kind, idx }
+  confirmTimer = setTimeout(clearDeletePending, CONFIRM_WINDOW_MS)
+}
+
+function clearDeletePending() {
+  clearTimeout(confirmTimer)
+  confirmTimer = undefined
+  pendingDelete.value = null
+}
+
+onBeforeUnmount(clearDeletePending)
+
 function addAdmin() {
   form.admins.push(0)
 }
@@ -525,9 +561,6 @@ async function resetDb() {
                         :aria-label="`来源 ${i + 1} 会话 ID`"
                       />
                       <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，群组或频道均可；在会话里发送 /id 即可查询。</p>
-                      <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
-                        <input v-model="s.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密频道
-                      </label>
                     </div>
                     <div class="min-w-0">
                       <label class="mb-1 block text-xs text-steam-dim" :for="`src-name-${i}`">名称</label>
@@ -592,13 +625,24 @@ async function resetDb() {
                       <p class="mt-1 text-xs text-steam-dim/70">不选则归档到全部目标频道。</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
-                    @click="expandedSource = null; removeSource(i)"
-                  >
-                    <Trash2 class="h-3.5 w-3.5" /> 删除此来源
-                  </button>
+                  <!-- 底部操作行：私密开关居左，删除靠右；删除走两段确认，3 秒内再点才删 -->
+                  <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <label class="flex items-center gap-2 text-xs text-steam-dim">
+                      <input v-model="s.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密频道
+                    </label>
+                    <button
+                      type="button"
+                      :class="cn(
+                        'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors',
+                        isDeletePending('source', i)
+                          ? 'border-destructive bg-destructive text-white'
+                          : 'border-destructive/40 text-destructive hover:bg-destructive/10',
+                      )"
+                      @click="requestRemove('source', i)"
+                    >
+                      <Trash2 class="h-3.5 w-3.5" /> {{ isDeletePending('source', i) ? '确认删除？' : '删除此来源' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -651,9 +695,6 @@ async function resetDb() {
                         :aria-label="`目标 ${i + 1} 会话 ID`"
                       />
                       <p class="mt-1 text-xs text-steam-dim/70">Telegram 会话 ID，频道或群组均可；发送 /id 即可查询。</p>
-                      <label class="mt-2.5 flex items-center gap-2 text-xs text-steam-dim">
-                        <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密会话
-                      </label>
                     </div>
                     <div class="min-w-0">
                       <label class="mb-1 block text-xs text-steam-dim" :for="`tgt-name-${i}`">名称</label>
@@ -680,13 +721,24 @@ async function resetDb() {
                       <p class="mt-1 text-xs text-steam-dim/70">留空则自动获取 Telegram 会话名，也可自定义备注名。</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    class="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-xs text-steam-dim transition-colors hover:text-destructive"
-                    @click="expandedTarget = null; removeTarget(i)"
-                  >
-                    <Trash2 class="h-3.5 w-3.5" /> 删除此目标
-                  </button>
+                  <!-- 底部操作行与来源卡同款：私密开关居左，删除靠右（两段确认） -->
+                  <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <label class="flex items-center gap-2 text-xs text-steam-dim">
+                      <input v-model="target.private" type="checkbox" class="h-4 w-4 accent-gold" /> 私密会话
+                    </label>
+                    <button
+                      type="button"
+                      :class="cn(
+                        'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors',
+                        isDeletePending('target', i)
+                          ? 'border-destructive bg-destructive text-white'
+                          : 'border-destructive/40 text-destructive hover:bg-destructive/10',
+                      )"
+                      @click="requestRemove('target', i)"
+                    >
+                      <Trash2 class="h-3.5 w-3.5" /> {{ isDeletePending('target', i) ? '确认删除？' : '删除此目标' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
