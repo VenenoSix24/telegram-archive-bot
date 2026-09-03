@@ -49,7 +49,7 @@ const templateBlocks = [
 ]
 
 const themeOptions: { key: ThemeKey; label: string }[] = [
-  { key: 'minimal', label: '简档' },
+  { key: 'minimal', label: '简约风' },
   { key: 'collection', label: '素材志' },
 ]
 
@@ -95,6 +95,12 @@ const form = reactive<EditableConfig>({
   thumbnail_media: 'first_video' as 'first_video' | 'first',
   thumbnail_source: 'auto' as 'auto' | 'archive' | 'source',
   message_template: ['rating', 'tags', 'body', 'source'],
+  backup: {
+    enabled: true,
+    interval_days: 7,
+    retain: 7,
+    upload_chat_id: null,
+  },
 })
 
 /** 最终落盘前不覆盖：保存改的是提交内容，页面状态独立 */
@@ -620,7 +626,7 @@ async function resetDb() {
                     <div class="min-w-0">
                       <span class="mb-1 block text-xs text-steam-dim">默认 Tag</span>
                       <TagInput v-model="s.default_tags" />
-                      <p class="mt-1 text-xs text-steam-dim/70">来自此来源的素材尚未打标时，自动加注这些标签。</p>
+                      <p class="mt-1 text-xs text-steam-dim/70">来自此来源的归档尚未打标时，自动加注这些标签。</p>
                     </div>
                     <div class="min-w-0">
                       <span class="mb-1 block text-xs text-steam-dim">目标频道</span>
@@ -790,7 +796,7 @@ async function resetDb() {
 
           <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(6) }">
             <h3 class="mb-1 text-sm font-medium text-steam">归档消息模板</h3>
-            <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
+            <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有归档保持原样。</p>
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
               <div>
                 <!-- 模板区块增删/排序走 TransitionGroup：上下移与隐藏/显示带 FLIP 过渡（B5） -->
@@ -886,6 +892,46 @@ async function resetDb() {
               {{ isVault ? '管理' : '管理 · 权限与检索' }}
             </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">ADMIN</span>
+          </div>
+          <!-- 自动备份：对应 config.yaml backup: 段；保存走同一 putConfig，重启生效 -->
+          <div class="mb-4 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
+            <h3 class="mb-1 text-sm font-medium text-steam">自动备份</h3>
+            <p class="mb-3 text-xs text-steam-dim">按间隔自动备份数据库，产物出现在上方备份列表可随时下载；停机期间顺延，下次启动时补跑。重启进程后生效。</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="flex items-center gap-2 text-sm text-steam">
+                <input v-model="form.backup.enabled" type="checkbox" class="h-4 w-4 accent-gold" />
+                启用定时自动备份
+              </label>
+              <label class="min-w-0">
+                <span class="mb-1 block text-xs text-steam-dim">备份间隔</span>
+                <Select v-model="form.backup.interval_days" class="w-full" :disabled="!form.backup.enabled">
+                  <option :value="1">每天</option>
+                  <option :value="3">每 3 天</option>
+                  <option :value="7">每 7 天</option>
+                  <option :value="30">每 30 天</option>
+                </Select>
+              </label>
+              <label class="min-w-0">
+                <span class="mb-1 block text-xs text-steam-dim">本地保留份数（超出自动清理最旧的）</span>
+                <input
+                  v-model.number="form.backup.retain"
+                  type="number"
+                  min="1"
+                  :disabled="!form.backup.enabled"
+                  class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam focus:border-gold focus:outline-none disabled:opacity-50"
+                />
+              </label>
+              <label class="min-w-0">
+                <span class="mb-1 block text-xs text-steam-dim">上传会话 ID（可选；填了则每次备份后发送文件到该会话）</span>
+                <input
+                  v-model.number="form.backup.upload_chat_id"
+                  type="number"
+                  placeholder="留空不上传"
+                  :disabled="!form.backup.enabled"
+                  class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none disabled:opacity-50"
+                />
+              </label>
+            </div>
           </div>
           <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
             <div class="mb-2 flex items-center justify-between">

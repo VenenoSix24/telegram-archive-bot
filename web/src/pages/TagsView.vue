@@ -94,7 +94,7 @@ onMounted(load)
 
       <div v-else key="empty" class="rounded-xl border border-ink-line bg-ink-surface py-16 text-center">
         <p class="text-[15px] font-semibold text-steam">还没有{{ L.tag }}</p>
-        <p class="mt-2 text-[13px] text-steam-dim">在详情里给素材加{{ L.tag }}后，会汇总在这里。</p>
+        <p class="mt-2 text-[13px] text-steam-dim">在详情里给归档加{{ L.tag }}后，会汇总在这里。</p>
       </div>
     </Transition>
   </div>
@@ -136,7 +136,7 @@ onMounted(load)
 
       <div v-else key="empty" class="border-t border-ink-line py-16 text-center">
         <p class="empty-title font-display text-xl text-steam">尚无类目</p>
-        <p class="mt-2 text-[13px] text-steam-dim">在抽屉里给素材加注标签后，会汇总在这里。</p>
+        <p class="mt-2 text-[13px] text-steam-dim">在抽屉里给归档加注标签后，会汇总在这里。</p>
       </div>
     </Transition>
   </div>

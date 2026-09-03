@@ -46,7 +46,7 @@ const {
         v-if="showThumb && !thumbFailed"
         v-img-fade
         :src="thumbSrc"
-        :alt="'素材 #' + message.id"
+        :alt="'归档 #' + message.id"
         loading="lazy"
         class="h-full w-full object-contain"
         :class="isDead && 'opacity-40 grayscale'"
@@ -98,6 +98,7 @@ const {
       :value="message.rating"
       size="sm"
       interactive
+      @click.stop
       @change="(n: number) => emit('rate', n)"
     />
     <span class="w-11 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-steam-dim">
