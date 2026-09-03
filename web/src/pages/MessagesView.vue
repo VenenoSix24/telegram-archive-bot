@@ -526,6 +526,7 @@ onBeforeUnmount(() => {
                   tag="div"
                   name="v-list"
                   appear
+                  move-class="v-list-move"
                   class="overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm"
                 >
                   <MessageRow
