@@ -25,6 +25,7 @@ import MessageCard from '@/components/MessageCard.vue'
 import MessageCardVault from '@/components/MessageCardVault.vue'
 import MessageRow from '@/components/MessageRow.vue'
 import MessageDrawer from '@/components/MessageDrawer.vue'
+import SidebarCatalog from '@/components/layout/SidebarCatalog.vue'
 import Button from '@/components/ui/Button.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { useCatalogFilters } from '@/composables/useCatalogFilters'
@@ -103,6 +104,10 @@ const gridClass = computed(() =>
     : 'feed-grid',
 )
 const paneOpen = ref(false)
+/* 移动端筛选抽屉：与素材志目录 FAB 同款交互（悬浮钮 + 遮罩 + 面板）。
+   内容直接复用左栏筛选树 SidebarCatalog（同一份 useCatalogFilters 状态），
+   手机上不必再够顶左角的导航钮 */
+const sheetOpen = ref(false)
 const isNarrow = ref(
   typeof window !== 'undefined' ? window.matchMedia('(max-width: 1279px)').matches : false,
 )
@@ -423,6 +428,7 @@ function setTag(name: string) {
 function resetAll() {
   resetFilters()
   tocOpen.value = false
+  sheetOpen.value = false
 }
 
 /* 标准后台：点卡片 = 选中并展开详情栏 */
@@ -434,6 +440,10 @@ function openCard(m: Message) {
 /* 「/」聚焦检索；Esc 优先收目录（素材志）/详情栏（标准后台） */
 function onGlobalKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
+    if (isVault.value && sheetOpen.value) {
+      sheetOpen.value = false
+      return
+    }
     if (tocOpen.value) {
       tocOpen.value = false
       return
@@ -663,6 +673,76 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <!-- 移动端筛选抽屉：遮罩 + 底部面板（内容复用左栏筛选树，同一份筛选状态） -->
+    <Transition name="v-dialog">
+      <div
+        v-if="sheetOpen"
+        class="fixed inset-0 z-40 bg-ink-bg/50 backdrop-blur-[2px] lg:hidden"
+        aria-hidden="true"
+        @click="sheetOpen = false"
+      />
+    </Transition>
+    <Transition name="v-rise">
+      <div
+        v-if="sheetOpen"
+        class="fixed inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-line bg-ink-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-2xl lg:hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="筛选素材"
+      >
+        <div class="sticky top-0 z-10 flex items-center gap-1 border-b border-ink-line bg-ink-surface/95 px-3 py-2 backdrop-blur">
+          <h2 class="text-[14px] font-semibold text-steam">筛选</h2>
+          <button
+            v-if="isFilterActive"
+            type="button"
+            class="ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-ink-line px-2.5 text-xs text-steam-dim transition-colors hover:border-gold/50 hover:text-gold"
+            @click="resetAll"
+          >
+            <RotateCcw class="h-3 w-3" /> {{ L.reset }}
+          </button>
+          <button
+            type="button"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-steam"
+            :class="!isFilterActive && 'ml-auto'"
+            aria-label="收起筛选"
+            @click="sheetOpen = false"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+        <label
+          class="mx-3 mt-3 flex h-9 items-center gap-2 rounded-lg border border-ink-line bg-ink-raised px-2.5 transition-[border-color,box-shadow,background-color] [transition-duration:var(--motion-fast)] [transition-timing-function:var(--ease-standard)] focus-within:border-gold focus-within:bg-ink-surface focus-within:ring-2 focus-within:ring-gold/15"
+        >
+          <Search class="h-4 w-4 shrink-0 text-steam-dim" />
+          <input
+            v-model="q"
+            type="search"
+            :placeholder="L.searchPlaceholder"
+            aria-label="检索素材"
+            class="w-full min-w-0 bg-transparent text-[13px] text-steam focus:outline-none placeholder:text-steam-dim/60"
+          />
+        </label>
+        <SidebarCatalog @navigate="sheetOpen = false" />
+      </div>
+    </Transition>
+
+    <!-- 移动端筛选悬浮钮（避开底栏；再点收起），与素材志目录 FAB 同款 -->
+    <button
+      type="button"
+      class="fixed bottom-24 right-4 z-40 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-ink-line/70 bg-ink-surface/85 text-steam shadow-lg backdrop-blur-xl transition-transform active:scale-95 lg:hidden"
+      :aria-label="sheetOpen ? '收起筛选' : '打开筛选'"
+      :aria-expanded="sheetOpen"
+      @click="sheetOpen = !sheetOpen"
+    >
+      <Transition name="v-dialog" mode="out-in">
+        <component
+          :is="sheetOpen ? X : SlidersHorizontal"
+          :key="sheetOpen ? 'close' : 'open'"
+          class="h-4 w-4"
+        />
+      </Transition>
+    </button>
 
     <!-- 窄屏详情遮罩 -->
     <Transition name="v-dialog">
