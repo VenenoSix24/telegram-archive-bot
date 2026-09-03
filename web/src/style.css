@@ -419,5 +419,7 @@ html.theme-fading *::after {
   visibility: visible;
   transform: translateY(0);
   pointer-events: auto;
-  transition: transform var(--motion-base) var(--ease-pop);
+  /* 贴边滑入不用过冲缓动：ease-pop 会冲过 0 让面板底边离开屏幕下缘，
+     露出几帧背后内容（用户复测反馈）；回弹只适合缩放类弹出 */
+  transition: transform var(--motion-base) var(--ease-standard);
 }
