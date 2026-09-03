@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import socket
 from contextlib import suppress
@@ -36,13 +37,33 @@ async def _serve_web(web_server) -> None:
         logger.error("web server stopped during startup (exit code %s)", exc.code)
 
 
-def _primary_lan_ip() -> str | None:
-    """探测本机局域网 IP（UDP connect 不真正发包），失败返回 None。"""
+def _lan_ips() -> list[str]:
+    """候选局域网 IPv4，只留 RFC1918 私网段。
+
+    来源两路：主机名解析（通常就是真实网卡）+ UDP connect 探测兜底。
+    探测会走默认路由，在挂代理的机器上常抓到 Clash/Surge 的 fake-IP
+    虚拟网卡（198.18.0.0/15），连同 169.254 链路本地一并排除。
+    """
+    candidates: list[str] = []
+    with suppress(OSError):
+        candidates.extend(socket.gethostbyname_ex(socket.gethostname())[2])
     with suppress(OSError):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
-            return sock.getsockname()[0]
-    return None
+            candidates.append(sock.getsockname()[0])
+    seen: set[str] = set()
+    result: list[str] = []
+    for ip in candidates:
+        if ip in seen:
+            continue
+        seen.add(ip)
+        addr = ipaddress.ip_address(ip)
+        if not addr.is_private or addr.is_loopback or addr.is_link_local:
+            continue
+        if addr in ipaddress.ip_network("198.18.0.0/15"):
+            continue
+        result.append(ip)
+    return result
 
 
 def _web_url(config) -> str:
@@ -50,9 +71,9 @@ def _web_url(config) -> str:
     port = config.web_port
     if config.web_host not in ("", "0.0.0.0", "::"):
         return f"http://{config.web_host}:{port}"
-    lan_ip = _primary_lan_ip()
-    if lan_ip:
-        return f"http://{lan_ip}:{port}（监听 {config.web_host or '0.0.0.0'}，局域网可访问）"
+    lan_ips = _lan_ips()
+    if lan_ips:
+        return f"http://{lan_ips[0]}:{port}（监听 {config.web_host or '0.0.0.0'}，局域网可访问）"
     return f"http://127.0.0.1:{port}（监听 {config.web_host or '0.0.0.0'}）"
 
 
