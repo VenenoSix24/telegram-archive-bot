@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
-from app.config import normalize_template_layout
+from app.config import normalize_backup_interval, normalize_template_layout
 
 # round-trip：加载与转储都能保住注释/键序
 _yaml = YAML()
@@ -63,6 +63,7 @@ def read_editable_config(path: Path) -> dict:
     rating = raw.get("rating", {})
     fw = raw.get("forward", {})
     thumbs = raw.get("thumbnails", {})
+    backup_cfg = raw.get("backup", {})
 
     target_channel_id = (tg.get("target_channel") or {}).get("chat_id")
     source_chats = [
@@ -109,6 +110,16 @@ def read_editable_config(path: Path) -> dict:
         "thumbnail_media": thumbs.get("media", "first_video"),
         "thumbnail_source": thumbs.get("source", "auto"),
         "message_template": normalize_template_layout(raw.get("message_template")),
+        "backup": {
+            "enabled": _bool(backup_cfg.get("enabled"), True),
+            "interval_days": normalize_backup_interval(backup_cfg.get("interval_days")),
+            "retain": max(1, int(backup_cfg.get("retain", 7))),
+            "upload_chat_id": (
+                int(backup_cfg["upload_chat_id"])
+                if backup_cfg.get("upload_chat_id") is not None
+                else None
+            ),
+        },
     }
 
 
@@ -166,6 +177,16 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
     raw.setdefault("thumbnails", {})["media"] = merged["thumbnail_media"]
     raw.setdefault("thumbnails", {})["source"] = merged["thumbnail_source"]
     raw["message_template"] = normalize_template_layout(merged["message_template"])
+    backup = merged["backup"]
+    backup_raw = raw.setdefault("backup", {})
+    backup_raw["enabled"] = bool(backup["enabled"])
+    backup_raw["interval_days"] = normalize_backup_interval(backup["interval_days"])
+    backup_raw["retain"] = max(1, int(backup["retain"]))
+    backup_raw["upload_chat_id"] = (
+        int(backup["upload_chat_id"])
+        if backup["upload_chat_id"] not in (None, "")
+        else None
+    )
 
     buf = StringIO()
     _yaml.dump(raw, buf)

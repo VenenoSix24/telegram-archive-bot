@@ -101,7 +101,7 @@ watch(
         v-if="showThumb && !thumbFailed"
         v-img-fade
         :src="thumbSrc"
-        :alt="'素材 #' + message.id"
+        :alt="'归档 #' + message.id"
         loading="lazy"
         class="h-full w-full"
         :class="[masonry || thumbMode === 'crop' ? 'object-cover' : 'object-contain', isDead && 'opacity-40 grayscale']"
@@ -146,7 +146,7 @@ watch(
 
     <!-- 卡身 -->
     <div class="flex flex-1 flex-col p-3">
-      <div class="flex items-center gap-2" @click.stop>
+      <div class="flex items-center gap-2">
         <span class="shrink-0 rounded bg-ink-raised px-1.5 py-0.5 font-mono text-[11px] font-semibold text-steam">
           #{{ message.id }}
         </span>
@@ -158,6 +158,7 @@ watch(
           :value="message.rating"
           size="sm"
           interactive
+          @click.stop
           @change="(n: number) => emit('rate', n)"
         />
       </div>
@@ -169,7 +170,7 @@ watch(
       </h3>
 
       <!-- 标签：两行自适应，放不下的收进 +N（渐变收边） -->
-      <div v-if="message.tags.length" ref="tagWrap" class="relative mt-2 max-h-[48px] overflow-hidden" @click.stop>
+      <div v-if="message.tags.length" ref="tagWrap" class="relative mt-2 max-h-[48px] overflow-hidden">
         <div class="flex flex-wrap gap-1">
           <span
             v-for="t in message.tags"
@@ -192,7 +193,6 @@ watch(
       <div
         class="mt-auto flex items-center gap-3 pt-2.5"
         :class="message.tags.length ? 'mt-2' : ''"
-        @click.stop
       >
         <a
           v-if="archiveUrl"
@@ -202,6 +202,7 @@ watch(
           class="inline-flex items-center gap-1 text-[11px] text-steam-dim transition-colors hover:text-gold"
           :aria-label="`打开归档频道消息 #${message.id}`"
           title="归档频道消息"
+          @click.stop
         >
           <Send class="h-3 w-3" /> 归档
         </a>
@@ -213,6 +214,7 @@ watch(
           class="inline-flex items-center gap-1 text-[11px] text-steam-dim transition-colors hover:text-gold"
           :aria-label="`打开来源消息 #${message.id}`"
           title="来源消息"
+          @click.stop
         >
           <Link2 class="h-3 w-3" /> 来源
         </a>

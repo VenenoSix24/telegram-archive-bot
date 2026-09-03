@@ -93,6 +93,12 @@ export interface EditableConfig {
   thumbnail_media: 'first_video' | 'first'
   thumbnail_source: 'auto' | 'archive' | 'source'
   message_template: string[]
+  backup: {
+    enabled: boolean
+    interval_days: number
+    retain: number
+    upload_chat_id: number | null
+  }
 }
 
 export interface Stats {
