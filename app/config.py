@@ -21,6 +21,10 @@ class ConfigError(Exception):
 
 DEFAULT_TEMPLATE_LAYOUT = ["rating", "tags", "body", "source"]
 
+# 自动备份间隔白名单（天）；缺失或非法一律回退默认值
+ALLOWED_BACKUP_INTERVALS = (1, 3, 7, 30)
+DEFAULT_BACKUP_INTERVAL_DAYS = 7
+
 
 @dataclass(frozen=True)
 class TargetChannel:
@@ -62,6 +66,10 @@ class Config:
     thumbnail_media: str = "first_video"
     thumbnail_source: str = "auto"
     message_template: list[str] = field(default_factory=lambda: list(DEFAULT_TEMPLATE_LAYOUT))
+    backup_enabled: bool = True
+    backup_interval_days: int = DEFAULT_BACKUP_INTERVAL_DAYS
+    backup_retain: int = 7
+    backup_upload_chat_id: int | None = None
 
     def targets_for(self, source_chat_id: int) -> list[int]:
         for source in self.source_chats:
@@ -113,6 +121,15 @@ def _env_bool(name: str, *, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def normalize_backup_interval(value) -> int:
+    """自动备份间隔白名单校验：缺失/非法一律回退默认 7 天。"""
+    try:
+        interval = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_BACKUP_INTERVAL_DAYS
+    return interval if interval in ALLOWED_BACKUP_INTERVALS else DEFAULT_BACKUP_INTERVAL_DAYS
+
+
 def normalize_template_layout(value) -> list[str]:
     """Return a valid ordered message-layout snapshot with body always present."""
     if not isinstance(value, list):
@@ -158,6 +175,7 @@ def load_config(config_path: str | Path | None = None) -> Config:
     tags_cfg = raw.get("tags", {})
     rating = raw.get("rating", {})
     thumbs = raw.get("thumbnails", {})
+    backup_cfg = raw.get("backup", {})
 
     source_chats = [
         SourceChat(
@@ -264,4 +282,12 @@ def load_config(config_path: str | Path | None = None) -> Config:
         thumbnail_media=thumbs.get("media", "first_video"),
         thumbnail_source=thumbs.get("source", "auto"),
         message_template=normalize_template_layout(raw.get("message_template")),
+        backup_enabled=bool(backup_cfg.get("enabled", True)),
+        backup_interval_days=normalize_backup_interval(backup_cfg.get("interval_days")),
+        backup_retain=max(1, int(backup_cfg.get("retain", 7))),
+        backup_upload_chat_id=(
+            int(backup_cfg["upload_chat_id"])
+            if backup_cfg.get("upload_chat_id") is not None
+            else None
+        ),
     )

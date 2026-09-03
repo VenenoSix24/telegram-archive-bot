@@ -32,6 +32,10 @@ def backup_database(path: Path) -> Path:
     target = sqlite3.connect(destination)
     try:
         source.backup(target)
+    except Exception:
+        # 备份中途失败时清掉半成品，避免 0 字节 .bak 混进 Web 备份列表
+        destination.unlink(missing_ok=True)
+        raise
     finally:
         target.close()
         source.close()
