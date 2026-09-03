@@ -24,6 +24,7 @@ import Select from '@/components/ui/Select.vue'
 import TagInput from '@/components/ui/TagInput.vue'
 import { toastError, toastSuccess } from '@/composables/useToast'
 import { displayChatId, sizeLabel } from '@/lib/format'
+import { STAGGER_CAP, STAGGER_STEP, staggerDelay } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import {
   currentMode, currentTheme, setMode, setTheme,
@@ -96,6 +97,15 @@ const form = reactive<EditableConfig>({
 /** 最终落盘前不覆盖：保存改的是提交内容，页面状态独立 */
 let saved: EditableConfig | null = null
 
+/* 进场 stagger（B6）：仅页面首次载入的进场逐项延迟；之后新增/删除条目的挂载
+   立即出现、不吃延迟（与消息页 revealStagger 同约定，筛选类交互不重播 stagger） */
+const revealStagger = ref(true)
+
+/** 来源/目标卡片进场延迟：首屏排在本章节锚点之后顺次浮现，子项不抢跑章节标题 */
+function enterDelay(base: number, index: number): { animationDelay: string } | undefined {
+  return revealStagger.value ? { animationDelay: staggerDelay(base + index) } : undefined
+}
+
 /* 有改动才浮出保存栏，长表单不用滚到底找按钮 */
 const dirty = computed(() => saved !== null && JSON.stringify(form) !== JSON.stringify(saved))
 
@@ -113,6 +123,8 @@ async function load() {
     error.value = e instanceof Error ? e.message : '配置读取失败'
   } finally {
     loading.value = false
+    /* 收尾波次入场完毕（cap*step 延迟 + 一段动画时长）后再摘除逐项延迟 */
+    setTimeout(() => (revealStagger.value = false), STAGGER_CAP * STAGGER_STEP + 400)
   }
 }
 
@@ -350,7 +362,8 @@ async function resetDb() {
 
 <template>
   <div class="mx-auto px-4 py-8 pb-28 sm:px-6" :class="isVault ? 'max-w-5xl' : 'max-w-4xl'">
-    <header class="mb-5">
+    <!-- 进场 stagger（B6）：报眉 → 锚点导航 → 各章节依次浮现，与其他页面同节奏 -->
+    <header class="mb-5 anim-fade-up">
       <h1 class="font-display text-2xl font-bold text-steam min-[480px]:text-3xl" :class="isVault ? 'tracking-normal' : 'tracking-[0.18em]'">
         {{ isVault ? '设置' : '设 置' }}
       </h1>
@@ -359,7 +372,7 @@ async function resetDb() {
     </header>
 
     <!-- 章节锚点：长表单快速跳转 -->
-    <nav class="mb-7 flex flex-wrap gap-2" aria-label="章节导航">
+    <nav class="mb-7 flex flex-wrap gap-2 anim-fade-up" :style="{ animationDelay: staggerDelay(1) }" aria-label="章节导航">
       <button
         v-for="a in anchors"
         :key="a.id"
@@ -385,7 +398,7 @@ async function resetDb() {
       </p>
 
       <!-- 外观：纯前端即时生效，放最前 -->
-      <section id="sec-theme" class="mb-8 scroll-mt-20">
+      <section id="sec-theme" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(2) }">
         <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
           <Palette class="h-3.5 w-3.5 self-center text-gold" />
           <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">外观</h2>
@@ -466,7 +479,7 @@ async function resetDb() {
 
       <form @submit.prevent="save">
         <!-- 一 · 输入：列表行 + 展开编辑 -->
-        <section id="sec-sources" class="mb-8 scroll-mt-20">
+        <section id="sec-sources" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(3) }">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
             <span v-if="!isVault" class="font-display text-sm font-bold text-gold">一</span>
             <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
@@ -478,7 +491,7 @@ async function resetDb() {
             </Button>
           </div>
 
-          <div v-for="(s, i) in form.source_chats" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface">
+          <div v-for="(s, i) in form.source_chats" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface anim-fade-up" :style="enterDelay(4, i)">
             <!-- 收起态：概要行，一眼看清有几个源、各自接什么 -->
             <button
               type="button"
@@ -594,7 +607,7 @@ async function resetDb() {
         </section>
 
         <!-- 二 · 输出 -->
-        <section id="sec-targets" class="mb-8 scroll-mt-20">
+        <section id="sec-targets" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(4) }">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
             <span v-if="!isVault" class="font-display text-sm font-bold text-gold">二</span>
             <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
@@ -606,7 +619,7 @@ async function resetDb() {
             </Button>
           </div>
           <!-- 与来源同款：概要行 + 手风琴展开编辑 -->
-          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface">
+          <div v-for="(target, i) in form.target_channels" :key="i" class="mb-2 overflow-hidden rounded-xl border border-ink-line bg-ink-surface anim-fade-up" :style="enterDelay(5, i)">
             <button
               type="button"
               class="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-ink-raised/50"
@@ -683,7 +696,7 @@ async function resetDb() {
         </section>
 
         <!-- 三 · 版式 -->
-        <section id="sec-template" class="mb-8 scroll-mt-20">
+        <section id="sec-template" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(5) }">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
             <span v-if="!isVault" class="font-display text-sm font-bold text-gold">三</span>
             <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
@@ -692,7 +705,7 @@ async function resetDb() {
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">TEMPLATE</span>
           </div>
 
-          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4">
+          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(6) }">
             <h3 class="mb-1 text-sm font-medium text-steam">归档消息模板</h3>
             <p class="mb-3 text-xs leading-5 text-steam-dim">调整区块顺序或隐藏可选区块。保存后仅影响新归档的消息，已有素材保持原样。</p>
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,.8fr)]">
@@ -721,7 +734,7 @@ async function resetDb() {
             </div>
           </div>
 
-          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4">
+          <div class="mb-5 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs text-steam-dim" for="fwd-interval">发送间隔（秒）</label>
@@ -763,7 +776,7 @@ async function resetDb() {
             </div>
           </div>
 
-          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(8) }">
             <h3 class="mb-3 text-sm font-medium text-steam">缩略图</h3>
             <div class="grid gap-4 sm:grid-cols-2">
               <label class="min-w-0">
@@ -783,7 +796,7 @@ async function resetDb() {
         </section>
 
         <!-- 四 · 管理 -->
-        <section id="sec-admin" class="mb-8 scroll-mt-20">
+        <section id="sec-admin" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(6) }">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
             <span v-if="!isVault" class="font-display text-sm font-bold text-gold">四</span>
             <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
@@ -791,7 +804,7 @@ async function resetDb() {
             </h2>
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">ADMIN</span>
           </div>
-          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
             <div class="mb-2 flex items-center justify-between">
               <h3 class="text-sm font-medium text-steam">管理员 ID</h3>
               <Button type="button" variant="secondary" size="sm" @click="addAdmin">
@@ -819,7 +832,7 @@ async function resetDb() {
         </section>
 
         <!-- 五 · 备份与维护 -->
-        <section id="sec-backups" class="mb-8 scroll-mt-20">
+        <section id="sec-backups" class="mb-8 scroll-mt-20 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
           <div class="mb-4 flex items-baseline gap-3 border-b border-ink-line pb-2">
             <span v-if="!isVault" class="font-display text-sm font-bold text-gold">五</span>
             <h2 class="font-display text-base font-bold text-steam" :class="isVault ? 'tracking-normal' : 'tracking-[0.2em]'">
@@ -828,7 +841,7 @@ async function resetDb() {
             <span class="font-mono text-[9px] tracking-[0.26em] text-steam-dim">BACKUPS</span>
           </div>
 
-          <div class="rounded-xl border border-ink-line bg-ink-surface p-4">
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(8) }">
             <p class="mb-3 text-xs leading-5 text-steam-dim">
               恢复与导入前都会先自动备份当前文件，完成后需重启进程。备份可下载保存到本地，也可单个删除。
             </p>
@@ -838,7 +851,7 @@ async function resetDb() {
             </div>
 
             <!-- 配置备份折叠组 -->
-            <div class="mt-4 border-t border-ink-line pt-1">
+            <div class="mt-4 border-t border-ink-line pt-1 anim-fade-up" :style="{ animationDelay: staggerDelay(9) }">
               <button
                 type="button"
                 class="flex w-full cursor-pointer items-center gap-2 py-2.5 text-left text-sm text-steam transition-colors hover:text-gold"
@@ -874,7 +887,7 @@ async function resetDb() {
             </div>
 
             <!-- 数据库备份折叠组 -->
-            <div class="border-t border-ink-line pt-1">
+            <div class="border-t border-ink-line pt-1 anim-fade-up" :style="{ animationDelay: staggerDelay(10) }">
               <button
                 type="button"
                 class="flex w-full cursor-pointer items-center gap-2 py-2.5 text-left text-sm text-steam transition-colors hover:text-gold"
@@ -924,7 +937,7 @@ async function resetDb() {
           </div>
 
           <!-- 危险区：与常规操作隔离 -->
-          <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+          <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(11) }">
             <TriangleAlert class="h-4 w-4 shrink-0 text-destructive" />
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-destructive">重置数据库</p>
