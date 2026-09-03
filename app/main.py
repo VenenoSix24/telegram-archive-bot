@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from contextlib import suppress
 from pathlib import Path
 
@@ -34,6 +35,26 @@ async def _serve_web(web_server) -> None:
         logger.error("web server stopped during startup (exit code %s)", exc.code)
 
 
+def _primary_lan_ip() -> str | None:
+    """探测本机局域网 IP（UDP connect 不真正发包），失败返回 None。"""
+    with suppress(OSError):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    return None
+
+
+def _web_url(config) -> str:
+    """横幅展示的 Web 地址；监听 0.0.0.0 时给局域网 IP，避免误导为仅本机可访问。"""
+    port = config.web_port
+    if config.web_host not in ("", "0.0.0.0", "::"):
+        return f"http://{config.web_host}:{port}"
+    lan_ip = _primary_lan_ip()
+    if lan_ip:
+        return f"http://{lan_ip}:{port}（监听 {config.web_host or '0.0.0.0'}，局域网可访问）"
+    return f"http://127.0.0.1:{port}（监听 {config.web_host or '0.0.0.0'}）"
+
+
 def _startup_banner(config, chats: dict[int, str]) -> str:
     """启动横幅：一次性集中展示使用者关心的全部运行信息。"""
     lines = [
@@ -42,8 +63,7 @@ def _startup_banner(config, chats: dict[int, str]) -> str:
         "  Telegram Archive Bot",
     ]
     if config.web_enabled:
-        host = "127.0.0.1" if config.web_host in ("", "0.0.0.0") else config.web_host
-        lines.append(f"  Web 后台    http://{host}:{config.web_port}")
+        lines.append(f"  Web 后台    {_web_url(config)}")
     lines.append(f"  数据库      {Path(config.database_path).name}")
     lines.append(f"  日志        {config_dir() / 'logs'}")
     lines.append("  来源 → 目标")
