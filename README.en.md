@@ -106,6 +106,10 @@ Secrets live in `.env` (not committed); everything else lives in `config.yaml`. 
 | `thumbnails.media` | Which album item becomes the thumbnail: `first_video` (default) / `first` |
 | `thumbnails.source` | Thumbnail source: `auto` (default, archive preferred, fall back to source) / `archive` / `source` |
 | `message_template` | Block order, default `[rating, tags, body, source]`; `body` is mandatory; changes only affect messages archived afterwards |
+| `backup.enabled` | Scheduled auto-backup switch, default `true` |
+| `backup.interval_days` | Backup interval in days: `1` / `3` / `7` (default) / `30`; runs while the app is up, catches up on next start |
+| `backup.retain` | How many newest local backups to keep, default `7` |
+| `backup.upload_chat_id` | Optional Telegram chat ID to receive each backup file; upload failures never affect the local backup |
 | `admins` | Admin user ids allowed to run commands |
 | `database.path` | SQLite path, default `archive.sqlite` (relative paths resolve against the directory containing `config.yaml`) |
 
@@ -164,7 +168,9 @@ One process hosts both the Telegram pipeline and a FastAPI web app (Vue 3 SPA). 
 | Tags | Tag statistics |
 | Settings | Config editor (auto-backup on save, restart to apply), config / database backup, download, restore, import, and database reset |
 
-Two UI themes (`collection` and `minimal`), each with a dark mode.
+Two UI themes — `minimal` (Jiandang, the default) and `collection` (Sucizhi) — each with selectable accent palettes; display mode supports light / dark / follow-system.
+
+**Scheduled auto-backup**: the database is backed up automatically every 1 / 3 / 7 (default) / 30 days while the app runs (missed schedules run on next startup); local retention count is configurable, and backups can also be uploaded to a Telegram chat of your choice.
 
 ### Running locally
 
