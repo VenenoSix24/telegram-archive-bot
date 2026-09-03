@@ -2,7 +2,7 @@
 
 <p align="left">
   <!-- TODO(badge): 仓库公开后补充 CI / coverage 徽章的真实链接 -->
-  <img alt="version" src="https://img.shields.io/badge/version-0.4.0-blue" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.5.0-blue" />
   <img alt="python" src="https://img.shields.io/badge/python-3.11%2B-informational" />
   <img alt="vue" src="https://img.shields.io/badge/web-Vue%203%20%C2%B7%20Tailwind-42b883" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green" />
