@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -150,6 +151,73 @@ def test_logout_invalidates_session(tmp_path):
 def test_health_requires_login(tmp_path):
     with _client(tmp_path) as client:
         assert client.get("/api/v1/health").status_code == 401
+
+
+def _utc_text(local_dt: datetime) -> str:
+    """本地墙钟时间 → SQLite CURRENT_TIMESTAMP 的 UTC 文本（YYYY-MM-DD HH:MM:SS）。"""
+    return local_dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _seeded_trend_db(tmp_path) -> str:
+    """归档时间按本地日散布的库：今天 2 条、昨天 1 条、40 天前 1 条，
+    另有今天 1 条 processed（不计入趋势）。"""
+    db = _make_schema_db(tmp_path, name="trend.sqlite")
+    noon = datetime.now().astimezone().replace(hour=12, minute=0, second=0, microsecond=0)
+    rows = [
+        (1, noon, "archived"),
+        (2, noon, "archived"),
+        (3, noon - timedelta(days=1), "archived"),
+        (4, noon - timedelta(days=40), "archived"),
+        (5, noon, "processed"),
+    ]
+    raw = sqlite3.connect(db)
+    for mid, at, status in rows:
+        raw.execute(
+            "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, "
+            "status, created_at) VALUES (?, ?, ?, 'text', ?, ?)",
+            (mid, -1001, mid, status, _utc_text(at)),
+        )
+    raw.commit()
+    raw.close()
+    return db
+
+
+def test_stats_trend_counts_by_local_day(tmp_path):
+    """每日归档量按本地日分组：只计 archived、缺数日补 0、窗口外不出现。"""
+    db = _seeded_trend_db(tmp_path)
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/stats/trend?days=5").json()
+    today = datetime.now().astimezone().date()
+    assert [i["date"] for i in body["items"]] == [
+        (today - timedelta(days=n)).isoformat() for n in (4, 3, 2, 1, 0)
+    ]
+    assert [i["count"] for i in body["items"]] == [0, 0, 0, 1, 2]
+
+
+def test_stats_trend_default_and_clamp(tmp_path):
+    """?days 缺省 30，越界收敛到 1..90。"""
+    db = _seeded_trend_db(tmp_path)
+    with _logged_client(db) as client:
+        assert len(client.get("/api/v1/stats/trend").json()["items"]) == 30
+        assert len(client.get("/api/v1/stats/trend?days=0").json()["items"]) == 1
+        assert len(client.get("/api/v1/stats/trend?days=999").json()["items"]) == 90
+
+
+def test_stats_trend_requires_login(tmp_path):
+    db = _seeded_trend_db(tmp_path)
+    cfg = _config(database_path=db, web_token="secret-token")
+    with TestClient(create_app(cfg)) as client:
+        assert client.get("/api/v1/stats/trend").status_code == 401
+
+
+def test_stats_trend_empty_database(tmp_path):
+    """空库：全 0 的连续日期序列，不抛错。"""
+    db = _make_schema_db(tmp_path, name="empty.sqlite")
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/stats/trend").json()
+    assert len(body["items"]) == 30
+    assert all(i["count"] == 0 for i in body["items"])
+    assert len({i["date"] for i in body["items"]}) == 30
 
 
 def _logged_client(db_path, token="secret-token"):

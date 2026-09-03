@@ -23,6 +23,11 @@ def build_router(ctx: WebContext) -> APIRouter:
             chat_names=ctx.chat_names,
         )
 
+    @router.get("/stats/trend")
+    def stats_trend(days: int = 30) -> dict:
+        """近 N 天归档趋势（?days=，缺省 30，服务端收敛到 1..90）。"""
+        return queries.trend_body(ctx.database_path, days=days)
+
     @router.get("/tags")
     def list_tags() -> dict:
         with queries.open_connection(ctx.database_path) as conn:

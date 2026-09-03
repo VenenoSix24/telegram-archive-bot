@@ -116,3 +116,13 @@ export interface TagsResponse {
   items: TagCount[]
   total: number
 }
+
+/** 近 N 天归档趋势的单日点：date 为本地日 ISO 文本（YYYY-MM-DD） */
+export interface TrendPoint {
+  date: string
+  count: number
+}
+
+export interface TrendResponse {
+  items: TrendPoint[]
+}
