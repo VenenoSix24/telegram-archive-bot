@@ -332,6 +332,7 @@ async function load() {
     })
     if (generation === requestGeneration) {
       data.value = result
+      swapTick.value++
       if (firstLoad && result.items.length) {
         firstLoad = false
         revealStagger.value = true
@@ -431,13 +432,11 @@ function resetAll() {
   sheetOpen.value = false
 }
 
-/* J6 筛选变更整体淡切：筛选签名进内容区 key，外层 out-in 渐出渐入。
-   用户定稿的降级方案：逐卡 FLIP 在筛选场景新旧卡片混排仍会闪，改为整列表
-   柔和淡出→淡入；翻页加载不换 key，新增卡片仍走 TransitionGroup appear */
-const filterKey = computed(
-  () =>
-    `${q.value}|${mediaType.value}|${rating.value}|${targetFilter.value}|${statusFilter.value}|${tagFilter.value.join('+')}`,
-)
+/* K5 筛选变更整体淡切：key 挂在「数据到达」而非「点击筛选」——上一版绑筛选
+   签名，点击瞬间旧列表就淡出淡入一遍（内容未变=白闪），300ms 后数据到达又
+   原地重排（第二闪）。现在 swapTick 只在 load() 换入新数据时递增，旧列表
+   完整保留到新数据回来，一次 out-in 完成整列替换；翻页不换 key 不重播 */
+const swapTick = ref(0)
 
 /* 标准后台：点卡片 = 选中并展开详情栏 */
 function openCard(m: Message) {
@@ -619,7 +618,7 @@ onBeforeUnmount(() => {
                 <TransitionGroup
                   v-if="viewMode === 'grid'"
                   ref="listEl"
-                  :key="`grid-${thumbMode}-${filterKey}`"
+                  :key="`grid-${thumbMode}-${swapTick}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -639,7 +638,7 @@ onBeforeUnmount(() => {
                 <TransitionGroup
                   v-else
                   ref="listEl"
-                  :key="`list-${thumbMode}-${filterKey}`"
+                  :key="`list-${thumbMode}-${swapTick}`"
                   tag="div"
                   name="v-list"
                   appear
@@ -691,7 +690,7 @@ onBeforeUnmount(() => {
         @click="sheetOpen = false"
       />
     </Transition>
-    <Transition name="v-rise">
+    <Transition name="v-sheet">
       <div
         v-if="sheetOpen"
         class="fixed inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-line bg-ink-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-2xl lg:hidden"
@@ -1021,7 +1020,7 @@ onBeforeUnmount(() => {
           <!-- 图录：瀑布流（原生装裱）或统一画布（跟随显示偏好） -->
           <TransitionGroup
             v-else-if="data && data.items.length"
-            :key="`plate-${thumbMode}-${filterKey}`"
+            :key="`plate-${thumbMode}-${swapTick}`"
             tag="div"
             name="v-list"
             appear

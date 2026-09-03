@@ -586,6 +586,57 @@ def test_delete_backup_removes_file(tmp_path):
     assert not backup_path.exists()
 
 
+def test_run_backup_now(tmp_path):
+    """POST /ops/backups/run 立即落盘一份库备份；无调度器时走本地回退。"""
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        resp = client.post("/api/v1/ops/backups/run")
+        assert resp.status_code == 200
+        name = resp.json()["name"]
+        assert name.endswith(".bak")
+
+        listed = client.get("/api/v1/ops/backups").json()["items"]
+        assert name in [item["name"] for item in listed]
+        assert (Path(db).parent / name).exists()
+
+
+def test_run_backup_now_uses_scheduler(tmp_path):
+    """app.state.auto_backup 存在时走调度器（run_once 被调用）。"""
+    from types import SimpleNamespace
+
+    db = _seeded_messages_db(tmp_path)
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE schema_version (version TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+
+    calls = []
+
+    async def fake_run_once():
+        calls.append(1)
+        return Path(db).with_name(f"{Path(db).name}.manual.bak")
+
+    scheduler = SimpleNamespace(run_once=fake_run_once)
+    app = create_app(cfg, auto_backup=scheduler)
+
+    with TestClient(app) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        resp = client.post("/api/v1/ops/backups/run")
+        assert resp.status_code == 200
+        assert resp.json()["name"].endswith(".manual.bak")
+    assert calls == [1]
+
+
 def test_delete_backup_rejects_bad_name(tmp_path):
     """非法名与不存在的备份分别 400 / 404，不动其他文件。"""
     db = _seeded_messages_db(tmp_path)
