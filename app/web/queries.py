@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -268,3 +269,25 @@ def stats_body(
                 ).fetchone()["n"] if has_target_table else 0,
             },
         }
+
+
+def trend_body(database_path: str, days: int = 30) -> dict:
+    """近 N 天归档趋势：每日归档量按「本地日」分组，缺数的日补 0 保证轴连续。
+
+    created_at 是 SQLite CURRENT_TIMESTAMP（UTC 文本），date(..., 'localtime')
+    转本地日，与前端 formatTime「按 UTC 解析、转本地时区展示」的口径一致；
+    只统计 status='archived'，与概览「已归档」同一口径。空库自然得到全 0 序列。
+    """
+    days = max(1, min(90, days))
+    today = datetime.now().astimezone().date()
+    start = today - timedelta(days=days - 1)
+    with open_connection(database_path) as conn:
+        rows = conn.execute(
+            "SELECT date(created_at, 'localtime') AS d, COUNT(*) AS n "
+            "FROM messages WHERE status='archived' "
+            "GROUP BY d HAVING d >= ?",
+            (start.isoformat(),),
+        ).fetchall()
+    counts = {row["d"]: row["n"] for row in rows}
+    dates = [(start + timedelta(days=i)).isoformat() for i in range(days)]
+    return {"items": [{"date": d, "count": counts.get(d, 0)} for d in dates]}

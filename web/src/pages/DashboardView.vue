@@ -4,8 +4,10 @@ import { FileText, Film, Headphones, Image as ImageIcon, Music, Sticker } from '
 import { getStats, getTags, listMessages } from '@/lib/api'
 import type { Message, Stats, TagCount } from '@/lib/types'
 import MessageDrawer from '@/components/MessageDrawer.vue'
+import TrendChart from '@/components/TrendChart.vue'
 import Button from '@/components/ui/Button.vue'
 import { displayChatId, durationLabel, shortDate, splitBodyTitleDesc } from '@/lib/format'
+import { staggerDelay } from '@/lib/motion'
 import { useAspectRatio } from '@/composables/useAspectRatio'
 import { useCountUp } from '@/composables/useCountUp'
 import { isVault, typeLabel as vocabTypeLabel, useVocab } from '@/lib/vocab'
@@ -190,6 +192,7 @@ onMounted(load)
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div v-for="i in 4" :key="i" class="h-[86px] animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
       </div>
+      <div class="mt-3 h-52 animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
       <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div class="h-44 animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
         <div class="h-44 animate-pulse rounded-xl border border-ink-line bg-ink-surface" />
@@ -227,7 +230,10 @@ onMounted(load)
         </div>
       </div>
 
-      <div class="anim-fade-up mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2" :style="{ animationDelay: '90ms' }">
+      <!-- 近 30 天归档趋势 -->
+      <TrendChart class="anim-fade-up mt-3" :style="{ animationDelay: staggerDelay(3) }" />
+
+      <div class="anim-fade-up mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2" :style="{ animationDelay: staggerDelay(5) }">
         <!-- 队列 -->
         <section class="rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="队列状态">
           <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
@@ -287,7 +293,7 @@ onMounted(load)
       </div>
 
       <!-- 最近添加 -->
-      <section class="anim-fade-up mt-3 overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="最近添加" :style="{ animationDelay: '150ms' }">
+      <section class="anim-fade-up mt-3 overflow-hidden rounded-xl border border-ink-line bg-ink-surface shadow-sm" aria-label="最近添加" :style="{ animationDelay: staggerDelay(7) }">
         <div class="flex items-center border-b border-ink-line px-4 py-2.5 text-[13px] font-semibold text-steam">
           最近添加
           <RouterLink
