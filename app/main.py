@@ -177,6 +177,7 @@ async def _run() -> int:
             indexer=indexer,
             chat_names=chats,
             queue=queue,
+            auto_backup=auto_backup,
         )
         web_task = asyncio.create_task(_serve_web(web_server))
 

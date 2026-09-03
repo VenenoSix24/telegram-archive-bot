@@ -56,6 +56,23 @@ def build_router(ctx: WebContext) -> APIRouter:
             str(path), filename=path.name, media_type="application/octet-stream"
         )
 
+    @router.post("/ops/backups/run")
+    async def run_backup_now(request: Request) -> dict:
+        """立即备份一次（本地落盘 + 按配置可选上传）；设置页「立即备份」用。
+
+        常驻进程走 AutoBackupScheduler.run_once（复用校验/上传/保留清理）；
+        devserver 等无调度器场景回退纯本地备份。"""
+        scheduler = getattr(request.app.state, "auto_backup", None)
+        if scheduler is not None:
+            path = await scheduler.run_once()
+        else:
+            path = backup_database(Path(ctx.database_path))
+            validate_database_backup(path)
+        if path is None:
+            raise HTTPException(status_code=500, detail="backup failed, see logs")
+        logger.info("backup %s created via web (manual run)", path.name)
+        return {"ok": True, "name": path.name}
+
     @router.delete("/ops/backups/{name}")
     def delete_backup(name: str) -> dict:
         path, kind = _find_backup(name)
