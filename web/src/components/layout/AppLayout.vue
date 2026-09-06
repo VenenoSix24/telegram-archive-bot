@@ -175,7 +175,7 @@ async function onLogout() {
         <div class="flex items-center gap-1">
           <button
             type="button"
-            class="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+            class="ml-auto flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
             aria-haspopup="menu"
             :aria-expanded="themeMenuOpen"
             title="切换主题"
