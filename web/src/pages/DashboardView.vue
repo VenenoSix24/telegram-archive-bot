@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { FileText, Film, Headphones, Image as ImageIcon, Music, Sticker } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  Archive as ArchiveIcon,
+  FileText,
+  Film,
+  Headphones,
+  Image as ImageIcon,
+  Music,
+  PencilLine,
+  Sticker,
+} from 'lucide-vue-next'
 import { getActivity, getStats, getTags, listMessages } from '@/lib/api'
 import type { ActivityEvent, Message, Stats, TagCount } from '@/lib/types'
 import MessageDrawer from '@/components/MessageDrawer.vue'
@@ -161,6 +171,17 @@ function eventText(e: ActivityEvent): string {
   return e.source ? `${verb}「${e.title}」← ${e.source}` : `${verb}「${e.title}」`
 }
 
+/* 事件类型的图标与配色：归档=收件金、更新=铅笔中性、失败=警示红 */
+const KIND_STYLE: Record<ActivityEvent['kind'], { icon: typeof ArchiveIcon; chip: string; text: string }> = {
+  archived: { icon: ArchiveIcon, chip: 'bg-gold/12 text-gold', text: 'text-steam' },
+  updated: { icon: PencilLine, chip: 'bg-ink-raised text-steam-dim', text: 'text-steam-dim' },
+  failure: { icon: AlertTriangle, chip: 'bg-destructive/12 text-destructive', text: 'text-destructive' },
+}
+
+function kindStyle(e: ActivityEvent) {
+  return KIND_STYLE[e.kind] ?? KIND_STYLE.updated
+}
+
 function eventTime(at: string): string {
   const d = new Date(at.endsWith('Z') ? at : at.replace(' ', 'T') + 'Z')
   if (Number.isNaN(d.getTime())) return at
@@ -293,9 +314,16 @@ onMounted(load)
                 :key="i"
                 class="flex items-start gap-2.5 border-b border-ink-line/40 px-4 py-1.5 text-[12px] last:border-b-0"
               >
-                <span class="shrink-0 pt-px font-mono text-[10.5px] tabular-nums text-steam-dim/60">{{ eventTime(e.at) }}</span>
-                <span class="min-w-0 flex-1 break-words" :class="e.kind === 'failure' ? 'text-destructive' : 'text-steam-dim'">
+                <span
+                  class="mt-px grid size-5 shrink-0 place-items-center rounded-md"
+                  :class="kindStyle(e).chip"
+                  :aria-label="e.kind"
+                >
+                  <component :is="kindStyle(e).icon" class="size-3" />
+                </span>
+                <span class="min-w-0 flex-1 break-words leading-5" :class="kindStyle(e).text">
                   {{ eventText(e) }}
+                  <span class="ml-1.5 font-mono text-[10px] tabular-nums text-steam-dim/50">{{ eventTime(e.at) }}</span>
                 </span>
               </div>
             </div>
