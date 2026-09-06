@@ -1,7 +1,7 @@
 # Telegram Archive Bot
 
 <p align="left">
-  [![CI](https://github.com/VenenoSix24/telegram-archive-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/VenenoSix24/telegram-archive-bot/actions/workflows/ci.yml)
+  <a href="https://github.com/VenenoSix24/telegram-archive-bot/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/VenenoSix24/telegram-archive-bot/ci.yml?label=CI" /></a>
   <img alt="version" src="https://img.shields.io/badge/version-0.5.0-blue" />
   <img alt="python" src="https://img.shields.io/badge/python-3.11%2B-informational" />
   <img alt="vue" src="https://img.shields.io/badge/web-Vue%203%20%C2%B7%20Tailwind-42b883" />
