@@ -1,7 +1,7 @@
 # Telegram Archive Bot
 
 <p align="left">
-  <!-- TODO(badge): add real CI / coverage badge links once the repo is public -->
+  [![CI](https://github.com/VenenoSix24/telegram-archive-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/VenenoSix24/telegram-archive-bot/actions/workflows/ci.yml)
   <img alt="version" src="https://img.shields.io/badge/version-0.5.0-blue" />
   <img alt="python" src="https://img.shields.io/badge/python-3.11%2B-informational" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green" />
