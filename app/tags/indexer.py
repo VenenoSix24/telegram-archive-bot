@@ -14,6 +14,7 @@ import sqlite3
 from telethon.errors import MessageNotModifiedError
 
 from app.tags.index import compute_tag_counts, format_tag_index
+from app.task_failures import record_failure
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,12 @@ class IndexUpdater:
         self._debounce = debounce
         self._dirty = asyncio.Event()
         self._task: asyncio.Task | None = None
+
+    def _record_failure(self, task: str, error: str) -> None:
+        """落失败记录；测试等无 database_path 的场景静默跳过。"""
+        path = getattr(self._config, "database_path", None)
+        if path:
+            record_failure(path, task, error)
 
     def _setting_key(self, target_chat_id: int) -> str:
         return f"{SETTING_PREFIX}{target_chat_id}"
@@ -61,8 +68,9 @@ class IndexUpdater:
                 await self._client.pin_message(target, msg.id)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 logger.exception("tag index init failed for %s, skipped", target_id)
+                self._record_failure("tag_index_init", str(exc))
                 continue
             self._conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
@@ -87,8 +95,9 @@ class IndexUpdater:
         for target_id in sorted(self._config.all_target_channel_ids()):
             try:
                 await self._refresh_one(target_id)
-            except Exception:
+            except Exception as exc:
                 logger.exception("tag index refresh failed for %s", target_id)
+                self._record_failure("tag_index_refresh", str(exc))
 
     async def run(self) -> None:
         # 初始化失败不能让整个索引任务静默死亡——那之后 Tag 变化永远

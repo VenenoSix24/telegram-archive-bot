@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.config import Config
+from app.task_failures import record_failure
 from app.web.backup import backup_database, validate_database_backup
 
 logger = logging.getLogger(__name__)
@@ -66,14 +67,16 @@ class AutoBackupScheduler:
         """执行一次备份（+可选上传+保留清理）；返回备份路径，失败返回 None。"""
         try:
             path = backup_database(Path(self._config.database_path))
-        except Exception:
+        except Exception as exc:
             logger.exception("auto backup failed for %s", self._config.database_path)
+            record_failure(self._config.database_path, "auto_backup", str(exc))
             return None
         try:
             validate_database_backup(path)
-        except Exception:
+        except Exception as exc:
             # 产物不可用直接删掉，避免坏文件混进 Web 备份列表
             logger.exception("auto backup validation failed, removing %s", path.name)
+            record_failure(self._config.database_path, "auto_backup", str(exc))
             path.unlink(missing_ok=True)
             return None
         logger.info("自动备份完成：%s", path.name)
@@ -90,8 +93,9 @@ class AutoBackupScheduler:
             await self._client.send_file(chat_id, path, caption=f"自动备份 {path.name}")
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("auto backup upload to %s failed", chat_id)
+            record_failure(self._config.database_path, "backup_upload", str(exc))
 
     def _prune_local(self) -> None:
         """保留最新 N 份本地备份，超出的删除；只动本地文件，不碰 Telegram 副本。"""
@@ -113,9 +117,10 @@ class AutoBackupScheduler:
                 await self.run_once()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             # 巡检环节任何异常都不允许拖垮后台任务，否则之后永远不再备份
             logger.exception("auto backup check failed")
+            record_failure(self._config.database_path, "auto_backup_check", str(exc))
 
     async def run(self) -> None:
         # 启动即补跑：距上次备份超过间隔（或从未备份）时先备一次
