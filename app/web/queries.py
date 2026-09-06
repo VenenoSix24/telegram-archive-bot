@@ -183,11 +183,13 @@ def _query_materials(conn, query, status, limit, offset, *, joined: bool):
 
 
 def facet_counts(conn, query, status, *, joined: bool) -> dict:
-    """侧栏分面计数：其余筛选全生效、仅去掉本维度自身约束（分面搜索语义）。
+    """侧栏分面计数：体例/来源计数剔除本维度自身约束（便于切换），
+    标签计数为共现口径（已选标签继续作为 AND 约束）。
 
     侧栏的来源/标签/体例数字随当前筛选实时刷新：比如选了标签「游戏」后，
-    来源计数含义变成「加上这个来源还会剩多少条」。消息副本按 joined 行计数
-    （与列表 total 同口径），标签按去重后的父消息计数（与 /tags 同口径）。
+    来源计数含义变成「加上这个来源还会剩多少条」，而其他标签的数字变成
+    与「游戏」共现的条数。消息副本按 joined 行计数（与列表 total 同口径），
+    标签按去重后的父消息计数（与 /tags 同口径）。
     """
     try:
         return _facet_counts(conn, query, status, joined=True)
@@ -223,8 +225,10 @@ def _facet_counts(conn, query, status, *, joined: bool) -> dict:
         )
         if row["k"] is not None
     ]
-    # 标签：命中当前其余筛选的消息里，各标签覆盖多少条（按父消息去重）
-    tag_where, tag_params = _material_filters(query, status, joined, exclude="tag")
+    # 标签：共现计数——已选标签同样作为 AND 约束，各标签显示
+    # 「当前全部筛选 ∧ 该标签」的命中数（按父消息去重）。选了标签 A 后，
+    # 其他标签的数字就是与 A 共现的条数，不共现的直接不出现（前端计 0）。
+    tag_where, tag_params = _material_filters(query, status, joined)
     tags = [
         {"name": row["name"], "count": row["n"]}
         for row in conn.execute(
