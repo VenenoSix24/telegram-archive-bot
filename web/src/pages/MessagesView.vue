@@ -834,7 +834,7 @@ onBeforeUnmount(() => {
                   class="ml-auto shrink-0 font-mono text-xs"
                   :class="tagFilter.includes(tag.name) ? 'font-bold text-gold' : 'text-steam-dim/80'"
                 >
-                  {{ tag.count }}
+                  {{ tagCount(tag.name) }}
                 </span>
               </button>
             </li>
