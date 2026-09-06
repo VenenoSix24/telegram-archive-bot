@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { FileText, Film, Headphones, Image as ImageIcon, Music, Sticker } from 'lucide-vue-next'
-import { getStats, getTags, listMessages } from '@/lib/api'
-import type { Message, Stats, TagCount } from '@/lib/types'
+import { getActivity, getStats, getTags, listMessages } from '@/lib/api'
+import type { ActivityEvent, Message, Stats, TagCount } from '@/lib/types'
 import MessageDrawer from '@/components/MessageDrawer.vue'
 import TrendChart from '@/components/TrendChart.vue'
 import Button from '@/components/ui/Button.vue'
@@ -14,6 +14,7 @@ import { isVault, typeLabel as vocabTypeLabel, useVocab } from '@/lib/vocab'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<Message[]>([])
+const activity = ref<ActivityEvent[]>([])
 const tagDist = ref<TagCount[]>([])
 const loading = ref(true)
 const loadError = ref('')
@@ -142,6 +143,32 @@ const queueIdle = computed(
     stats.value.queue.pending + stats.value.queue.processing + stats.value.queue.failed === 0,
 )
 
+/* 队列卡片的近期活动日志：事件文案 + 本地时间（后端 at 为 UTC 文本） */
+const FAILURE_LABEL: Record<string, string> = {
+  auto_backup: '自动备份失败',
+  backup_upload: '备份上传失败',
+  auto_backup_check: '备份巡检失败',
+  tag_index_init: '标签索引初始化失败',
+  tag_index_refresh: '标签索引刷新失败',
+}
+
+function eventText(e: ActivityEvent): string {
+  if (e.kind === 'failure') {
+    const label = FAILURE_LABEL[e.task ?? ''] ?? `任务失败（${e.task ?? '未知'}）`
+    return e.error ? `${label}：${e.error}` : label
+  }
+  const verb = e.kind === 'updated' ? '更新' : '归档'
+  return e.source ? `${verb}「${e.title}」← ${e.source}` : `${verb}「${e.title}」`
+}
+
+function eventTime(at: string): string {
+  const d = new Date(at.endsWith('Z') ? at : at.replace(' ', 'T') + 'Z')
+  if (Number.isNaN(d.getTime())) return at
+  const now = new Date()
+  const hm = d.toTimeString().slice(0, 5)
+  return d.toDateString() === now.toDateString() ? hm : `${d.getMonth() + 1}-${d.getDate()} ${hm}`
+}
+
 const maxTagCount = computed(() => Math.max(1, ...tagDist.value.map((t) => t.count)))
 
 function rowTitle(m: Message) {
@@ -165,10 +192,11 @@ async function load() {
   loadError.value = ''
   coverFailed.value = false
   try {
-    const [s, t, r] = await Promise.all([getStats(), getTags(), listMessages({ limit: 8 })])
+    const [s, t, r, a] = await Promise.all([getStats(), getTags(), listMessages({ limit: 8 }), getActivity(15)])
     stats.value = s
     tagDist.value = [...t.items].sort((a, b) => b.count - a.count).slice(0, 8)
     recent.value = r.items
+    activity.value = a.items
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : '数据加载失败'
   } finally {
@@ -240,23 +268,38 @@ onMounted(load)
             队列
             <span class="ml-auto font-mono text-[10px] font-normal tracking-[0.14em] text-steam-dim/60">QUEUE</span>
           </div>
-          <p v-if="queueIdle" class="px-4 py-3 text-[13px] text-steam-dim">队列空闲，全部归档均已处理。</p>
-          <div v-else>
-            <div
-              v-for="row in queueRows"
-              :key="row.label"
-              class="flex items-center gap-2.5 border-b border-ink-line/60 px-4 py-2 text-[13px] last:border-b-0"
-            >
-              <span
-                class="h-1.5 w-1.5 rounded-full"
-                :class="row.tone === 'alert' ? 'bg-destructive' : row.value > 0 ? 'bg-gold' : 'bg-steam-dim/40'"
-              />
-              <span :class="row.tone === 'alert' ? 'text-destructive' : 'text-steam-dim'">{{ row.label }}</span>
-              <span class="ml-auto font-mono text-xs tabular-nums" :class="row.tone === 'alert' ? 'font-semibold text-destructive' : 'text-steam'">
-                {{ row.value }}
-              </span>
+          <p v-if="queueIdle && !activity.length" class="px-4 py-3 text-[13px] text-steam-dim">队列空闲，全部归档均已处理。</p>
+          <template v-else>
+            <div v-if="!queueIdle">
+              <div
+                v-for="row in queueRows"
+                :key="row.label"
+                class="flex items-center gap-2.5 border-b border-ink-line/60 px-4 py-2 text-[13px]"
+              >
+                <span
+                  class="h-1.5 w-1.5 rounded-full"
+                  :class="row.tone === 'alert' ? 'bg-destructive' : row.value > 0 ? 'bg-gold' : 'bg-steam-dim/40'"
+                />
+                <span :class="row.tone === 'alert' ? 'text-destructive' : 'text-steam-dim'">{{ row.label }}</span>
+                <span class="ml-auto font-mono text-xs tabular-nums" :class="row.tone === 'alert' ? 'font-semibold text-destructive' : 'text-steam'">
+                  {{ row.value }}
+                </span>
+              </div>
             </div>
-          </div>
+            <!-- 近期处理日志：时间 + 干了什么，失败条目警示色 -->
+            <div v-if="activity.length" class="max-h-56 overflow-y-auto">
+              <div
+                v-for="(e, i) in activity"
+                :key="i"
+                class="flex items-start gap-2.5 border-b border-ink-line/40 px-4 py-1.5 text-[12px] last:border-b-0"
+              >
+                <span class="shrink-0 pt-px font-mono text-[10.5px] tabular-nums text-steam-dim/60">{{ eventTime(e.at) }}</span>
+                <span class="min-w-0 flex-1 break-words" :class="e.kind === 'failure' ? 'text-destructive' : 'text-steam-dim'">
+                  {{ eventText(e) }}
+                </span>
+              </div>
+            </div>
+          </template>
           <p v-if="queueRows.some((r) => r.tone === 'alert')" class="border-t border-ink-line/60 px-4 py-2 text-xs text-steam-dim">
             存在失败任务：可在源群用 /queue 查看明细。
           </p>

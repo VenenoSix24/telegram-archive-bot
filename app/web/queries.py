@@ -345,6 +345,81 @@ def stats_body(
         }
 
 
+_ACTIVITY_TITLE_LEN = 24
+
+
+def activity_body(database_path: str, limit: int = 15) -> dict:
+    """概览队列卡片的近期活动日志：归档/更新事件 + 任务失败，按时间倒序混排。
+
+    事件源（归并后按 at 倒序截断 limit 条）：
+    - messages 表：以 updated_at（缺失回退 created_at）为时间，updated_at 晚于
+      created_at 视为 "updated"，否则 "archived"；标题取原文/文件名前几个字符，
+      缺失回退 "#id"；来源名查 channels 表（缺表/缺列时静默降级为空）。
+    - task_failures 表：kind="failure"，错误截断到约 120 字符。
+    queue 沿用 /stats 同一口径的队列计数，供卡片显示当前队列状态。
+    不暴露任何路径或敏感配置值。
+    """
+    limit = max(1, min(50, limit))
+    items: list[dict] = []
+    with open_connection(database_path) as conn:
+        # 归档/更新事件：channels 缺表时降级为空来源名
+        try:
+            source_names = {
+                row["chat_id"]: row["name"]
+                for row in conn.execute("SELECT chat_id, name FROM channels")
+            }
+        except sqlite3.OperationalError:
+            source_names = {}
+        try:
+            rows = conn.execute(
+                "SELECT id, source_chat_id, original_text, file_name, "
+                "created_at, updated_at FROM messages "
+                "ORDER BY COALESCE(updated_at, created_at) DESC LIMIT ?",
+                (limit * 3,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+        for row in rows:
+            title = (row["original_text"] or "").strip() or (row["file_name"] or "").strip()
+            if not title:
+                title = f"#{row['id']}"
+            items.append(
+                {
+                    "kind": "updated"
+                    if row["updated_at"] and row["updated_at"] != row["created_at"]
+                    else "archived",
+                    "title": title[:_ACTIVITY_TITLE_LEN],
+                    "source": source_names.get(row["source_chat_id"], ""),
+                    "at": row["updated_at"] or row["created_at"],
+                }
+            )
+        try:
+            failures = conn.execute(
+                "SELECT task, error, created_at FROM task_failures ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            failures = []
+        for row in failures:
+            items.append(
+                {
+                    "kind": "failure",
+                    "task": row["task"],
+                    "error": (row["error"] or "")[:120],
+                    "at": row["created_at"],
+                }
+            )
+        items.sort(key=lambda item: item["at"] or "", reverse=True)
+        items = items[:limit]
+        queue = {"pending": 0, "processing": 0, "success": 0, "failed": 0}
+        try:
+            for row in conn.execute(_QUEUE_COUNTS):
+                queue[row["status"]] = row["n"]
+        except sqlite3.OperationalError:
+            pass
+    return {"items": items, "queue": queue}
+
+
 def trend_body(database_path: str, days: int = 30) -> dict:
     """近 N 天归档趋势：每日归档量按「本地日」分组，缺数的日补 0 保证轴连续。
 

@@ -203,6 +203,40 @@ def test_stats_trend_default_and_clamp(tmp_path):
         assert len(client.get("/api/v1/stats/trend?days=999").json()["items"]) == 90
 
 
+def test_stats_activity_endpoint(tmp_path):
+    """近期活动：归档事件 + 任务失败按时间倒序混排；limit 收敛、queue 同 /stats 口径。"""
+    db = _seeded_messages_db(tmp_path)
+    import sqlite3
+
+    conn = sqlite3.connect(db)
+    # _make_schema_db 不跑迁移，这里手动建 task_failures（与迁移 0008 同构）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_failures ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT NOT NULL, "
+        "error TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO task_failures (task, error, created_at) "
+        "VALUES ('auto_backup', 'boom', '2020-01-01 00:00:00')"
+    )
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/stats/activity").json()
+        items = body["items"]
+        # 消息 created_at 为当前时间，晚于 2020 年的失败记录 → 归档在前、失败殿后
+        assert items[0]["kind"] == "archived"
+        assert items[0]["title"] and items[0]["source"] == ""
+        assert items[-1]["kind"] == "failure"
+        assert items[-1]["task"] == "auto_backup"
+        assert items[-1]["error"] == "boom"
+        assert body["queue"] == {"pending": 0, "processing": 0, "success": 0, "failed": 0}
+
+        clamped = client.get("/api/v1/stats/activity?limit=1").json()
+        assert len(clamped["items"]) == 1
+        assert len(client.get("/api/v1/stats/activity?limit=999").json()["items"]) == 3
+
+
 def test_stats_trend_requires_login(tmp_path):
     db = _seeded_trend_db(tmp_path)
     cfg = _config(database_path=db, web_token="secret-token")

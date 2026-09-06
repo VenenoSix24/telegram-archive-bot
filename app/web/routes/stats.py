@@ -28,6 +28,11 @@ def build_router(ctx: WebContext) -> APIRouter:
         """近 N 天归档趋势（?days=，缺省 30，服务端收敛到 1..90）。"""
         return queries.trend_body(ctx.database_path, days=days)
 
+    @router.get("/stats/activity")
+    def activity(limit: int = 15) -> dict:
+        """近期处理活动（归档/更新/失败），供队列卡片日志展示（limit 收敛 1..50）。"""
+        return queries.activity_body(ctx.database_path, limit=limit)
+
     @router.get("/tags")
     def list_tags() -> dict:
         with queries.open_connection(ctx.database_path) as conn:

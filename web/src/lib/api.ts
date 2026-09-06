@@ -1,4 +1,5 @@
 import type {
+  ActivityResponse,
   BackupItem,
   EditableConfig,
   Message,
@@ -62,6 +63,11 @@ export async function getTrend(days = 30): Promise<TrendResponse> {
 
 export async function getTags(): Promise<TagsResponse> {
   return request('/tags')
+}
+
+/** 近期处理活动（归档/更新/失败，供概览队列卡片日志展示） */
+export async function getActivity(limit = 15): Promise<ActivityResponse> {
+  return request(`/stats/activity?limit=${limit}`)
 }
 
 export async function getConfig(): Promise<EditableConfig> {

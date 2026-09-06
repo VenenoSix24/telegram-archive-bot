@@ -143,3 +143,18 @@ export interface TrendPoint {
 export interface TrendResponse {
   items: TrendPoint[]
 }
+
+/** 概览队列卡片的近期活动事件（归档/更新/任务失败混排，at 为 UTC 文本） */
+export interface ActivityEvent {
+  kind: 'archived' | 'updated' | 'failure'
+  at: string
+  title?: string
+  source?: string
+  task?: string
+  error?: string
+}
+
+export interface ActivityResponse {
+  items: ActivityEvent[]
+  queue: { pending: number; processing: number; success: number; failed: number }
+}
