@@ -34,13 +34,72 @@ def open_connection(database_path: str):
 
 
 
+def _fts_match_query(text: str) -> str | None:
+    """把用户输入转成 FTS5 安全的 MATCH 表达式；不适配时返回 None 走 LIKE。
+
+    索引用 trigram 分词：>=3 字符的词可以做子串匹配（中文「游戏机」能命中
+    「新游戏机开箱」，英文大小写不敏感），任一语料子串都是超集，天然覆盖
+    前缀匹配。trigram 要求查询词至少 3 字符，更短的词（如「游戏」）FTS
+    查不到，返回 None 交给 LIKE 路径，保证与旧子串语义一致。
+    每个空白分隔的词包进双引号（内部引号翻倍转义），特殊字符不再破坏
+    MATCH 语法；多词之间是隐式 AND 语义。
+    """
+    terms = text.split()
+    if not terms or any(len(term) < 3 for term in terms):
+        return None
+    quoted = ['"' + term.replace('"', '""') + '"' for term in terms]
+    return " ".join(quoted)
+
+
+def _search_condition(
+    conn: sqlite3.Connection, text: str, joined: bool
+) -> tuple[str | None, list]:
+    """q= 的搜索条件：优先 FTS5 MATCH，失败回退 LIKE 子串匹配。
+
+    joined 模式下父表与副本（message_targets 有自己的 original_text /
+    rendered_text）都可能承载要搜的文本，条件为两张 FTS 表命中取并集，
+    与旧版 LIKE 搜副本文本的语义保持一致。FTS 不可用的情形（库没跑 0009、
+    SQLite 无 FTS5 模块、MATCH 语法错误）都会在探测查询上抛 OperationalError，
+    此时静默退回原 LIKE 路径——搜索永不 500。探测复用最终 MATCH 表达式，
+    能同时覆盖以上所有情况。
+    """
+    match = _fts_match_query(text)
+    if match is not None:
+        # 每个条件各带自己的绑定参数；整体命中任一即命中（并集）
+        conds: list[str] = [
+            "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"
+        ]
+        conds_params: list[list] = [[match]]
+        if joined:
+            conds.append(
+                "m.id IN (SELECT c.message_id FROM message_targets c "
+                "JOIN message_targets_fts f ON f.rowid = c.id "
+                "WHERE message_targets_fts MATCH ?)"
+            )
+            conds_params.append([match])
+        try:
+            for cond, cond_params in zip(conds, conds_params, strict=True):
+                probe = cond.replace("m.id IN (", "1 IN (", 1)
+                conn.execute(f"SELECT 1 WHERE {probe} LIMIT 1", cond_params)
+            return "(" + " OR ".join(conds) + ")", [p for cp in conds_params for p in cp]
+        except sqlite3.OperationalError:
+            pass
+    return None, []
+
+
 def _material_filters(
-    query, status: str, joined: bool, exclude: str | None = None
+    conn: sqlite3.Connection,
+    query,
+    status: str,
+    joined: bool,
+    exclude: str | None = None,
 ) -> tuple[str, list]:
     """素材列表的 WHERE 条件；joined=True 时条件取 COALESCE(副本, 父表)。
 
     与旧版 Python 侧过滤语义一致：status 映射 archived/deleted、rating 与
-    target_chat_id 精确匹配、q 对正文+渲染文本做大小写不敏感子串匹配、
+    target_chat_id 精确匹配、q 优先走 FTS5 全文 MATCH（前缀匹配、多词 AND，
+    见 _search_condition），FTS 不可用时回退正文+渲染文本的大小写不敏感
+    子串匹配、
     tag 可多值（?tag=A&tag=B）AND 交集——副本素材看副本标签，父表素材看父表标签。
 
     exclude 指定要剔除的维度（media_type/rating/target/tag），供分面计数复用
@@ -73,14 +132,29 @@ def _material_filters(
         params.append(value)
     text = query.get("q")
     if text:
-        searchable = (
-            "COALESCE(mt.original_text, '') || ' ' || COALESCE(mt.rendered_text, '')"
-            if joined
-            else "COALESCE(m.original_text, '') || ' ' || COALESCE(m.rendered_text, '')"
-        )
-        escaped = text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-        conds.append(f"{searchable} LIKE ? ESCAPE '\\'")
-        params.append(f"%{escaped}%")
+        fts_cond, fts_params = _search_condition(conn, text, joined)
+        if fts_cond is not None:
+            conds.append(fts_cond)
+            params.extend(fts_params)
+        else:
+            # 与 FTS 路径一致：joined 模式父表文本与副本文本都能搜到（并集），
+            # 多词 AND 语义——每个词一个 OR 组。
+            fallback_m = "COALESCE(m.original_text, '') || ' ' || COALESCE(m.rendered_text, '')"
+            fallback_mt = "COALESCE(mt.original_text, '') || ' ' || COALESCE(mt.rendered_text, '')"
+            for term in text.split():
+                escaped = (
+                    term.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+                )
+                pattern = f"%{escaped}%"
+                if joined:
+                    conds.append(
+                        f"({fallback_mt} LIKE ? ESCAPE '\\' "
+                        f"OR {fallback_m} LIKE ? ESCAPE '\\')"
+                    )
+                    params.extend([pattern, pattern])
+                else:
+                    conds.append(f"{fallback_m} LIKE ? ESCAPE '\\'")
+                    params.append(pattern)
     tags = [] if exclude == "tag" else query.getlist("tag")
     for tag in tags:
         if joined:
@@ -164,7 +238,7 @@ def list_messages(
 
 def _query_materials(conn, query, status, limit, offset, *, joined: bool):
     """同一 WHERE 下先 COUNT 再取页；返回 (total, 当前行)。"""
-    where, params = _material_filters(query, status, joined)
+    where, params = _material_filters(conn, query, status, joined)
     columns = _JOINED_COLUMNS if joined else _FALLBACK_COLUMNS
     source = _JOINED_FROM if joined else _FALLBACK_FROM
     order = (
@@ -203,7 +277,7 @@ def _facet_counts(conn, query, status, *, joined: bool) -> dict:
     source = _JOINED_FROM if joined else _FALLBACK_FROM
     # 体例：按 media_type 分组（过滤条件也用 m.media_type，口径一致）
     media_where, media_params = _material_filters(
-        query, status, joined, exclude="media_type"
+        conn, query, status, joined, exclude="media_type"
     )
     media_type = {
         row["k"]: row["n"]
@@ -215,7 +289,7 @@ def _facet_counts(conn, query, status, *, joined: bool) -> dict:
         if row["k"] is not None
     }
     # 来源与目标：按 COALESCE(副本, 父表) 的 target_chat_id 分组
-    target_where, target_params = _material_filters(query, status, joined, exclude="target")
+    target_where, target_params = _material_filters(conn, query, status, joined, exclude="target")
     targets = [
         {"chat_id": row["k"], "count": row["n"]}
         for row in conn.execute(
@@ -228,7 +302,7 @@ def _facet_counts(conn, query, status, *, joined: bool) -> dict:
     # 标签：共现计数——已选标签同样作为 AND 约束，各标签显示
     # 「当前全部筛选 ∧ 该标签」的命中数（按父消息去重）。选了标签 A 后，
     # 其他标签的数字就是与 A 共现的条数，不共现的直接不出现（前端计 0）。
-    tag_where, tag_params = _material_filters(query, status, joined)
+    tag_where, tag_params = _material_filters(conn, query, status, joined)
     tags = [
         {"name": row["name"], "count": row["n"]}
         for row in conn.execute(
