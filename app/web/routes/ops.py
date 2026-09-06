@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from app.task_failures import recent_failures
 from app.web.backup import (
     backup_config,
     backup_database,
@@ -48,6 +49,15 @@ def build_router(ctx: WebContext) -> APIRouter:
     def list_backups() -> dict:
         items = [backup_metadata(path, kind) for path, kind in _backup_paths()]
         return {"items": sorted(items, key=lambda item: item["name"], reverse=True)}
+
+    @router.get("/ops/failures")
+    def list_failures(limit: int = 20) -> dict:
+        """最近的后台任务失败记录（设置页「最近失败」面板；limit 收敛 1..50）。"""
+        return {
+            "items": recent_failures(
+                ctx.database_path, limit=max(1, min(50, limit))
+            )
+        }
 
     @router.get("/ops/backups/{name}")
     def download_backup(name: str):

@@ -6,6 +6,7 @@ import type {
   MessagesResponse,
   Stats,
   TagsResponse,
+  TaskFailureItem,
   TrendResponse,
 } from '@/lib/types'
 
@@ -88,6 +89,11 @@ export async function listBackups(): Promise<{ items: BackupItem[] }> {
 
 export async function restoreBackup(name: string): Promise<{ ok: boolean; kind: string; restart_required: boolean }> {
   return request('/ops/restore', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+/** 最近的后台任务失败记录（设置页「最近失败」面板） */
+export async function listTaskFailures(limit = 20): Promise<{ items: TaskFailureItem[] }> {
+  return request(`/ops/failures?limit=${limit}`)
 }
 
 export async function runBackupNow(): Promise<{ ok: boolean; name: string }> {

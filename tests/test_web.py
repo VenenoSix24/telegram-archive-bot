@@ -879,3 +879,41 @@ def test_fts_search_matches_copy_text(tmp_path):
         body = client.get("/api/v1/messages?q=独有词组").json()
         assert body["total"] == 1
         assert body["items"][0]["id"] == 1
+
+
+def test_ops_failures_endpoint(tmp_path):
+    """/ops/failures：最近失败记录倒序 + limit 收敛 + 需要登录。"""
+    db = _seeded_messages_db(tmp_path)
+    import sqlite3
+
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_failures ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT NOT NULL, "
+        "error TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.executemany(
+        "INSERT INTO task_failures (task, error, created_at) VALUES (?, ?, ?)",
+        [
+            ("auto_backup", "first", "2020-01-01 00:00:00"),
+            ("backup_upload", "second", "2021-06-01 12:30:00"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+    # ops 路由仅在 config_path 存在时挂载（与其他 /ops 端点一致）
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+    with TestClient(create_app(cfg)) as client:
+        client.post("/api/v1/auth/login", json={"token": "secret-token"})
+        body = client.get("/api/v1/ops/failures").json()
+        assert [i["task"] for i in body["items"]] == ["backup_upload", "auto_backup"]
+        assert body["items"][0]["error"] == "second"
+
+        assert len(client.get("/api/v1/ops/failures?limit=1").json()["items"]) == 1
+        assert len(client.get("/api/v1/ops/failures?limit=999").json()["items"]) == 2
+        assert client.get("/api/v1/ops/failures?limit=0").json()["items"]
+
+    # 未登录需要 401
+    with TestClient(create_app(cfg)) as client:
+        assert client.get("/api/v1/ops/failures").status_code == 401
