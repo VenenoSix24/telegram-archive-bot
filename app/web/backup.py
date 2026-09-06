@@ -56,7 +56,8 @@ def reset_database(path: Path) -> None:
             row[0]
             for row in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name NOT LIKE 'sqlite_%' AND name <> 'schema_version'"
+                "AND name NOT LIKE 'sqlite_%' AND name <> 'schema_version' "
+                "AND name NOT LIKE '%_fts%'"
             )
         ]
         conn.execute("PRAGMA foreign_keys=OFF")
@@ -68,6 +69,7 @@ def reset_database(path: Path) -> None:
             conn.execute("PRAGMA foreign_keys=ON")
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        rebuild_fts(conn)
     finally:
         conn.close()
     cache_dir = path.parent / "thumbs"
@@ -75,6 +77,20 @@ def reset_database(path: Path) -> None:
         for cached in cache_dir.iterdir():
             if cached.is_file():
                 cached.unlink()
+
+
+def rebuild_fts(conn: sqlite3.Connection) -> None:
+    """重建 FTS 索引：清空全部数据行后 FTS 内部结构失效，必须 rebuild。
+
+    清空 messages/message_targets 会经触发器写 FTS 影子表，索引格式版本
+    归零，后续写入全部报 invalid fts5 file format。无 FTS 表（未跑 0009）
+    时静默跳过。
+    """
+    for table in ("messages_fts", "message_targets_fts"):
+        try:
+            conn.execute(f"INSERT INTO {table}({table}) VALUES ('rebuild')")
+        except sqlite3.OperationalError:
+            pass
 
 
 def backup_metadata(path: Path, kind: str) -> dict:

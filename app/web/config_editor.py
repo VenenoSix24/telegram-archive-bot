@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import time
 from io import StringIO
 from pathlib import Path
 
@@ -22,11 +24,22 @@ _yaml.preserve_quotes = True
 
 
 def _read_raw(path: Path):
-    """round-trip 加载；返回 ruamel CommentedMap，保留顶层注释与键序。"""
+    """round-trip 加载；返回 ruamel CommentedMap，保留顶层注释与键序。
+
+    读到空文档（写方截断-写入的瞬间被撞上）时短暂重试；重试后仍为空
+    再按无配置处理。
+    """
     if not path.exists():
         return _yaml.load("{}")  # 空文档返回 CommentedMap 便于后续 setdefault
-    with path.open(encoding="utf-8") as fh:
-        data = _yaml.load(fh)
+    for _ in range(3):
+        with path.open(encoding="utf-8") as fh:
+            content = fh.read()
+        if content.strip():
+            break
+        time.sleep(0.05)
+    else:
+        return _yaml.load("{}")
+    data = _yaml.load(StringIO(content))
     return data if data is not None else _yaml.load("{}")
 
 
@@ -190,5 +203,8 @@ def apply_editable_config(path: Path, edits: dict) -> dict:
 
     buf = StringIO()
     _yaml.dump(raw, buf)
-    path.write_text(buf.getvalue(), encoding="utf-8")
+    # 先写临时文件再原子替换：读方（/stats 等）不会撞到截断后的空文件
+    temporary = path.with_suffix(".yaml.tmp")
+    temporary.write_text(buf.getvalue(), encoding="utf-8")
+    os.replace(temporary, path)
     return read_editable_config(path)
