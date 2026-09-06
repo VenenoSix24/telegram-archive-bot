@@ -175,7 +175,7 @@ async function onLogout() {
         <div class="flex items-center gap-1">
           <button
             type="button"
-            class="ml-auto flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+            class="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
             aria-haspopup="menu"
             :aria-expanded="themeMenuOpen"
             title="切换主题"
@@ -185,7 +185,7 @@ async function onLogout() {
             <span class="truncate">{{ themeLabels[currentTheme] }}</span>
             <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="themeMenuOpen && 'rotate-180'" />
           </button>
-          <ModeToggle button-class="h-9 w-9 rounded-lg" />
+          <ModeToggle button-class="ml-auto h-9 w-9 rounded-lg" />
           <button
             type="button"
             class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-steam-dim transition active:scale-95 hover:bg-ink-raised hover:text-destructive"
