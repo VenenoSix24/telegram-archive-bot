@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 
 def message_tags_by_id(conn: sqlite3.Connection, message_ids) -> dict[int, list[dict]]:
@@ -54,6 +55,17 @@ def target_tags_by_id(conn: sqlite3.Connection, target_ids) -> dict[int, list[di
     return grouped
 
 
+def _thumb_meta(thumb_path: str | None) -> dict:
+    """缩略图元数据：v 为文件 mtime，前端拼进 URL 防止浏览器用旧缓存串图。"""
+    if not thumb_path:
+        return {"available": False, "path": None, "v": 0}
+    try:
+        version = int(Path(thumb_path).stat().st_mtime)
+    except OSError:
+        version = 0
+    return {"available": True, "path": thumb_path, "v": version}
+
+
 def base_message_dict(row, tags: list[dict]) -> dict:
     """messages 行 → 消息 dict 骨架（targets 待填）。"""
     original_html = row["original_html"] if "original_html" in row.keys() else ""
@@ -79,7 +91,7 @@ def base_message_dict(row, tags: list[dict]) -> dict:
         "status": row["status"],
         "created_at": row["created_at"],
         "tags": tags,
-        "thumb": {"available": bool(row["thumb_path"]), "path": row["thumb_path"]},
+        "thumb": _thumb_meta(row["thumb_path"]),
     }
 
 

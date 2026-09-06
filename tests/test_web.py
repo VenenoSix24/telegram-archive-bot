@@ -570,6 +570,28 @@ def test_reset_database_uses_request_owned_connection(tmp_path):
         filtered = client.get("/api/v1/messages?status=all&target_chat_id=-1006").json()
         assert filtered["total"] == 1
         assert filtered["items"][0]["material_id"] == "target:102"
+def test_reset_rebuilds_fts_index(tmp_path):
+    """重置后 FTS 索引必须可用：清空会破坏 FTS 内部结构，需 rebuild 兜底。"""
+    from app.web.backup import reset_database
+
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "重置前的旧消息")
+    conn.commit()
+    reset_database(Path(db))
+    # 重置后新消息经触发器写 FTS 不应报 invalid fts5 file format
+    conn.execute(
+        "INSERT INTO messages (id, source_chat_id, source_message_id, "
+        "original_text, rendered_text, status) VALUES (2, -1001, 2, "
+        "'重置后的新消息', '重置后的新消息', 'archived')"
+    )
+    hits = conn.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH '\"重置后的\"'"
+    ).fetchall()
+    assert hits == [(2,)]
+    conn.close()
+
+
 def test_reset_clears_thumbnail_cache(tmp_path):
     db = _seeded_messages_db(tmp_path)
     thumbs = tmp_path / "thumbs"

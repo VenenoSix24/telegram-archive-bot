@@ -48,8 +48,15 @@ export function useMessageCard(message: () => Message) {
   )
 
   const thumbSrc = computed(() => {
-    const target = message().target_id
-    return `/api/v1/messages/${message().id}/thumb${target == null ? '' : `?target_id=${target}`}`
+    const m = message()
+    const target = m.target_id
+    // v = 缩略图文件 mtime：文件换了 URL 才换，避免重置库后消息 id 复用导致浏览器串图
+    const v = (m as { thumb?: { v?: number } }).thumb?.v ?? 0
+    const qs = new URLSearchParams()
+    if (target != null) qs.set('target_id', String(target))
+    if (v) qs.set('v', String(v))
+    const query = qs.size ? `?${qs.toString()}` : ''
+    return `/api/v1/messages/${m.id}/thumb${query}`
   })
 
   const isDead = computed(() => message().status === 'deleted')
