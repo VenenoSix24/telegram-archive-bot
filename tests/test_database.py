@@ -89,6 +89,8 @@ def test_legacy_db_without_user_version_migrates_without_data_loss(tmp_path):
             source_chat_id INTEGER NOT NULL,
             source_message_id INTEGER NOT NULL,
             media_type TEXT NOT NULL DEFAULT 'text',
+            original_text TEXT NOT NULL DEFAULT '',
+            rendered_text TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'processed',
             target_chat_id INTEGER);
         INSERT INTO schema_version (version) VALUES ('0001_initial');
@@ -130,3 +132,66 @@ def test_legacy_db_baseline_no_rerun_of_old_ddl(tmp_path):
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='channels'"
     ).fetchone()[0] == 0
     db.close()
+
+
+# ---- 0009 FTS5 全文索引迁移 ----
+
+
+def test_fts_migration_fresh_db(conn):
+    """新库到 user_version=9，FTS 表与三个同步触发器都在。"""
+    assert _user_version(conn) == 9
+    names = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' "
+            "AND name LIKE 'messages_fts_%'"
+        )
+    }
+    assert names == {"messages_fts_ai", "messages_fts_au", "messages_fts_ad"}
+    assert conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='messages_fts'"
+    ).fetchone() is not None
+
+
+def test_fts_triggers_keep_index_synced(conn):
+    conn.execute(
+        "INSERT INTO messages (source_chat_id, source_message_id, original_text) "
+        "VALUES (-1001, 1, '游戏机攻略分享')"
+    )
+    assert conn.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH '游戏机'"
+    ).fetchone() is not None
+    conn.execute("UPDATE messages SET original_text='旅行日记分享' WHERE rowid=1")
+    assert conn.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH '\"旅行日\"'"
+    ).fetchone() is not None
+    assert conn.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH '游戏机'"
+    ).fetchone() is None
+    conn.execute("DELETE FROM messages WHERE rowid=1")
+    assert conn.execute("SELECT COUNT(*) FROM messages_fts").fetchone()[0] == 0
+
+
+def test_fts_migration_populates_existing_rows(tmp_path):
+    """0008 时代的旧库升级后，存量行已在索引里，搜索能查到。"""
+    import shutil
+
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if _version_num(path.stem) <= 8:
+            shutil.copy(path, legacy_dir / path.name)
+    db = open_db(tmp_path / "legacy.sqlite")
+    apply_migrations(db, legacy_dir)
+    assert _user_version(db) == 8
+    db.execute(
+        "INSERT INTO messages (source_chat_id, source_message_id, original_text) "
+        "VALUES (-1001, 1, '旧库存的游戏机攻略')"
+    )
+    db.commit()
+
+    apply_migrations(db)  # 升级到 0009，rebuild 为存量行建索引
+    assert _user_version(db) == 9
+    assert db.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH '游戏机'"
+    ).fetchone() is not None

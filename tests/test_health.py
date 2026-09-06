@@ -47,7 +47,7 @@ def test_health_ok_payload(tmp_path):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["database"] == {"reachable": True, "user_version": 8}
+    assert body["database"] == {"reachable": True, "user_version": 9}
     assert body["last_failure"] is None
     assert isinstance(body["uptime_seconds"], (int, float))
     assert body["uptime_seconds"] >= 0

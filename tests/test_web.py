@@ -737,3 +737,145 @@ def test_delete_backup_rejects_bad_name(tmp_path):
         assert client.delete("/api/v1/ops/backups/missing.bak").status_code == 404
 
     assert backup_path.exists()
+
+
+# ---- FTS5 全文搜索（0009 迁移 + LIKE 回退） ----
+
+
+def _migrated_db(tmp_path, name="fts.sqlite") -> str:
+    """跑完整迁移的真实 schema 库：messages_fts 与同步触发器都已就位。"""
+    from app.database.migrate import apply_migrations, open_db
+
+    db = tmp_path / name
+    conn = open_db(str(db))
+    apply_migrations(conn)
+    conn.close()
+    return str(db)
+
+
+def _insert_message(conn, id_, text, file_name=""):
+    conn.execute(
+        "INSERT INTO messages (id, source_chat_id, source_message_id, media_type, "
+        "original_text, rendered_text, file_name, status) "
+        "VALUES (?, -1001, ?, 'text', ?, ?, ?, 'archived')",
+        (id_, id_, text, text, file_name),
+    )
+
+
+def test_fts_search_matches_cjk_and_latin(tmp_path):
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "游戏攻略分享")
+    _insert_message(conn, 2, "Game Guide Tonight")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=游戏").json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == 1
+        latin = client.get("/api/v1/messages?q=game").json()
+        assert [i["id"] for i in latin["items"]] == [2]
+
+
+def test_fts_search_prefix_match(tmp_path):
+    """「游戏」前缀命中「游戏机」；FTS 不需要写出完整词。"""
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "新游戏机开箱")
+    _insert_message(conn, 2, "今天天气不错")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=游戏").json()
+        assert [i["id"] for i in body["items"]] == [1]
+        assert client.get("/api/v1/messages?q=天气").json()["total"] == 1
+
+
+def test_fts_search_multi_term_is_and(tmp_path):
+    """多词 AND：两词都在才命中。"""
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "游戏攻略 include 地图")
+    _insert_message(conn, 2, "游戏攻略 但没有另一个词")
+    _insert_message(conn, 3, "只有地图")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=游戏+地图").json()
+        assert [i["id"] for i in body["items"]] == [1]
+
+
+def test_fts_search_special_chars_do_not_500(tmp_path):
+    """引号/括号/通配符/百分号等不破坏 MATCH 语法，也不触发 500。"""
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "100% 正品 (未拆封)")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        for q in ['"', "(", "NEAR(", "%", "*", '"未拆封"', "游戏 AND ("]:
+            resp = client.get(f"/api/v1/messages?q={q}")
+            assert resp.status_code == 200, q
+        # 100% 是一个 token，前缀查询 "100%*" 命中它
+        assert client.get("/api/v1/messages?q=100%25").json()["total"] == 1
+
+
+def test_fts_search_falls_back_to_like_without_fts_table(tmp_path):
+    """FTS 表缺失（模拟无 FTS5 / 未跑 0009）时回退 LIKE，搜索不 500。"""
+    db = _make_schema_db(tmp_path, name="nofsts.sqlite")
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "游戏攻略分享")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=攻略").json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == 1
+
+
+def test_fts_search_falls_back_after_table_dropped(tmp_path):
+    """迁移过的库把 messages_fts 手动删掉后仍可搜索（运行期回退）。"""
+    db = _migrated_db(tmp_path, name="dropped.sqlite")
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "游戏攻略分享")
+    conn.commit()
+    conn.execute("DROP TABLE messages_fts")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=攻略").json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == 1
+
+
+def test_fts_facets_follow_search(tmp_path):
+    """分面计数与 q= 同口径（FTS 路径下同样生效）。"""
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "游戏攻略")
+    _insert_message(conn, 2, "旅行日记")
+    conn.execute("INSERT INTO tags (name, normalized_name) VALUES ('游戏', '游戏')")
+    conn.execute("INSERT INTO message_tags (message_id, tag_id, type) VALUES (1, 1, 'source')")
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        facets = client.get("/api/v1/messages?q=游戏").json()["facets"]
+        assert facets["tags"] == [{"name": "游戏", "count": 1}]
+
+
+def test_fts_search_matches_copy_text(tmp_path):
+    """joined 主路径搜副本文本：只有副本 original_text 里出现的词也能命中。"""
+    db = _migrated_db(tmp_path)
+    conn = sqlite3.connect(db)
+    _insert_message(conn, 1, "父表正文里没有目标词汇")
+    conn.execute(
+        "INSERT INTO message_targets (message_id, target_chat_id, status, "
+        "original_text, rendered_text) VALUES (1, -1005, 'archived', "
+        "'副本独有词组内容', '副本独有词组内容')"
+    )
+    conn.commit()
+    conn.close()
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages?q=独有词组").json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == 1
