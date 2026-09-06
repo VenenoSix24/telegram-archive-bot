@@ -1,16 +1,21 @@
-"""运维端点：备份列举/下载/删除、恢复/导入/创建、重置数据库。"""
+"""运维端点：备份列举/下载/删除、恢复/导入/创建、重置数据库、导出。"""
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 import logging
 import shutil
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.task_failures import recent_failures
+from app.web import queries
 from app.web.backup import (
     backup_config,
     backup_database,
@@ -20,8 +25,66 @@ from app.web.backup import (
     validate_database_backup,
 )
 from app.web.routes.deps import WebContext
+from app.web.serializers import serialize_materials
 
 logger = logging.getLogger(__name__)
+
+# 导出分批拉取序列化，避免大库一次性载入；行数上限内整体构建（个人归档规模可控）
+_EXPORT_BATCH = 500
+_EXPORT_CAP = 20000
+
+# CSV 列：表头用中文（与界面词汇一致），取值函数对应序列化后的素材 dict
+_EXPORT_COLUMNS = [
+    ("编号", lambda m: m["id"]),
+    ("标题", lambda m: _export_title(m)),
+    ("正文", lambda m: m["original_text"]),
+    ("类型", lambda m: m["media_type"]),
+    ("评分", lambda m: m["rating"]),
+    ("状态", lambda m: m["status"]),
+    ("标签", lambda m: " ".join(f"#{t['name']}" for t in m["tags"])),
+    ("文件名", lambda m: m["file_name"]),
+    ("归档链接", lambda m: m["target_url"] or ""),
+    ("来源链接", lambda m: m["source_url"] or ""),
+    ("频道", lambda m: (m["targets"] or [{}])[0].get("name", "")),
+    ("归档时间", lambda m: m["created_at"]),
+]
+
+
+def _export_title(m: dict) -> str:
+    """标题：正文首个非空行；退回文件名 / #编号（与列表标题口径一致）。"""
+    for line in (m["original_text"] or "").splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return m["file_name"] or f"#{m['id']}"
+
+
+def _export_rows(request: Request, ctx: WebContext, status: str) -> list[dict]:
+    """按 /messages 同款过滤条件分批序列化全部素材（超出上限截断）。"""
+    items: list[dict] = []
+    with queries.open_connection(ctx.database_path) as conn:
+        offset = 0
+        while offset < _EXPORT_CAP:
+            limit = min(_EXPORT_BATCH, _EXPORT_CAP - offset)
+            try:
+                total, page = queries._query_materials(
+                    conn, request.query_params, status, limit, offset, joined=True
+                )
+            except sqlite3.OperationalError as exc:
+                if "no such table: message_targets" not in str(exc):
+                    raise
+                total, page = queries._query_materials(
+                    conn, request.query_params, status, limit, offset, joined=False
+                )
+            if not page:
+                break
+            items.extend(serialize_materials(conn, page, ctx.target_names))
+            offset += len(page)
+            if offset >= total:
+                break
+    if offset >= _EXPORT_CAP:
+        logger.info("export truncated at cap %s", _EXPORT_CAP)
+    return items
 
 
 def build_router(ctx: WebContext) -> APIRouter:
@@ -58,6 +121,48 @@ def build_router(ctx: WebContext) -> APIRouter:
                 ctx.database_path, limit=max(1, min(50, limit))
             )
         }
+
+    @router.get("/ops/export")
+    def export_ops(request: Request, format: str = "csv", status: str = "active"):
+        """导出归档为 CSV/JSON：支持 /messages 同款过滤参数，超出上限截断。"""
+        if format not in ("csv", "json"):
+            raise HTTPException(status_code=400, detail="invalid format; expected csv or json")
+        if status not in {"active", "deleted", "all"}:
+            raise HTTPException(status_code=400, detail="invalid status")
+        items = _export_rows(request, ctx, status)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        if format == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([header for header, _ in _EXPORT_COLUMNS])
+            for m in items:
+                writer.writerow([get(m) for _, get in _EXPORT_COLUMNS])
+            # UTF-8 带 BOM：Excel 直接打开中文不乱码
+            payload = b"\xef\xbb\xbf" + output.getvalue().encode("utf-8")
+            filename = f"archive-export-{stamp}.csv"
+            media_type = "text/csv; charset=utf-8"
+        else:
+            payload = json.dumps(
+                {
+                    "exported_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    "items": items,
+                },
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+            filename = f"archive-export-{stamp}.json"
+            media_type = "application/json; charset=utf-8"
+        return StreamingResponse(
+            iter([payload]),
+            media_type=media_type,
+            headers={
+                # filename* 携带 UTF-8 文件名（RFC 5987），filename 为 ASCII 兜底
+                "Content-Disposition": (
+                    f"attachment; filename={filename}; filename*=UTF-8''{filename}"
+                ),
+                "X-Export-Count": str(len(items)),
+            },
+        )
 
     @router.get("/ops/backups/{name}")
     def download_backup(name: str):

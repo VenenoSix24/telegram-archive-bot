@@ -917,3 +917,65 @@ def test_ops_failures_endpoint(tmp_path):
     # 未登录需要 401
     with TestClient(create_app(cfg)) as client:
         assert client.get("/api/v1/ops/failures").status_code == 401
+
+def _ops_client(tmp_path, db):
+    """ops 路由需要 config_path 才挂载（与备份测试同一套件约定）。"""
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    (tmp_path / "config.yaml").write_text("telegram: {}\n", encoding="utf-8")
+    client = TestClient(create_app(cfg))
+    client.post("/api/v1/auth/login", json={"token": "secret-token"})
+    return client
+
+
+def test_ops_export_csv(tmp_path):
+    """/ops/export?format=csv：中文表头 + BOM，字段完整，下载头正确。"""
+    db = _seeded_messages_db(tmp_path)
+    with _ops_client(tmp_path, db) as client:
+        resp = client.get("/api/v1/ops/export?format=csv")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert "attachment" in resp.headers["content-disposition"]
+        body = resp.content
+        assert body.startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
+        import csv as csv_mod
+        import io as io_mod
+
+        text = body.decode("utf-8-sig")
+        rows = list(csv_mod.reader(io_mod.StringIO(text)))
+        assert rows[0][0] == "编号"
+        assert len(rows) == 3  # 表头 + 2 条归档
+        data = dict(zip(rows[0], rows[1], strict=True))
+        assert data["编号"] == "1"
+        assert data["类型"] == "photo"
+        assert data["标签"] == "#游戏"
+
+
+def test_ops_export_json_shape(tmp_path):
+    """/ops/export?format=json：exported_at + items 数组，字段含 targets/tags。"""
+    db = _seeded_messages_db(tmp_path)
+    with _ops_client(tmp_path, db) as client:
+        resp = client.get("/api/v1/ops/export?format=json")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/json")
+        body = resp.json()
+        assert body["items"][0]["id"] == 1
+        assert body["items"][0]["tags"][0]["name"] == "游戏"
+        assert "exported_at" in body
+
+
+def test_ops_export_respects_filters(tmp_path):
+    """导出支持 /messages 同款过滤：q= 只导命中条目。"""
+    db = _seeded_messages_db(tmp_path)
+    with _ops_client(tmp_path, db) as client:
+        body = client.get("/api/v1/ops/export?format=json&q=MOD").json()
+        assert [i["id"] for i in body["items"]] == [2]
+
+
+def test_ops_export_rejects_bad_format_and_requires_auth(tmp_path):
+    db = _seeded_messages_db(tmp_path)
+    with _ops_client(tmp_path, db) as client:
+        assert client.get("/api/v1/ops/export?format=xlsx").status_code == 400
+        assert client.get("/api/v1/ops/export?format=csv&status=bogus").status_code == 400
+    cfg = _config(database_path=db, config_path=str(tmp_path / "config.yaml"))
+    with TestClient(create_app(cfg)) as plain:
+        assert plain.get("/api/v1/ops/export?format=csv").status_code == 401
