@@ -175,7 +175,7 @@ async function onLogout() {
         <div class="flex items-center gap-1">
           <button
             type="button"
-            class="flex h-9 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
+            class="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-steam-dim transition-colors hover:bg-ink-raised hover:text-steam"
             aria-haspopup="menu"
             :aria-expanded="themeMenuOpen"
             title="切换主题"
@@ -330,7 +330,6 @@ async function onLogout() {
               >
                 <Paintbrush class="h-4 w-4" />
                 <span class="hidden min-[480px]:inline">{{ themeLabels[currentTheme] }}</span>
-                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="themeMenuOpen && 'rotate-180'" />
               </button>
               <Transition name="v-pop">
                 <div

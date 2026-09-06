@@ -1029,46 +1029,46 @@ async function resetDb() {
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- 导出归档：CSV（Excel 友好）/ JSON，支持按当前筛选导出见后端 -->
-            <div class="mb-4 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
-              <div class="mb-2 flex items-center justify-between">
-                <h3 class="text-sm font-medium text-steam">导出归档</h3>
-                <div class="flex items-center gap-2">
-                  <Button type="button" variant="secondary" size="sm" :disabled="exportBusy !== null" @click="exportArchive('csv')">
-                    {{ exportBusy === 'csv' ? '导出中…' : '导出 CSV' }}
-                  </Button>
-                  <Button type="button" variant="secondary" size="sm" :disabled="exportBusy !== null" @click="exportArchive('json')">
-                    {{ exportBusy === 'json' ? '导出中…' : '导出 JSON' }}
-                  </Button>
-                </div>
-              </div>
-              <p class="text-xs text-steam-dim/70">导出全部归档条目（编号、标题、正文、类型、评分、标签、链接、时间等）。CSV 可用 Excel 直接打开；条目超过 2 万条时截断。</p>
-            </div>
-            <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
-              <div class="mb-2 flex items-center justify-between">
-                <h3 class="text-sm font-medium text-steam">管理员 ID</h3>
-                <Button type="button" variant="secondary" size="sm" @click="addAdmin">
-                  <Plus class="h-3.5 w-3.5" /> 新增
+          <!-- 导出归档：CSV（Excel 友好）/ JSON，支持按当前筛选导出见后端 -->
+          <div class="mb-4 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="text-sm font-medium text-steam">导出归档</h3>
+              <div class="flex items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" :disabled="exportBusy !== null" @click="exportArchive('csv')">
+                  {{ exportBusy === 'csv' ? '导出中…' : '导出 CSV' }}
+                </Button>
+                <Button type="button" variant="secondary" size="sm" :disabled="exportBusy !== null" @click="exportArchive('json')">
+                  {{ exportBusy === 'json' ? '导出中…' : '导出 JSON' }}
                 </Button>
               </div>
-              <p class="mb-3 text-xs text-steam-dim/70">在源群里发指令（/status /tag /rating 等）仅对这些用户生效。</p>
-              <div v-for="(a, i) in form.admins" :key="i" class="mb-2 flex items-center gap-2">
-                <input
-                  v-model.number="form.admins[i]"
-                  type="number"
-                  placeholder="User ID"
-                  class="h-9 w-full cursor-pointer rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
-                />
-                <button
-                  type="button"
-                  class="cursor-pointer rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive"
-                  :aria-label="`删除管理员 ${i + 1}`"
-                  @click="removeAdmin(i)"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              </div>
+            </div>
+            <p class="text-xs text-steam-dim/70">导出全部归档条目（编号、标题、正文、类型、评分、标签、链接、时间等）。CSV 可用 Excel 直接打开；条目超过 2 万条时截断。</p>
+          </div>
+          <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="text-sm font-medium text-steam">管理员 ID</h3>
+              <Button type="button" variant="secondary" size="sm" @click="addAdmin">
+                <Plus class="h-3.5 w-3.5" /> 新增
+              </Button>
+            </div>
+            <p class="mb-3 text-xs text-steam-dim/70">在源群里发指令（/status /tag /rating 等）仅对这些用户生效。</p>
+            <div v-for="(a, i) in form.admins" :key="i" class="mb-2 flex items-center gap-2">
+              <input
+                v-model.number="form.admins[i]"
+                type="number"
+                placeholder="User ID"
+                class="h-9 w-full cursor-pointer rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none"
+              />
+              <button
+                type="button"
+                class="cursor-pointer rounded-md p-2 text-steam-dim transition-colors hover:bg-destructive/20 hover:text-destructive"
+                :aria-label="`删除管理员 ${i + 1}`"
+                @click="removeAdmin(i)"
+              >
+                <Trash2 class="h-4 w-4" />
+              </button>
             </div>
           </div>
         </section>

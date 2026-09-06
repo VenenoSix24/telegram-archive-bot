@@ -174,6 +174,12 @@ const stripTags = computed<TagCount[]>(() => {
     .filter((t) => t.count > 0 || tagFilter.value.includes(t.name))
 })
 
+/* 素材志侧栏「类目」列表：与简约风侧栏同口径——共现计数为 0 的标签
+ * 直接隐藏（已选中的保留，否则无法取消）；无分面数据时原样展示 */
+const catalogTags = computed(() =>
+  tagIndex.value.filter((t) => tagCount(t.name) > 0 || tagFilter.value.includes(t.name)),
+)
+
 // URL ?tag=（从标签页点来，可多值）作为标签筛选的初始值
 function tagsFromQuery(value: unknown): string[] {
   if (typeof value === 'string') return value ? [value] : []
@@ -814,7 +820,7 @@ onBeforeUnmount(() => {
         <nav v-if="tagIndex.length" class="mt-7" aria-label="类目索引">
           <h3 class="mb-1.5 font-mono text-[10px] font-medium tracking-[0.28em] text-steam-dim">类目 · TAGS</h3>
           <ul>
-            <li v-for="tag in tagIndex" :key="tag.name">
+            <li v-for="tag in catalogTags" :key="tag.name">
               <button
                 type="button"
                 class="flex w-full cursor-pointer items-baseline gap-2 px-0.5 py-[7px] text-left text-[13.5px] transition-colors"
