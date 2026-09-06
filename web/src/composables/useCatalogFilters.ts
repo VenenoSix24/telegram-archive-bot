@@ -1,11 +1,13 @@
 import { computed, ref } from 'vue'
 import { getStats, getTags } from '@/lib/api'
-import type { Stats, TagCount, Target } from '@/lib/types'
+import type { CatalogFacets, Stats, TagCount, Target } from '@/lib/types'
 
 /*
  * 目录筛选的单一状态源。
  * 素材页（两种变体）与标准后台的侧栏筛选树共用同一批 ref：
  * 侧栏改筛选 → 素材页的 debounce watch 自动重查；跨页点标签 → 先改状态再跳路由。
+ * 侧栏计数走 facets（/messages 响应随筛选返回的分面计数，本维度自身约束剔除），
+ * 没有分面数据时（还没进过素材页）回退到 /stats、/tags 的全局计数。
  */
 
 const q = ref('')
@@ -18,6 +20,8 @@ const statusFilter = ref<'active' | 'deleted' | 'all'>('active')
 const stats = ref<Stats | null>(null)
 const tagIndex = ref<TagCount[]>([])
 const targets = ref<Target[]>([])
+/** 最近一次 /messages 响应带的分面计数；随筛选实时刷新 */
+const facets = ref<CatalogFacets | null>(null)
 
 let statsLoaded = false
 
@@ -37,6 +41,39 @@ export function useCatalogFilters() {
       targets.value = []
       tagIndex.value = []
     }
+  }
+
+  /** 素材页每次列表查询成功后写入最新分面（随筛选 debounce 刷新） */
+  function setFacets(next: CatalogFacets | undefined | null) {
+    facets.value = next ?? null
+  }
+
+  /** 来源分面计数：优先分面数据，缺失回退 /stats 全局计数 */
+  function targetCount(chatId: number): number {
+    const hit = facets.value?.targets.find((t) => t.chat_id === chatId)
+    if (hit) return hit.count
+    if (facets.value) return 0
+    return targets.value.find((t) => t.chat_id === chatId)?.count ?? 0
+  }
+
+  /** 标签分面计数：同上（分面里没有的标签 = 当前筛选下命中 0） */
+  function tagCount(name: string): number {
+    const hit = facets.value?.tags.find((t) => t.name === name)
+    if (hit) return hit.count
+    if (facets.value) return 0
+    return tagIndex.value.find((t) => t.name === name)?.count ?? 0
+  }
+
+  /** 体例分面计数：''（全部）取分布总和；无分面数据回退 /stats */
+  function mediaCount(value: string): number | null {
+    const dist = facets.value?.media_type
+    if (dist) {
+      if (value === '') return Object.values(dist).reduce((sum, n) => sum + n, 0)
+      return dist[value] ?? 0
+    }
+    if (!stats.value) return null
+    if (value === '') return stats.value.messages.total
+    return stats.value.messages.by_type[value] ?? 0
   }
 
   const isFilterActive = computed(
@@ -94,8 +131,13 @@ export function useCatalogFilters() {
     stats,
     tagIndex,
     targets,
+    facets,
     isFilterActive,
     loadStats,
+    setFacets,
+    targetCount,
+    tagCount,
+    mediaCount,
     resetFilters,
     toggleMedia,
     toggleRating,
