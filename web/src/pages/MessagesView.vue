@@ -168,7 +168,10 @@ const stripTags = computed<TagCount[]>(() => {
       top.unshift(found ?? { name: current, count: 0 })
     }
   }
-  return top.map((t) => ({ name: t.name, count: tagCount(t.name) }))
+  // 共现计数为 0 的标签直接隐藏（已选中的保留），与侧栏口径一致
+  return top
+    .map((t) => ({ name: t.name, count: tagCount(t.name) }))
+    .filter((t) => t.count > 0 || tagFilter.value.includes(t.name))
 })
 
 // URL ?tag=（从标签页点来，可多值）作为标签筛选的初始值
