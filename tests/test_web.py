@@ -327,33 +327,48 @@ def test_messages_list_and_detail(tmp_path):
 
 
 def test_messages_facets_reflect_filters(tmp_path):
-    """分面计数：其余筛选生效、本维度约束剔除（分面搜索语义）。"""
+    """分面计数：体例/来源剔除本维度约束，标签为共现口径（已选标签作 AND 约束）。"""
     db = _seeded_messages_db(tmp_path)
+    # 追加共现场景：消息 2 同时挂「旅行」，与消息 1 的「游戏」不共现
+    import sqlite3
+
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO tags (name, normalized_name) VALUES ('旅行', '旅行')")
+    conn.execute(
+        "INSERT INTO message_tags (message_id, tag_id, type) "
+        "SELECT 2, id, 'source' FROM tags WHERE name = '旅行'"
+    )
+    conn.commit()
+    conn.close()
     with _logged_client(db) as client:
         body = client.get("/api/v1/messages").json()
         facets = body["facets"]
         assert facets["media_type"] == {"photo": 1, "text": 1}
         assert {t["chat_id"] for t in facets["targets"]} == {-1005}
-        assert facets["tags"] == [{"name": "游戏", "count": 1}]
+        assert {t["name"]: t["count"] for t in facets["tags"]} == {"游戏": 1, "旅行": 1}
 
-        # 带 q=MOD：media 分面里 q 仍生效，只剩 text；标签分面里「游戏」应归零
+        # 带 q=MOD：media 分面里 q 仍生效，只剩 text；只剩与 MOD 消息共现的「旅行」
         facets = client.get("/api/v1/messages?q=MOD").json()["facets"]
         assert facets["media_type"] == {"text": 1}
-        assert facets["tags"] == []
+        assert facets["tags"] == [{"name": "旅行", "count": 1}]
 
         # 带 tag=游戏：target 分面应忽略标签约束仍报 -1005；media 分面只有 photo
         facets = client.get("/api/v1/messages?tag=游戏").json()["facets"]
         assert facets["media_type"] == {"photo": 1}
         assert facets["targets"] == [{"chat_id": -1005, "count": 1}]
-        # 标签自身约束剔除：两个标签都能看到各自命中数
+        # 标签共现口径：「游戏」自身保持命中数，不与它共现的「旅行」不出现（前端计 0）
         assert facets["tags"] == [{"name": "游戏", "count": 1}]
 
-        # 带 media_type=text：标签与 target 分面按 text 生效（均归零/为空），
+        # 带 media_type=text：标签与 target 分面按 text 生效，
         # media 分面自身剔除后仍给出全量分布
         facets = client.get("/api/v1/messages?media_type=text").json()["facets"]
         assert facets["media_type"] == {"photo": 1, "text": 1}
-        assert facets["tags"] == []
+        assert facets["tags"] == [{"name": "旅行", "count": 1}]
         assert facets["targets"] == [{"chat_id": -1005, "count": 1}]
+
+        # 多标签 AND 交集：游戏∧旅行无共现消息，分面为空
+        facets = client.get("/api/v1/messages?tag=游戏&tag=旅行").json()["facets"]
+        assert facets["tags"] == []
 
 
 def test_messages_patch_updates_via_shared_service(patch_client):
