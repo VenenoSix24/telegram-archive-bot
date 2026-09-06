@@ -37,6 +37,12 @@ const L = useVocab()
 const route = useRoute()
 const router = useRouter()
 
+/* 标签共现计数为 0 的直接隐藏（已选中的保留，否则无法取消）；
+ * 没有分面数据时 tagCount 走全局回退，列表原样展示 */
+const visibleTags = computed(() =>
+  tagIndex.value.filter((t) => tagCount(t.name) > 0 || tagFilter.value.includes(t.name)),
+)
+
 function goMessages(query: Record<string, string | string[]> = {}) {
   if (route.name !== 'messages') {
     void router.push({ name: 'messages', query })
@@ -206,7 +212,7 @@ onMounted(loadStats)
       </h3>
       <div class="ml-4 border-l border-ink-line pl-3">
         <button
-          v-for="tag in tagIndex"
+          v-for="tag in visibleTags"
           :key="tag.name"
           type="button"
           class="flex h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-[13px] transition-colors"
