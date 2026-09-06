@@ -75,6 +75,17 @@ python -m app
 
 <!-- 截图占位：终端启动横幅 / 首次登录流程 -->
 
+## Docker 部署
+
+不想装 Python 环境可以直接用 Docker Compose：前端在镜像内多阶段构建，数据与配置全部通过挂载提供，数据库 / session / 备份 / 日志收敛在 `./data` 一个目录。
+
+```bash
+cp .env.example .env && cp config.example.yaml config.yaml   # 按快速开始编辑好
+docker compose up -d --build
+```
+
+完整步骤（首次登录生成 session、volume 布局、升级与备份、常见坑）见 [docs/deploy.md](docs/deploy.md)。
+
 ## 配置
 
 敏感凭据只进 `.env`（不进 Git），业务配置进 `config.yaml`。可用环境变量 `ARCHIVE_CONFIG` 指定配置文件路径。

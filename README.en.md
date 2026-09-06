@@ -76,6 +76,17 @@ Then open `http://127.0.0.1:8000` and log in with `WEB_TOKEN`.
 
 <!-- Screenshot placeholder: startup banner / first-login flow -->
 
+## Docker deployment
+
+Prefer containers over a local Python setup? Docker Compose builds the frontend in a multi-stage image; all state (SQLite, session, backups, logs) lives in a single mounted `./data` directory.
+
+```bash
+cp .env.example .env && cp config.example.yaml config.yaml   # edit as in Quick start
+docker compose up -d --build
+```
+
+Full walkthrough (first login to create the session, volume layout, upgrades and backups, pitfalls): [docs/deploy.md](docs/deploy.md) (Chinese).
+
 ## Configuration
 
 Secrets live in `.env` (not committed); everything else lives in `config.yaml`. Set the `ARCHIVE_CONFIG` environment variable to use a different config file location.

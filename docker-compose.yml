@@ -1,17 +1,20 @@
+# 单服务最小部署：配置文件 + .env 挂载/注入，所有数据落在 ./data 一个目录里。
+# 用法见 docs/deploy.md。
 services:
   app:
     build: .
     image: telegram-archive-bot:local
+    container_name: telegram-archive-bot
     restart: unless-stopped
+    # 凭据与 Web 口令（TELEGRAM_API_ID / TELEGRAM_API_HASH / WEB_TOKEN ...）
     env_file:
       - .env
     ports:
-      # Web 后台（WEB_HOST 绑 0.0.0.0 时对外可用；本机保持 127.0.0.1 由 Linux 桥接限制访问）
+      # 宿主机端口:容器端口；.env 里改 WEB_PORT 时两端同步，容器内 WEB_HOST 强制 0.0.0.0
       - "${WEB_PORT:-8000}:${WEB_PORT:-8000}"
     volumes:
-      # 业务配置只读挂载；数据/凭据不烧进镜像
-      - ./config.yaml:/app/config.yaml:ro
-      - ./telegram_archive.session:/app/telegram_archive.session
-      - ./archive.sqlite:/app/archive.sqlite
-      - ./logs:/app/logs
-      - ./thumbs:/app/thumbs
+      # 业务配置只读挂载；容器内路径由镜像的 ARCHIVE_CONFIG 指定。
+      # SQLite 库、-wal/-shm、session、logs、thumbs、自动备份
+      # 全部锚定配置文件所在目录，因此 ./data 一个目录即可整体持久化。
+      - ./config.yaml:/app/data/config.yaml:ro
+      - ./data:/app/data

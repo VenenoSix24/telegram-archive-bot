@@ -43,3 +43,11 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+
+  docker:
+    # 仅构建镜像验证 Dockerfile 可用；无 registry 凭据，不推送
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t telegram-archive-bot:ci .
