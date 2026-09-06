@@ -34,24 +34,29 @@ def open_connection(database_path: str):
 
 
 
-def _material_filters(query, status: str, joined: bool) -> tuple[str, list]:
+def _material_filters(
+    query, status: str, joined: bool, exclude: str | None = None
+) -> tuple[str, list]:
     """素材列表的 WHERE 条件；joined=True 时条件取 COALESCE(副本, 父表)。
 
     与旧版 Python 侧过滤语义一致：status 映射 archived/deleted、rating 与
     target_chat_id 精确匹配、q 对正文+渲染文本做大小写不敏感子串匹配、
     tag 可多值（?tag=A&tag=B）AND 交集——副本素材看副本标签，父表素材看父表标签。
+
+    exclude 指定要剔除的维度（media_type/rating/target/tag），供分面计数复用
+    同一筛选条件但不对本维度设约束（标准分面搜索语义）。
     """
     conds: list[str] = []
     params: list[object] = []
     media_type = query.get("media_type")
-    if media_type:
+    if media_type and exclude != "media_type":
         conds.append("m.media_type = ?")
         params.append(media_type)
     if status != "all":
         conds.append(f"{_coalesce('status', joined)} = ?")
         params.append("archived" if status == "active" else "deleted")
     rating = query.get("rating")
-    if rating not in (None, ""):
+    if rating not in (None, "") and exclude != "rating":
         try:
             value = int(rating)
         except (TypeError, ValueError) as exc:
@@ -59,7 +64,7 @@ def _material_filters(query, status: str, joined: bool) -> tuple[str, list]:
         conds.append(f"{_coalesce('rating', joined)} = ?")
         params.append(value)
     target = query.get("target_chat_id")
-    if target:
+    if target and exclude != "target":
         try:
             value = int(target)
         except (TypeError, ValueError) as exc:
@@ -76,7 +81,8 @@ def _material_filters(query, status: str, joined: bool) -> tuple[str, list]:
         escaped = text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
         conds.append(f"{searchable} LIKE ? ESCAPE '\\'")
         params.append(f"%{escaped}%")
-    for tag in query.getlist("tag"):
+    tags = [] if exclude == "tag" else query.getlist("tag")
+    for tag in tags:
         if joined:
             conds.append(
                 "(EXISTS (SELECT 1 FROM target_tags tt JOIN tags t ON t.id = tt.tag_id "
@@ -140,12 +146,20 @@ def list_messages(
     offset = max(0, offset)
     try:
         total, rows = _query_materials(conn, query, status, limit, offset, joined=True)
+        facets = facet_counts(conn, query, status, joined=True)
     except sqlite3.OperationalError as exc:
         if "no such table: message_targets" not in str(exc):
             raise
         total, rows = _query_materials(conn, query, status, limit, offset, joined=False)
+        facets = facet_counts(conn, query, status, joined=False)
     items = serialize_materials(conn, rows, target_names or {})
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "facets": facets,
+    }
 
 
 def _query_materials(conn, query, status, limit, offset, *, joined: bool):
@@ -166,6 +180,62 @@ def _query_materials(conn, query, status, limit, offset, *, joined: bool):
         [*params, limit, offset],
     ).fetchall()
     return total, rows
+
+
+def facet_counts(conn, query, status, *, joined: bool) -> dict:
+    """侧栏分面计数：其余筛选全生效、仅去掉本维度自身约束（分面搜索语义）。
+
+    侧栏的来源/标签/体例数字随当前筛选实时刷新：比如选了标签「游戏」后，
+    来源计数含义变成「加上这个来源还会剩多少条」。消息副本按 joined 行计数
+    （与列表 total 同口径），标签按去重后的父消息计数（与 /tags 同口径）。
+    """
+    try:
+        return _facet_counts(conn, query, status, joined=True)
+    except sqlite3.OperationalError as exc:
+        if "no such table: message_targets" not in str(exc):
+            raise
+        return _facet_counts(conn, query, status, joined=False)
+
+
+def _facet_counts(conn, query, status, *, joined: bool) -> dict:
+    source = _JOINED_FROM if joined else _FALLBACK_FROM
+    # 体例：按 media_type 分组（过滤条件也用 m.media_type，口径一致）
+    media_where, media_params = _material_filters(
+        query, status, joined, exclude="media_type"
+    )
+    media_type = {
+        row["k"]: row["n"]
+        for row in conn.execute(
+            f"SELECT m.media_type AS k, COUNT(*) AS n "
+            f"{source} {media_where} GROUP BY m.media_type",
+            media_params,
+        )
+        if row["k"] is not None
+    }
+    # 来源与目标：按 COALESCE(副本, 父表) 的 target_chat_id 分组
+    target_where, target_params = _material_filters(query, status, joined, exclude="target")
+    targets = [
+        {"chat_id": row["k"], "count": row["n"]}
+        for row in conn.execute(
+            f"SELECT {_coalesce('target_chat_id', joined)} AS k, COUNT(*) AS n "
+            f"{source} {target_where} GROUP BY k ORDER BY n DESC, k",
+            target_params,
+        )
+        if row["k"] is not None
+    ]
+    # 标签：命中当前其余筛选的消息里，各标签覆盖多少条（按父消息去重）
+    tag_where, tag_params = _material_filters(query, status, joined, exclude="tag")
+    tags = [
+        {"name": row["name"], "count": row["n"]}
+        for row in conn.execute(
+            f"SELECT t.name AS name, COUNT(DISTINCT m.id) AS n "
+            f"{source} JOIN message_tags ft ON ft.message_id = m.id "
+            f"JOIN tags t ON t.id = ft.tag_id {tag_where} "
+            f"GROUP BY t.id ORDER BY n DESC, name",
+            tag_params,
+        )
+    ]
+    return {"media_type": media_type, "targets": targets, "tags": tags}
 
 
 def get_message_row(conn: sqlite3.Connection, message_id: int):

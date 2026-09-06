@@ -317,7 +317,43 @@ def test_messages_list_and_detail(tmp_path):
     with _logged_client(db) as client:
         resp = client.get("/api/v1/messages")
         assert resp.status_code == 200
-        assert resp.json() == {"items": [], "total": 0, "limit": 30, "offset": 0}
+        assert resp.json() == {
+            "items": [],
+            "total": 0,
+            "limit": 30,
+            "offset": 0,
+            "facets": {"media_type": {}, "targets": [], "tags": []},
+        }
+
+
+def test_messages_facets_reflect_filters(tmp_path):
+    """分面计数：其余筛选生效、本维度约束剔除（分面搜索语义）。"""
+    db = _seeded_messages_db(tmp_path)
+    with _logged_client(db) as client:
+        body = client.get("/api/v1/messages").json()
+        facets = body["facets"]
+        assert facets["media_type"] == {"photo": 1, "text": 1}
+        assert {t["chat_id"] for t in facets["targets"]} == {-1005}
+        assert facets["tags"] == [{"name": "游戏", "count": 1}]
+
+        # 带 q=MOD：media 分面里 q 仍生效，只剩 text；标签分面里「游戏」应归零
+        facets = client.get("/api/v1/messages?q=MOD").json()["facets"]
+        assert facets["media_type"] == {"text": 1}
+        assert facets["tags"] == []
+
+        # 带 tag=游戏：target 分面应忽略标签约束仍报 -1005；media 分面只有 photo
+        facets = client.get("/api/v1/messages?tag=游戏").json()["facets"]
+        assert facets["media_type"] == {"photo": 1}
+        assert facets["targets"] == [{"chat_id": -1005, "count": 1}]
+        # 标签自身约束剔除：两个标签都能看到各自命中数
+        assert facets["tags"] == [{"name": "游戏", "count": 1}]
+
+        # 带 media_type=text：标签与 target 分面按 text 生效（均归零/为空），
+        # media 分面自身剔除后仍给出全量分布
+        facets = client.get("/api/v1/messages?media_type=text").json()["facets"]
+        assert facets["media_type"] == {"photo": 1, "text": 1}
+        assert facets["tags"] == []
+        assert facets["targets"] == [{"chat_id": -1005, "count": 1}]
 
 
 def test_messages_patch_updates_via_shared_service(patch_client):

@@ -54,11 +54,22 @@ export interface Message {
   tags: MessageTag[]
 }
 
+/** 侧栏分面计数：其余筛选生效、本维度自身约束剔除（分面搜索语义） */
+export interface CatalogFacets {
+  /** 按 media_type 的命中数 */
+  media_type: Record<string, number>
+  /** 按 target_chat_id 的命中数 */
+  targets: Target[]
+  /** 各标签在当前其余筛选下的命中数（按父消息去重） */
+  tags: TagCount[]
+}
+
 export interface MessagesResponse {
   items: Message[]
   total: number
   limit: number
   offset: number
+  facets?: CatalogFacets
 }
 
 export interface Target {

@@ -24,6 +24,8 @@ const {
   isFilterActive,
   loadStats,
   resetFilters,
+  targetCount,
+  tagCount,
   toggleMedia,
   toggleRating,
   toggleStatus,
@@ -189,7 +191,7 @@ onMounted(loadStats)
         >
           <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: dotColor(t.chat_id) }"></span>
           <span class="min-w-0 truncate">{{ t.name || `目标 ${t.chat_id}` }}</span>
-          <span class="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums text-steam-dim/70">{{ t.count }}</span>
+          <span class="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums text-steam-dim/70">{{ targetCount(t.chat_id) }}</span>
         </button>
       </div>
     </section>
@@ -217,7 +219,7 @@ onMounted(loadStats)
             class="ml-auto shrink-0 rounded-full px-1.5 font-mono text-[10px] tabular-nums"
             :class="tagFilter.includes(tag.name) ? 'bg-gold/20 text-gold' : 'bg-ink-raised text-steam-dim/80'"
           >
-            {{ tag.count }}
+            {{ tagCount(tag.name) }}
           </span>
         </button>
       </div>

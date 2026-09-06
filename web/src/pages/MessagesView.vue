@@ -47,11 +47,13 @@ const {
   tagFilter,
   targetFilter,
   statusFilter,
-  stats,
   tagIndex,
   targets,
   isFilterActive,
   loadStats,
+  mediaCount,
+  setFacets,
+  tagCount,
   resetFilters,
   toggleMedia,
   toggleRating,
@@ -152,14 +154,12 @@ const issue = computed(() => {
   return `第 ${week} 卷 · ${now.getFullYear()} 年 ${now.getMonth() + 1} 月`
 })
 
-/** 体例计数：全部 = 总数，其余取 stats.by_type；统计未载返回 null 不展示 */
+/** 体例计数：走分面计数（随筛选刷新）；分面未载回退 stats，统计未载返回 null 不展示 */
 function typeCount(value: string): number | null {
-  if (!stats.value) return null
-  if (value === '') return stats.value.messages.total
-  return stats.value.messages.by_type[value] ?? 0
+  return mediaCount(value)
 }
 
-/** 类目快捷切换条：热度前 12 + 当前所选类目（不在前 12 则补进来） */
+/** 类目快捷切换条：热度前 12 + 当前所选类目（不在前 12 则补进来）；计数走分面 */
 const stripTags = computed<TagCount[]>(() => {
   const top = tagIndex.value.slice(0, 12)
   for (const current of tagFilter.value) {
@@ -168,7 +168,7 @@ const stripTags = computed<TagCount[]>(() => {
       top.unshift(found ?? { name: current, count: 0 })
     }
   }
-  return top
+  return top.map((t) => ({ name: t.name, count: tagCount(t.name) }))
 })
 
 // URL ?tag=（从标签页点来，可多值）作为标签筛选的初始值
@@ -332,6 +332,7 @@ async function load() {
     })
     if (generation === requestGeneration) {
       data.value = result
+      setFacets(result.facets)
       swapTick.value++
       if (firstLoad && result.items.length) {
         firstLoad = false
