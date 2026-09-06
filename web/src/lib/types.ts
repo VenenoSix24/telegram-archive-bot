@@ -79,6 +79,13 @@ export interface Target {
   name?: string
 }
 
+/** 后台任务失败记录（设置页「最近失败」面板；created_at 为 UTC 文本） */
+export interface TaskFailureItem {
+  task: string
+  error: string
+  created_at: string
+}
+
 export interface BackupItem {
   name: string
   kind: 'config' | 'database'

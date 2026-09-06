@@ -16,8 +16,8 @@ import {
   Upload,
   X,
 } from 'lucide-vue-next'
-import { backup, backupDownloadUrl, deleteBackup, getConfig, getStats, importBackup, listBackups, putConfig, resetDatabase, restoreBackup, runBackupNow } from '@/lib/api'
-import type { BackupItem, EditableConfig } from '@/lib/types'
+import { backup, backupDownloadUrl, deleteBackup, getConfig, getStats, importBackup, listBackups, listTaskFailures, putConfig, resetDatabase, restoreBackup, runBackupNow } from '@/lib/api'
+import type { BackupItem, EditableConfig, TaskFailureItem } from '@/lib/types'
 import { isVault } from '@/lib/vocab'
 import Button from '@/components/ui/Button.vue'
 import Select from '@/components/ui/Select.vue'
@@ -47,6 +47,7 @@ async function runBackup() {
     const result = await runBackupNow()
     toastSuccess(`已生成备份 ${result.name}`)
     backups.value = (await listBackups()).items
+    await loadFailures()
   } catch (e) {
     toastError(e instanceof Error ? e.message : '备份失败')
   } finally {
@@ -54,6 +55,36 @@ async function runBackup() {
   }
 }
 const backups = ref<BackupItem[]>([])
+const failures = ref<TaskFailureItem[]>([])
+
+/* 最近失败面板：后台任务（备份/上传/巡检/索引）失败原因一览 */
+const FAILURE_LABEL: Record<string, string> = {
+  auto_backup: '自动备份',
+  backup_upload: '备份上传',
+  auto_backup_check: '备份巡检',
+  tag_index_init: '标签索引初始化',
+  tag_index_refresh: '标签索引刷新',
+}
+
+function failureLabel(task: string): string {
+  return FAILURE_LABEL[task] ?? task
+}
+
+function failureTime(at: string): string {
+  const d = new Date(at.endsWith('Z') ? at : at.replace(' ', 'T') + 'Z')
+  if (Number.isNaN(d.getTime())) return at
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+async function loadFailures() {
+  try {
+    failures.value = (await listTaskFailures()).items
+  } catch {
+    failures.value = [] // 面板非关键路径，静默降级
+  }
+}
+
 const importKind = ref<'config' | 'database'>('config')
 const importFile = ref<File | null>(null)
 
@@ -143,7 +174,7 @@ async function load() {
        直接存响应会导致 JSON 比对永远不等（进页面就误报有改动） */
     saved = _clone(form)
     await getStats() // 触发一次预热，顺带确认后端可用
-    await loadBackups()
+    await Promise.all([loadBackups(), loadFailures()])
   } catch (e) {
     error.value = e instanceof Error ? e.message : '配置读取失败'
   } finally {
@@ -953,6 +984,33 @@ async function resetDb() {
                   class="h-9 w-full rounded-md border border-ink-line bg-ink-raised px-3 text-sm text-steam placeholder:text-steam-dim/60 focus:border-gold focus:outline-none disabled:opacity-50"
                 />
               </label>
+            </div>
+          </div>
+          <!-- 最近失败：后台任务失败原因一览（task_failures 表） -->
+          <div class="mb-4 rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="text-sm font-medium text-steam">最近失败</h3>
+              <button
+                type="button"
+                class="cursor-pointer font-mono text-[10px] tracking-[0.14em] text-steam-dim/60 transition-colors hover:text-gold"
+                @click="loadFailures"
+              >
+                REFRESH
+              </button>
+            </div>
+            <p v-if="!failures.length" class="text-xs text-steam-dim/70">暂无失败记录，后台任务运行正常。</p>
+            <div v-else class="max-h-48 overflow-y-auto">
+              <div
+                v-for="(f, i) in failures"
+                :key="i"
+                class="border-b border-ink-line/40 py-1.5 text-xs last:border-b-0"
+              >
+                <div class="flex items-baseline gap-2">
+                  <span class="shrink-0 font-mono text-[10.5px] tabular-nums text-steam-dim/60">{{ failureTime(f.created_at) }}</span>
+                  <span class="shrink-0 rounded bg-destructive/10 px-1.5 py-px font-medium text-destructive">{{ failureLabel(f.task) }}</span>
+                  <span class="min-w-0 flex-1 break-words text-steam-dim">{{ f.error }}</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="rounded-xl border border-ink-line bg-ink-surface p-4 anim-fade-up" :style="{ animationDelay: staggerDelay(7) }">
